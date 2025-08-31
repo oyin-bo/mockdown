@@ -1,0 +1,26 @@
+{
+  "name": "mockdown",
+  "description": "Mockdown document parser and management",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build:parser": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js",
+    "build": "npm run build:parser",
+    "test-old": "node --loader ts-node/esm --test parser/tests/**/*.test.ts",
+    "test": "vitest run parser/tests --exclude parser/docs"
+  },
+  "keywords": [
+    "Mockdown",
+    "Markdown"
+  ],
+  "author": "Oleg Mihailik",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.9",
+    "vitest": "^3.2.4"
+  }
+}
