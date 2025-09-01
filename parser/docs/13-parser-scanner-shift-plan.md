@@ -103,22 +103,36 @@ Unlike a flat array of "pending constructs", Markdown ambiguities have **structu
 
 ```typescript
 enum ScanMode {
-  // Standard modes
-  Normal = 0,
-  RawText = 1,              // <script>, <style> content  
-  RCData = 2,               // <textarea>, <title> content
+  // === CONTENT MODES ===
+  // Base content scanning modes
+  Normal = 0,                    // Regular Markdown content scanning
+  RawText = 1,                   // <script>, <style> - NO Markdown processing
+  RCData = 2,                    // <textarea>, <title> - entities active, no Markdown
   
-  // Ambiguous scanning modes (temporary during speculation)
-  TableSpeculation = 3,     // Seeing |, might be table vs paragraph
-  SetextSpeculation = 4,    // Saw text line, checking for underline
-  ListSpeculation = 5,      // Saw marker, validating list vs paragraph
-  CodeFenceSpeculation = 6, // Saw ```, determining fence vs paragraph
-  HtmlBlockSpeculation = 7, // Saw HTML tag, block vs inline context
+  // Structured content modes  
+  CodeBlockContent = 3,          // Inside fenced code blocks (``` or ~~~)
+  HtmlElementContent = 4,        // Inside HTML element content (non-raw)
+  MathInline = 5,                // Inside $math$ expressions
+  MathBlock = 6,                 // Inside $$math$$ blocks
+  AttributeBlock = 7,            // Inside {.class #id} attribute blocks
+  FrontmatterYaml = 8,           // Inside --- YAML frontmatter
+  FrontmatterToml = 9,           // Inside +++ TOML frontmatter
   
-  // Resolved ambiguous modes
-  TableConfirmed = 8,       // Table pattern validated
-  SetextConfirmed = 9,      // Setext underline validated
-  ListConfirmed = 10,       // List structure validated
+  // === SPECULATION MODES ===
+  // Temporary ambiguous states during pattern detection
+  TableSpeculation = 10,         // Seeing |, might be table vs paragraph
+  SetextSpeculation = 11,        // Saw text line, checking for underline
+  ListSpeculation = 12,          // Saw marker, validating list vs paragraph
+  CodeFenceSpeculation = 13,     // Saw ```, determining fence vs paragraph
+  HtmlBlockSpeculation = 14,     // Saw HTML tag, block vs inline context
+  
+  // === CONFIRMED MODES ===
+  // Resolved ambiguous states - emit definitive tokens
+  TableConfirmed = 15,           // Table pattern validated - emit table tokens
+  SetextConfirmed = 16,          // Setext underline validated - emit heading tokens
+  ListConfirmed = 17,            // List structure validated - emit list tokens
+  CodeFenceConfirmed = 18,       // Code fence validated - emit code block tokens
+  HtmlBlockConfirmed = 19,       // HTML block confirmed - emit block tokens
 }
 
 // Ultra-minimal state - just primitives, no boolean flags needed
@@ -135,31 +149,269 @@ interface ScannerState {
   speculationData2: number;       // Mode-specific: headerEnd, underlineLength, etc.  
   speculationData3: number;       // Mode-specific: alignmentStart, markerValue, etc.
   
-  // Raw text end tags (existing)
-  rawTextEndTag: string | undefined;
-  rcdataEndTag: string | undefined;
+  // Content mode end markers
+  rawTextEndTag: string | undefined;      // For RawText mode
+  rcdataEndTag: string | undefined;       // For RCData mode
+  mathDelimiter: string | undefined;      // For Math modes ("$" or "$$")
+  codeBlockMarker: string | undefined;    // For CodeBlockContent ("```" or "~~~")
+  attributeBlockDepth: number;            // For AttributeBlock nesting
 }
 
-// Total: ~40 bytes, complete zero allocations, mode unifies everything
+// Total: ~50 bytes, complete zero allocations, mode unifies everything
 ```
 
-### Mode-Specific Data Interpretation
+### Detailed Scan Mode Behaviors
+
+#### **Content Modes** (Stable Scanning States)
+
+**Normal Mode** (`ScanMode.Normal`):
+```typescript
+// Standard Markdown content scanning
+// - All punctuation is significant for inline markup
+// - Block constructs detected at line start
+// - Triggers speculation modes when ambiguity detected
+```
+
+**RawText Mode** (`ScanMode.RawText`):
+```typescript
+// Inside <script>, <style>, etc.
+// - NO Markdown processing whatsoever  
+// - Only scan for matching end tag
+// - Every position is ultra-safe rollback point
+// - End condition: case-insensitive </tagname>
+
+// Example:
+<script>
+const text = "# Not a heading, *not emphasis*";
+console.log("[not a link](example.com)");
+</script>  // ← Only this ends RawText mode
+```
+
+**RCData Mode** (`ScanMode.RCData`):
+```typescript
+// Inside <textarea>, <title>, etc.
+// - Entities are active (&amp; → &)
+// - NO Markdown processing
+// - End condition: case-insensitive </tagname>
+
+// Example:
+<textarea>
+&amp; is decoded to &
+But *this* is not emphasis
+</textarea>  // ← Only this ends RCData mode
+```
+
+**CodeBlockContent Mode** (`ScanMode.CodeBlockContent`):
+```typescript
+// Inside fenced code blocks
+// - NO Markdown processing within content
+// - Line boundaries are safe rollback points
+// - End condition: matching fence with same/longer length
+// speculationData1: fence length (3, 4, 5, etc.)
+// codeBlockMarker: fence type ("```" or "~~~")
+
+// Example:
+```javascript
+function test() {
+  // # Not a heading
+  // *not emphasis*
+  return "just code";
+}
+```  // ← Must be ``` with length >= 3 to close
+```
+
+**MathInline Mode** (`ScanMode.MathInline`):
+```typescript
+// Inside $math$ expressions
+// - NO Markdown processing
+// - Scan for closing $ delimiter
+// - Handle escaped \$ characters
+// mathDelimiter: "$"
+
+// Example: $E = mc^2$ where *nothing* is Markdown
+```
+
+**MathBlock Mode** (`ScanMode.MathBlock`):
+```typescript
+// Inside $$math$$ blocks
+// - NO Markdown processing
+// - Scan for closing $$ delimiter
+// - Line boundaries might be safe rollback points
+// mathDelimiter: "$$"
+
+// Example:
+$$
+E = mc^2
+F = ma  // # Not a heading
+$$
+```
+
+#### **Speculation Modes** (Temporary Ambiguous States)
+
+**TableSpeculation Mode** (`ScanMode.TableSpeculation`):
+```typescript
+// Triggered by: | character at line start or in paragraph
+// Collecting: pipe positions, checking for alignment row
+// speculationData1: columnCount (number of | characters seen)
+// speculationData2: headerEndPos (end of first row)
+// speculationData3: alignmentStartPos (start of second row)
+// Resolution: Valid alignment row → TableConfirmed, else → Normal
+
+// Example ambiguous sequence:
+| Maybe table |
+|-------------|  // ← This line confirms table
+```
+
+**SetextSpeculation Mode** (`ScanMode.SetextSpeculation`):
+```typescript
+// Triggered by: newline after text content
+// Collecting: checking next line for === or --- underline
+// speculationData1: underlineChar (61 for =, 45 for -)
+// speculationData2: underlineLength (length of underline sequence)
+// speculationData3: contentEndPos (end of heading text)
+// Resolution: Valid underline → SetextConfirmed, else → Normal
+
+// Example ambiguous sequence:
+Heading text
+============  // ← This line confirms setext heading
+```
+
+**ListSpeculation Mode** (`ScanMode.ListSpeculation`):
+```typescript
+// Triggered by: -, +, *, or 1. at line start with proper indentation
+// Collecting: marker type, number, indentation, space validation
+// speculationData1: markerType (0=unordered, 1=ordered)
+// speculationData2: markerValue (number for ordered lists, 0 for unordered)
+// speculationData3: indentLevel (0-3 spaces before marker)
+// Resolution: Valid spacing → ListConfirmed, else → Normal
+
+// Example ambiguous sequences:
+- Valid list item
+1. Another valid item
+   - Nested item
+```
+
+**CodeFenceSpeculation Mode** (`ScanMode.CodeFenceSpeculation`):
+```typescript
+// Triggered by: ``` or ~~~ at line start
+// Collecting: fence length, language info
+// speculationData1: fenceLength (3, 4, 5, etc.)
+// speculationData2: hasLanguageInfo (0 or 1)
+// speculationData3: languageEndPos (end of language string)
+// Resolution: Valid fence pattern → CodeFenceConfirmed, else → Normal
+
+// Example:
+```javascript
+// ← Speculation starts here, confirms with language
+```
+
+**HtmlBlockSpeculation Mode** (`ScanMode.HtmlBlockSpeculation`):
+```typescript
+// Triggered by: < at line start matching HTML block patterns
+// Collecting: HTML block type (1-7), tag validation
+// speculationData1: blockType (1-7 for different HTML block types)
+// speculationData2: tagNameLength
+// speculationData3: isClosingTag (0 or 1)
+// Resolution: Valid HTML block start → HtmlBlockConfirmed, else → Normal
+
+// Examples:
+<div>        // ← Block type 6 (other tags)
+<!--         // ← Block type 2 (comments)
+<![CDATA[    // ← Block type 5 (CDATA)
+```
+
+#### **Confirmed Modes** (Definitive Token Emission)
+
+**TableConfirmed Mode** (`ScanMode.TableConfirmed`):
+```typescript
+// Table pattern validated - emit structured table tokens
+// Rewind to speculation start and emit:
+// - TableHeaderStart, TableCell tokens for header row
+// - TableDelimiterRow for alignment row
+// - Transition to Normal mode after table complete
+```
+
+**SetextConfirmed Mode** (`ScanMode.SetextConfirmed`):
+```typescript
+// Setext heading validated - emit heading tokens
+// Rewind to speculation start and emit:
+// - SetextHeadingStart with level (1 for =, 2 for -)
+// - Heading content tokens
+// - SetextUnderline token
+// - Transition to Normal mode
+```
+
+**ListConfirmed Mode** (`ScanMode.ListConfirmed`):
+```typescript
+// List structure validated - emit list tokens
+// Emit from current position:
+// - ListMarker token with type and value
+// - ListItemContent tokens
+// - Transition to Normal mode for content
+```
+
+#### **Mode Transition Matrix**
 
 ```typescript
-// TableSpeculation mode data layout:
-// speculationData1 = columnCount (number of | characters)
-// speculationData2 = headerEndPos (end of first row)
-// speculationData3 = alignmentStartPos (start of second row)
+// Mode transition rules
+const TRANSITIONS: Record<ScanMode, ScanMode[]> = {
+  [ScanMode.Normal]: [
+    ScanMode.RawText,           // <script>, <style>
+    ScanMode.RCData,            // <textarea>, <title>
+    ScanMode.TableSpeculation,  // | character
+    ScanMode.SetextSpeculation, // newline after text
+    ScanMode.ListSpeculation,   // -, +, *, 1.
+    ScanMode.CodeFenceSpeculation, // ```, ~~~
+    ScanMode.HtmlBlockSpeculation, // < at line start
+    ScanMode.MathInline,        // $ character
+    ScanMode.MathBlock,         // $$ sequence
+    ScanMode.AttributeBlock,    // { character
+    ScanMode.FrontmatterYaml,   // --- at document start
+    ScanMode.FrontmatterToml,   // +++ at document start
+  ],
+  
+  [ScanMode.TableSpeculation]: [
+    ScanMode.TableConfirmed,    // Valid alignment row found
+    ScanMode.Normal,            // Invalid table pattern
+  ],
+  
+  [ScanMode.SetextSpeculation]: [
+    ScanMode.SetextConfirmed,   // Valid underline found
+    ScanMode.Normal,            // No valid underline
+  ],
+  
+  // ... etc for all modes
+};
 
-// SetextSpeculation mode data layout:  
-// speculationData1 = underlineChar (61 for =, 45 for -)
-// speculationData2 = underlineLength (length of underline sequence)
-// speculationData3 = contentEndPos (end of heading text)
+// Mode characteristics
+interface ModeCharacteristics {
+  allowsMarkdown: boolean;        // Can Markdown be processed?
+  allowsLineBreaks: boolean;      // Are line breaks significant?
+  hasEndCondition: boolean;       // Does mode have specific end pattern?
+  safeRollbackLevel: number;      // 0=any position, 1=line boundaries, 2=block boundaries
+}
 
-// ListSpeculation mode data layout:
-// speculationData1 = markerType (0=unordered, 1=ordered)  
-// speculationData2 = markerValue (number for ordered lists)
-// speculationData3 = indentLevel (indentation depth)
+const MODE_CHARACTERISTICS: Record<ScanMode, ModeCharacteristics> = {
+  [ScanMode.Normal]: { 
+    allowsMarkdown: true, 
+    allowsLineBreaks: true, 
+    hasEndCondition: false, 
+    safeRollbackLevel: 1 
+  },
+  [ScanMode.RawText]: { 
+    allowsMarkdown: false, 
+    allowsLineBreaks: false, 
+    hasEndCondition: true, 
+    safeRollbackLevel: 0 
+  },
+  [ScanMode.CodeBlockContent]: { 
+    allowsMarkdown: false, 
+    allowsLineBreaks: false, 
+    hasEndCondition: true, 
+    safeRollbackLevel: 1 
+  },
+  // ... etc
+};
 ```
 
 ### Typed Rollback System
