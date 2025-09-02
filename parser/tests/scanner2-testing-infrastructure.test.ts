@@ -9,25 +9,36 @@ import { createScanner2 } from '../scanner2.js';
 
 describe('Scanner2 Testing Infrastructure', () => {
   test('should return original string when all expectations match', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
+1
+@1 StringLiteral`;
+    
+    const expected = `Hello world
 1
 @1 StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should handle simple text with position marker', () => {
-    const tokenTest = `Simple text line
+    const tokenTest = `
+Simple text line
+1
+@1 StringLiteral`;
+    
+    const expected = `Simple text line
 1
 @1 StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should inject error for wrong token kind', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
 1
 @1 WhitespaceTrivia`;
     
@@ -37,26 +48,38 @@ describe('Scanner2 Testing Infrastructure', () => {
   });
 
   test('should handle multiple position markers', () => {
-    const tokenTest = `  Hello world
+    const tokenTest = `
+  Hello world
+1 2
+@1 WhitespaceTrivia
+@2 StringLiteral`;
+    
+    const expected = `  Hello world
 1 2
 @1 WhitespaceTrivia
 @2 StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should handle text with attributes', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
+1
+@1 StringLiteral text: "Hello world"`;
+    
+    const expected = `Hello world
 1
 @1 StringLiteral text: "Hello world"`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should inject error for wrong attribute value', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
 1
 @1 StringLiteral text: "Wrong text"`;
     
@@ -66,38 +89,58 @@ describe('Scanner2 Testing Infrastructure', () => {
   });
 
   test('should handle multiple markers on same token', () => {
-    const tokenTest = `Hello World
+    const tokenTest = `
+Hello World
+1    2    3
+@1 StringLiteral text: "Hello World"
+@2 StringLiteral text: "Hello World"  
+@3 StringLiteral text: "Hello World"`;
+    
+    const expected = `Hello World
 1    2    3
 @1 StringLiteral text: "Hello World"
 @2 StringLiteral text: "Hello World"  
 @3 StringLiteral text: "Hello World"`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should handle newline tokens between lines', () => {
-    const tokenTest = `Line1
+    const tokenTest = `
+Line1
+Line2
+1
+@1 StringLiteral text: "Line2"`;
+    
+    const expected = `Line1
 Line2
 1
 @1 StringLiteral text: "Line2"`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should handle leading whitespace', () => {
-    const tokenTest = `  Indented text
+    const tokenTest = `
+  Indented text
+1 2
+@1 WhitespaceTrivia
+@2 StringLiteral`;
+    
+    const expected = `  Indented text
 1 2
 @1 WhitespaceTrivia
 @2 StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should inject error for missing position marker', () => {
-    const tokenTest = `Hello
+    const tokenTest = `
+Hello
 World
 1           2
 @1 StringLiteral
@@ -109,38 +152,56 @@ World
   });
 
   test('should handle leading whitespace tokens', () => {
-    const tokenTest = `  Hello World
+    const tokenTest = `
+  Hello World
+1 2
+@1 WhitespaceTrivia
+@2 StringLiteral text: "Hello World"`;
+    
+    const expected = `  Hello World
 1 2
 @1 WhitespaceTrivia
 @2 StringLiteral text: "Hello World"`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should handle letter position markers', () => {
-    const tokenTest = `Hello world test
+    const tokenTest = `
+Hello world test
+A           B
+@A StringLiteral
+@B StringLiteral`;
+    
+    const expected = `Hello world test
 A           B
 @A StringLiteral
 @B StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('should validate flags attribute', () => {
-    const tokenTest = `  Hello world
+    const tokenTest = `
+  Hello world
+1
+@1 WhitespaceTrivia flags: 2`;
+    
+    const expected = `  Hello world
 1
 @1 WhitespaceTrivia flags: 2`;
     
     const result = verifyTokens(tokenTest);
     // WhitespaceTrivia should have IsAtLineStart flag (1 << 1 = 2)
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
   });
 
   test('infrastructure failure: wrong position marker should inject descriptive error', () => {
     // Position 12 should be beyond the "Hello world" token (which ends at position 10)
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
             1
 @1 StringLiteral`;
     
@@ -156,7 +217,8 @@ A           B
   });
 
   test('infrastructure failure: wrong attribute value should show actual vs expected', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
 1
 @1 StringLiteral text: "Wrong content"`;
     
@@ -172,7 +234,8 @@ A           B
   });
 
   test('infrastructure failure: unknown attribute should produce error', () => {
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
 1
 @1 StringLiteral unknownAttr: "value"`;
     
@@ -198,23 +261,34 @@ Hello world
 
   test('should properly align position markers with token starts', () => {
     // Test that digit 1 aligns with the start of "Hello" (position 0)
-    const tokenTest = `Hello world
+    const tokenTest = `
+Hello world
+1
+@1 StringLiteral`;
+    
+    const expected = `Hello world
 1
 @1 StringLiteral`;
     
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(tokenTest);
+    expect(result).toBe(expected);
     
     // Test that digit 1 aligns with the start of whitespace, digit 2 with "Hello"
     // For "  Hello world":
     // Position 0-1: "  " (WhitespaceTrivia)
     // Position 2-12: "Hello world" (StringLiteral)
-    const tokenTest2 = `  Hello world
+    const tokenTest2 = `
+  Hello world
+1 2
+@1 WhitespaceTrivia
+@2 StringLiteral`;
+    
+    const expected2 = `  Hello world
 1 2
 @1 WhitespaceTrivia
 @2 StringLiteral`;
     
     const result2 = verifyTokens(tokenTest2);
-    expect(result2).toBe(tokenTest2);
+    expect(result2).toBe(expected2);
   });
 });
