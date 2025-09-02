@@ -21,7 +21,9 @@ Mixpad relies on tests as a cornerstone of its breakneck progress. We move ***fa
 
 ## Architecture: Smart Scanner, Simple Parser
 
-Mixpad is full of innovations, like a **responsibility shift** moving complexity INTO the scanner through structured ambiguity resolution, making the parser elegantly simple and incremental parsing efficient. Unlike traditional approaches that create GC pressure through speculative token streams and rollbacks, our scanner resolves Markdown's structural ambiguities internally using typed state flags, emitting only definitive tokens.
+Mixpad is full of innovations, like a **responsibility shift** moving complexity INTO the scanner through structured ambiguity resolution, making the parser elegantly simple. Unlike traditional approaches that create GC pressure with speculative token streams and rollbacks, our scanner resolves Markdown's structural ambiguities internally using typed state flags, emitting only definitive tokens.
+
+Fast editing requires constant re-parsing of modified documents. Markdown is one of the top-quality parsers supporting fast re-parsing of incremental changes.
 
 **Editing**: Most existing parsers descend from Markdown>HTML processors, struggling with precise positions and incremental updates that you need to edit Markdown as easily as any other language. Mixpad targets that goal with intentionality.
 
