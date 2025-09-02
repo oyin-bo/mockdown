@@ -1,5 +1,75 @@
 # Parser-Scanner Responsibility Shift: Typed Ambiguity Resolution
 
+## Implementation Staging Plan
+
+### Stage 1: Text Lines + Whitespace/Newlines
+Everything comes as text tokens (1 per line with normalized text content), plus whitespace and newline tokens as per CommonMark spec. Establishes the 4-field interface and basic line-by-line scanning.
+
+### Stage 2: Testing Infrastructure
+Build annotated Markdown testing system for comprehensive validation. All subsequent stages will use this testing approach.
+
+### Stage 3: Inline Formatting (Bold, Italic, Code)
+- Bold (`**text**`, `__text__`)
+- Italic (`*text*`, `_text_`)
+- Code spans (`` `code` ``, ``` ``code`` ```)
+- Strikethrough (`~~text~~`)
+- Emphasis delimiter recognition and matching
+
+### Stage 4: Entities and HTML
+- Character entities (`&amp;`, `&lt;`, `&#123;`)
+- HTML tags (inline and block-level)
+- HTML attributes parsing
+- Raw HTML content handling
+
+### Stage 5: Thematic Breaks
+- Horizontal rules (`---`, `***`, `___`)
+- Variant detection (3+ characters, whitespace handling)
+- Differentiation from setext headings
+
+### Stage 6: Lists
+- Ordered list markers (`1.`, `2.`, etc.)
+- Unordered list markers (`-`, `*`, `+`)
+- List indentation and nesting
+- Tight vs loose list detection
+- Task list markers (`- [ ]`, `- [x]`)
+
+### Stage 7: Tables
+- Table detection (`| header |`)
+- Alignment row parsing (`|---|:--:|--:|`)
+- Multi-line table speculation
+- Column alignment handling
+
+### Stage 8: Extensions Group A (Code & Math)
+- Fenced code blocks (``` and ~~~ with info strings)
+- Math blocks (`$$...$$`)
+- Math inline (`$...$`)
+- Language-specific highlighting hints
+
+### Stage 9: Extensions Group B (Headings & Structure)
+- ATX headings (`# Header`)
+- Setext headings (text + underline)
+- Frontmatter (YAML `---`, TOML `+++`)
+- Document structure tokens
+
+### Stage 10: Extensions Group C (Links & Advanced)
+- Link parsing (`[text](url)`, `[text][ref]`)
+- Image parsing (`![alt](url)`)
+- Reference definitions (`[ref]: url`)
+- Autolinks and URL detection
+
+### Stage 11: Remaining Syntax
+- Any other Markdown syntax not covered above
+- Custom extensions and edge cases
+- Performance optimizations
+
+### Stage 12: Rollback System
+- TokenFlags with rollback information
+- Ultra-safe rollback point detection
+- AST-derived rollback integration
+- Incremental parsing support
+
+Each stage builds incrementally with comprehensive testing before advancing.
+
 ## Architecture Overview
 
 ### Current Problem: Complex Incremental Parsing with Stateful Scanner
