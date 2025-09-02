@@ -20,6 +20,8 @@ const tokenTest = ˋ
 1 2
 @1 ListMarker ...optionally attributes to expect...
 ˋ;
+
+expect(verifyTokens(tokenTest)).toBe(tokenTest);
 ˋˋˋ
 
 Here you can see any Markdown line optionally followed with
@@ -35,6 +37,12 @@ We should support syntax like propertyName: <JSON-serialized value>.
 
 As of the Stage 1 we may only support only 2 token types,
 so the testing infrastructure will not be that useful yet.
+
+Functionally this is exposed with verifyTokens that takes in
+the annotated format, and if its expectations match, returns
+the same original string.
+If any of the expectations don't match, it injects an error message
+as an extra line below the expectation in the original string.
 
 ### Stage 3: Inline Formatting (Bold, Italic, Code)
 - Bold (`**text**`, `__text__`)
