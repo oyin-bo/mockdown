@@ -202,6 +202,12 @@ function syntaxKindToString(kind: SyntaxKind2): string {
     case SyntaxKind2.StringLiteral: return 'StringLiteral';
     case SyntaxKind2.WhitespaceTrivia: return 'WhitespaceTrivia';
     case SyntaxKind2.NewLineTrivia: return 'NewLineTrivia';
+    case SyntaxKind2.AsteriskToken: return 'AsteriskToken';
+    case SyntaxKind2.AsteriskAsterisk: return 'AsteriskAsterisk';
+    case SyntaxKind2.UnderscoreToken: return 'UnderscoreToken';
+    case SyntaxKind2.UnderscoreUnderscore: return 'UnderscoreUnderscore';
+    case SyntaxKind2.BacktickToken: return 'BacktickToken';
+    case SyntaxKind2.TildeTilde: return 'TildeTilde';
     default: return `SyntaxKind2(${kind})`;
   }
 }

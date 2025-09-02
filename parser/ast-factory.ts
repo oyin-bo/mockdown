@@ -14,6 +14,8 @@ import {
   HtmlElementNode, 
   EmphasisNode, 
   StrongNode, 
+  InlineCodeNode,
+  StrikethroughNode,
   WhitespaceSeparationNode,
   AttributeSlice,
   BlockNode,
@@ -159,6 +161,28 @@ export function createStrongNode(
   return {
     ...createNode(NodeKind.Strong, pos, end),
     marker,
+    children
+  };
+}
+
+export function createInlineCodeNode(
+  pos: number,
+  end: number,
+  backtickCount: number
+): InlineCodeNode {
+  return {
+    ...createNode(NodeKind.InlineCode, pos, end),
+    backtickCount
+  };
+}
+
+export function createStrikethroughNode(
+  pos: number,
+  end: number,
+  children: InlineNode[]
+): StrikethroughNode {
+  return {
+    ...createNode(NodeKind.Strikethrough, pos, end),
     children
   };
 }

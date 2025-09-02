@@ -4,7 +4,7 @@
  */
 
 import { Scanner, createScanner } from './scanner.js';
-import { SyntaxKind, TokenFlags } from './token-types.js';
+import { SyntaxKind, TokenFlags, TokenFlagRunLengthMask, TokenFlagRunLengthShift } from './token-types.js';
 import { 
   Node, 
   NodeKind, 
@@ -15,6 +15,10 @@ import {
   ParagraphNode,
   HeadingNode,
   TextNode,
+  EmphasisNode,
+  StrongNode,
+  InlineCodeNode,
+  StrikethroughNode,
   HtmlElementNode,
   WhitespaceSeparationNode,
   getNodeKind
@@ -25,6 +29,10 @@ import {
   createHeadingNode,
   createTextNode,
   createHtmlElementNode,
+  createEmphasisNode,
+  createStrongNode,
+  createInlineCodeNode,
+  createStrikethroughNode,
   createWhitespaceSeparationNode,
   finishNode,
   setChildren,
@@ -324,8 +332,19 @@ function parseInlineConstruct(context: ParseContext): InlineNode | null {
     return parseHtmlElement(context) as InlineNode;
   }
 
-  // Emphasis and strong (basic implementation)
-  if (token === SyntaxKind.AsteriskToken || token === SyntaxKind.UnderscoreToken) {
+  // Inline code spans
+  if (token === SyntaxKind.BacktickToken) {
+    return parseInlineCode(context);
+  }
+
+  // Strikethrough
+  if (token === SyntaxKind.TildeTilde) {
+    return parseStrikethrough(context);
+  }
+
+  // Emphasis and strong (both single and double markers)
+  if (token === SyntaxKind.AsteriskToken || token === SyntaxKind.UnderscoreToken ||
+      token === SyntaxKind.AsteriskAsterisk || token === SyntaxKind.UnderscoreUnderscore) {
     return parseEmphasisOrStrong(context);
   }
 
@@ -333,10 +352,145 @@ function parseInlineConstruct(context: ParseContext): InlineNode | null {
   return parseTextRun(context);
 }
 
+function parseInlineCode(context: ParseContext): InlineCodeNode | null {
+  const { scanner } = context;
+  const start = scanner.getTokenStart();
+  const flags = scanner.getTokenFlags();
+  
+  // Extract backtick run length from token flags
+  const openRunLength = (flags & TokenFlagRunLengthMask) >> TokenFlagRunLengthShift;
+  
+  // Get the opening backticks 
+  const openText = scanner.getTokenText();
+  scanner.scan(); // consume opening backticks
+  
+  // Find matching closing backticks with same run length
+  let codeStart = scanner.getTokenStart();
+  let foundClose = false;
+  
+  while (scanner.getToken() !== SyntaxKind.EndOfFileToken) {
+    if (scanner.getToken() === SyntaxKind.BacktickToken) {
+      const closeFlags = scanner.getTokenFlags();
+      const closeRunLength = (closeFlags & TokenFlagRunLengthMask) >> TokenFlagRunLengthShift;
+      
+      if (closeRunLength === openRunLength) {
+        // Found matching closing backticks
+        foundClose = true;
+        scanner.scan(); // consume closing backticks
+        break;
+      }
+    }
+    scanner.scan();
+  }
+  
+  const end = scanner.getTokenStart();
+  
+  if (!foundClose) {
+    // Unterminated code span - treat opening backticks as literal text
+    // Reset scanner to start position and return null to let parseTextRun handle it
+    return null;
+  }
+  
+  return createInlineCodeNode(start, end, openRunLength);
+}
+
+function parseStrikethrough(context: ParseContext): StrikethroughNode | null {
+  const { scanner } = context;
+  const start = scanner.getTokenStart();
+  
+  scanner.scan(); // consume opening ~~
+  
+  // Parse inline content until closing ~~
+  const children = parseInlineContentUntil(context, SyntaxKind.TildeTilde);
+  
+  // Check if we found closing ~~
+  if (scanner.getToken() === SyntaxKind.TildeTilde) {
+    scanner.scan(); // consume closing ~~
+    const end = scanner.getTokenStart();
+    
+    const strikethrough = createStrikethroughNode(start, end, children);
+    
+    if (context.options.parentLinking) {
+      setChildren(strikethrough, children, true);
+    }
+    
+    return strikethrough;
+  }
+  
+  // No closing delimiter found - treat as literal text
+  return null;
+}
+
 function parseEmphasisOrStrong(context: ParseContext): InlineNode | null {
-  // TODO: Implement proper delimiter stack algorithm in phase 2
-  // For now, just parse as text
-  return parseTextRun(context);
+  const { scanner } = context;
+  const token = scanner.getToken();
+  const flags = scanner.getTokenFlags();
+  const start = scanner.getTokenStart();
+  
+  // Check if this token can open emphasis/strong based on flanking rules
+  if (!(flags & TokenFlags.CanOpen)) {
+    return null; // Can't open, treat as text
+  }
+  
+  const markerText = scanner.getTokenText();
+  scanner.scan(); // consume opening marker
+  
+  // Determine if this is emphasis (single) or strong (double)
+  const isStrong = (token === SyntaxKind.AsteriskAsterisk || token === SyntaxKind.UnderscoreUnderscore);
+  const targetToken = token; // Same token type for closing
+  
+  // Parse inline content until closing marker
+  const children = parseInlineContentUntil(context, targetToken);
+  
+  // Check if we found a proper closing marker
+  if (scanner.getToken() === targetToken) {
+    const closeFlags = scanner.getTokenFlags();
+    if (closeFlags & TokenFlags.CanClose) {
+      scanner.scan(); // consume closing marker
+      const end = scanner.getTokenStart();
+      
+      let result: EmphasisNode | StrongNode;
+      if (isStrong) {
+        result = createStrongNode(start, end, markerText, children);
+      } else {
+        result = createEmphasisNode(start, end, markerText, children);
+      }
+      
+      if (context.options.parentLinking) {
+        setChildren(result, children, true);
+      }
+      
+      return result;
+    }
+  }
+  
+  // No proper closing delimiter found - treat as literal text
+  return null;
+}
+
+function parseInlineContentUntil(context: ParseContext, stopToken: SyntaxKind): InlineNode[] {
+  const { scanner } = context;
+  const children: InlineNode[] = [];
+  
+  while (scanner.getToken() !== SyntaxKind.EndOfFileToken && scanner.getToken() !== stopToken) {
+    // Avoid parsing nested constructs of the same type to prevent infinite recursion
+    if (scanner.getToken() === stopToken) {
+      break;
+    }
+    
+    const inline = parseInlineConstruct(context);
+    if (inline) {
+      children.push(inline);
+    } else {
+      // If we can't parse anything, consume one token as text to avoid infinite loop
+      const start = scanner.getTokenStart();
+      scanner.scan();
+      const end = scanner.getTokenStart();
+      children.push(createTextNode(start, end));
+    }
+  }
+  
+  return children;
 }
 
 function parseTextRun(context: ParseContext): TextNode {
