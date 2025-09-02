@@ -1,93 +1,60 @@
 /**
  * Example Usage of Stage 2 Testing Infrastructure
  * 
- * This file demonstrates the new annotated testing system with practical examples
- * that showcase the declarative testing approach for Scanner2.
+ * This file demonstrates the new @ numbered token verification system
+ * with practical examples that showcase the declarative testing approach for Scanner2.
  */
 
-import { describe, test } from 'vitest';
-import { testAnnotated } from './testing-harness/index.js';
+import { describe, test, expect } from 'vitest';
+import { verifyTokens } from './testing-harness/verify-tokens.js';
 
 describe('Stage 2: Testing Infrastructure Examples', () => {
   
   test('demonstrates basic annotated test usage', () => {
-    testAnnotated(`
-<!-- TEST: Simple text with line break -->
-Hello world
+    const tokenTest = `Hello world
 Second line
-<!-- EXPECT: StringLiteral "Hello world" flags=IsAtLineStart -->
-<!-- EXPECT: NewLineTrivia "\\n" -->
-<!-- EXPECT: StringLiteral "Second line" flags=IsAtLineStart|PrecedingLineBreak -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+@1 StringLiteral text="Hello world" flags=IsAtLineStart|CanRollbackHere
+@2 NewLineTrivia
+@3 StringLiteral text="Second line" flags=IsAtLineStart|PrecedingLineBreak|CanRollbackHere
+@4 EndOfFileToken`;
+
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
   
   test('demonstrates whitespace handling', () => {
-    testAnnotated(`
-<!-- TEST: Leading whitespace preservation -->
-    Indented text
-<!-- EXPECT: WhitespaceTrivia "    " flags=IsAtLineStart -->
-<!-- EXPECT: StringLiteral "Indented text" -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+    const tokenTest = `    Indented text
+@1 WhitespaceTrivia text="    " flags=IsAtLineStart
+@2 StringLiteral text="Indented text" flags=IsAtLineStart|CanRollbackHere
+@3 EndOfFileToken`;
+
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
   
   test('demonstrates blank line detection', () => {
-    testAnnotated(`
-<!-- TEST: Blank line flags -->
-Text
+    const tokenTest = `Text
 
 More text
-<!-- EXPECT: StringLiteral "Text" flags=IsAtLineStart -->
-<!-- EXPECT: NewLineTrivia "\\n" -->
-<!-- EXPECT: NewLineTrivia "\\n" flags=IsBlankLine|PrecedingLineBreak -->
-<!-- EXPECT: StringLiteral "More text" flags=IsAtLineStart|PrecedingLineBreak -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
-  });
-  
-  test('demonstrates multiple test cases in one annotation', () => {
-    testAnnotated(`
-<!-- TEST: First test case -->
-Simple
-<!-- EXPECT: StringLiteral "Simple" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
+@1 StringLiteral text="Text" flags=IsAtLineStart|CanRollbackHere
+@2 NewLineTrivia
+@3 NewLineTrivia flags=PrecedingLineBreak|IsAtLineStart|IsBlankLine
+@4 StringLiteral text="More text" flags=PrecedingLineBreak|IsAtLineStart|CanRollbackHere
+@5 EndOfFileToken`;
 
-<!-- TEST: Second test case -->
-Another test
-<!-- EXPECT: StringLiteral "Another test" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
-  });
-  
-  test('demonstrates performance testing configuration', () => {
-    testAnnotated(`
-<!-- TEST: Performance measurement example -->
-<!-- CONFIG: performance=true -->
-This is a test line for performance measurement
-<!-- EXPECT: StringLiteral "This is a test line for performance measurement" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
   
   test('demonstrates edge case testing', () => {
-    testAnnotated(`
-<!-- TEST: Empty input handling -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
+    const tokenTest = `@1 EndOfFileToken`;
 
-<!-- TEST: Unicode content -->
-Hello 🌍 World
-<!-- EXPECT: StringLiteral "Hello 🌍 World" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
+
+  test('demonstrates unicode content', () => {
+    const tokenTest = `Hello 🌍 World
+@1 StringLiteral text="Hello 🌍 World" flags=IsAtLineStart|CanRollbackHere
+@2 EndOfFileToken`;
+
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 });
 
@@ -96,63 +63,33 @@ describe('Future Stage Patterns (Examples)', () => {
   
   test('shows pattern for Stage 3: inline formatting (future)', () => {
     // When Stage 3 is implemented, tests could look like:
-    /*
-    testAnnotated(`
-      <!-- TEST: Bold text formatting -->
-      **bold text**
-      <!-- EXPECT: BoldStart "**" -->
-      <!-- EXPECT: StringLiteral "bold text" -->
-      <!-- EXPECT: BoldEnd "**" -->
-      <!-- EXPECT: EndOfFileToken "" -->
-      <!-- /TEST -->
-    `);
-    */
-    
-    // For now, just demonstrate the current capability
-    testAnnotated(`
-<!-- TEST: Future bold pattern (Stage 1 behavior) -->
-**bold text**
-<!-- EXPECT: StringLiteral "**bold text**" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+    const tokenTest = `**bold text**
+@1 StringLiteral text="**bold text**" flags=IsAtLineStart|CanRollbackHere
+@2 EndOfFileToken`;
+
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
   
   test('shows pattern for Stage 4: HTML entities (future)', () => {
     // When Stage 4 is implemented, tests could look like:
-    /*
-    testAnnotated(`
-      <!-- TEST: HTML entity parsing -->
-      &lt;tag&gt;
-      <!-- EXPECT: EntityRef "&lt;" -->
-      <!-- EXPECT: StringLiteral "tag" -->
-      <!-- EXPECT: EntityRef "&gt;" -->
-      <!-- EXPECT: EndOfFileToken "" -->
-      <!-- /TEST -->
-    `);
-    */
-    
-    // For now, just demonstrate the current capability
-    testAnnotated(`
-<!-- TEST: Future entity pattern (Stage 1 behavior) -->
-&lt;tag&gt;
-<!-- EXPECT: StringLiteral "&lt;tag&gt;" flags=IsAtLineStart -->
-<!-- EXPECT: EndOfFileToken "" -->
-<!-- /TEST -->
-    `);
+    const tokenTest = `&lt;tag&gt;
+@1 StringLiteral text="&lt;tag&gt;" flags=IsAtLineStart|CanRollbackHere
+@2 EndOfFileToken`;
+
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 });
 
 /*
  * Key Benefits Demonstrated:
  * 
- * 1. **Readable**: Tests are written in natural markdown with inline expectations
+ * 1. **Readable**: Tests use @ numbered token expectations inline with content
  * 2. **Maintainable**: Easy to update expectations when behavior changes
- * 3. **Comprehensive**: Can test tokens, flags, positions, and configurations
+ * 3. **Comprehensive**: Can test tokens, text content, flags, and positions
  * 4. **Extensible**: Ready for future stages with minimal changes
  * 5. **Integrated**: Works seamlessly with existing Vitest infrastructure
- * 6. **Debugging**: Rich error messages show exactly what differed
- * 7. **Performance**: Built-in performance measurement capabilities
+ * 6. **Debugging**: Clear error messages show exactly what differed
+ * 7. **Consistent**: Single pattern for all test definitions
  * 
  * This testing infrastructure provides the foundation for testing all subsequent
  * parser-scanner stages while maintaining the high quality and comprehensive

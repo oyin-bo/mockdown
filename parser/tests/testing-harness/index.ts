@@ -66,6 +66,11 @@ export {
   type PerformanceComparison
 } from './test-utils.js';
 
+// Token verification system
+export {
+  verifyTokens
+} from './verify-tokens.js';
+
 /**
  * Quick start example for new users
  */
