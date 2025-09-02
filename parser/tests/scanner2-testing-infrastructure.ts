@@ -164,11 +164,11 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
   while (scanner.token !== SyntaxKind2.EndOfFileToken && positionIndex < sortedPositions.length) {
     scanner.scan();
     
-    if (scanner.token === SyntaxKind2.EndOfFileToken) break;
-    
+    if ((scanner.token as SyntaxKind2) === SyntaxKind2.EndOfFileToken) break;
+
     const tokenStart = scanner.offsetNext - scanner.tokenText.length;
     const tokenEnd = scanner.offsetNext;
-    
+
     // Check if any position markers fall within this token
     while (positionIndex < sortedPositions.length) {
       const marker = sortedPositions[positionIndex];
@@ -188,7 +188,7 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
       }
     }
   }
-  
+
   return tokenMap;
 }
 
