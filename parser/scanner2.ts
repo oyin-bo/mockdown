@@ -305,21 +305,14 @@ export function createScanner2(): Scanner2 {
   }
   
   function scanTilde(start: number): void {
-    let runEnd = start;
-    
-    // Count consecutive tildes
-    while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.tilde) {
-      runEnd++;
-    }
-    
-    const runLength = runEnd - start;
-    
-    // Only emit TildeTilde for runs of 2 or more
-    if (runLength >= 2) {
-      emitToken(SyntaxKind2.TildeTilde, start, runEnd, TokenFlags2.None);
-      updatePosition(runEnd);
+    // This should only be called for double tildes now, since emitTextRun handles single tildes
+    // Double check that we have at least 2 tildes
+    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.tilde) {
+      // This is a double tilde - emit TildeTilde token
+      emitToken(SyntaxKind2.TildeTilde, start, start + 2, TokenFlags2.None);
+      updatePosition(start + 2);
     } else {
-      // Single tilde - treat as regular text
+      // This shouldn't happen now, but fallback to text
       emitTextRun(start);
     }
   }
@@ -331,13 +324,32 @@ export function createScanner2(): Scanner2 {
     while (textEnd < end) {
       const ch = source.charCodeAt(textEnd);
       
-      if (isLineBreak(ch) ||
-          ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.underscore ||
-          ch === CharacterCodes.backtick ||
-          ch === CharacterCodes.tilde) {
+      if (isLineBreak(ch)) {
         break;
       }
+      
+      // Check for special characters, but handle intraword underscores specially
+      if (ch === CharacterCodes.asterisk ||
+          ch === CharacterCodes.backtick) {
+        break;
+      }
+      
+      // Special handling for underscores - only break if they can be emphasis delimiters
+      if (ch === CharacterCodes.underscore) {
+        if (canUnderscoreBeDelimiter(textEnd)) {
+          break;
+        }
+      }
+      
+      // Special handling for tildes - only break if they are part of double tilde
+      if (ch === CharacterCodes.tilde) {
+        // Check if this is a double tilde
+        if (textEnd + 1 < end && source.charCodeAt(textEnd + 1) === CharacterCodes.tilde) {
+          break; // This is start of ~~, let scanner handle it
+        }
+        // Single tilde - include it in text
+      }
+      
       textEnd++;
     }
     
@@ -358,6 +370,24 @@ export function createScanner2(): Scanner2 {
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
     }
+  }
+  
+  function canUnderscoreBeDelimiter(pos: number): boolean {
+    // Check if underscore at position pos can be an emphasis delimiter
+    // According to CommonMark, intraword underscores (surrounded by alphanumeric) cannot be delimiters
+    
+    const prevChar = pos > 0 ? source.charCodeAt(pos - 1) : 0;
+    const nextChar = pos + 1 < end ? source.charCodeAt(pos + 1) : 0;
+    
+    const prevIsAlnum = isAlphaNumeric(prevChar);
+    const nextIsAlnum = isAlphaNumeric(nextChar);
+    
+    // If surrounded by alphanumeric characters, it's intraword and can't be a delimiter
+    if (prevIsAlnum && nextIsAlnum) {
+      return false;
+    }
+    
+    return true;
   }
   
   function computeFlankingFlags(start: number, end: number, char: number): TokenFlags2 {
@@ -535,19 +565,54 @@ export function createScanner2(): Scanner2 {
       return;
     }
     
-    // Stage 3: Handle inline formatting tokens
-    if (ch === CharacterCodes.asterisk) {
-      scanAsterisk(start);
-    } else if (ch === CharacterCodes.underscore) {
-      scanUnderscore(start);
-    } else if (ch === CharacterCodes.backtick) {
-      scanBacktick(start);
-    } else if (ch === CharacterCodes.tilde) {
-      scanTilde(start);
+    // Check if this line contains any special characters that need individual tokenization
+    if (lineContainsSpecialChars(start)) {
+      // Stage 3: Handle inline formatting tokens
+      if (ch === CharacterCodes.asterisk) {
+        scanAsterisk(start);
+      } else if (ch === CharacterCodes.underscore) {
+        scanUnderscore(start);
+      } else if (ch === CharacterCodes.backtick) {
+        scanBacktick(start);
+      } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
+        scanTilde(start);
+      } else {
+        // Regular text content - scan until next special character
+        emitTextRun(start);
+      }
     } else {
-      // Regular text content - scan until next special character
-      emitTextRun(start);
+      // No special characters on this line - use Stage 1 behavior for compatibility
+      emitTextContent(start);
     }
+  }
+  
+  function lineContainsSpecialChars(start: number): boolean {
+    let pos = start;
+    while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
+      const ch = source.charCodeAt(pos);
+      
+      if (ch === CharacterCodes.asterisk ||
+          ch === CharacterCodes.backtick) {
+        return true;
+      }
+      
+      // Check for emphasis-capable underscores
+      if (ch === CharacterCodes.underscore && canUnderscoreBeDelimiter(pos)) {
+        return true;
+      }
+      
+      // Check for double tildes
+      if (ch === CharacterCodes.tilde && isDoubleTilde(pos)) {
+        return true;
+      }
+      
+      pos++;
+    }
+    return false;
+  }
+  
+  function isDoubleTilde(pos: number): boolean {
+    return pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.tilde;
   }
   
   /**
