@@ -12,59 +12,93 @@ import {
 } from './character-codes.js';
 
 export interface Scanner2 {
-  // Core methods - only 3 methods total
-  scan(): void;                                    // Advances to next token, updates all fields
-  rollback(pos: number, type: RollbackType): void; // Structured rollback
-  fillDebugState(state: ScannerDebugState): void;  // Zero-allocation diagnostics
-  
-  // Token fields - updated by scan() and rollback() - direct access
-  token: SyntaxKind2;           // Current token type
-  tokenText: string;           // Current token text (always materialized)
-  tokenFlags: TokenFlags2;      // Token flags including rollback safety
-  offsetNext: number;          // Where the next token will start
-  
-  // Initialization method
-  setText(text: string, start?: number, length?: number): void;
+  /** Initialize scanner text and optional start/length. */
+  initText(text: string, start?: number, length?: number): void;
+
+  /** Advances to the next token and updates all public token fields. */
+  scan(): void;
+
+  /** Structured rollback to a previous position. */
+  rollback(pos: number, type: RollbackType): void;
+
+  /** Fill a zero-allocation diagnostics state object. */
+  fillDebugState(state: ScannerDebugState): void;
+
+  /** Current token type. Updated by scan() and rollback(). */
+  token: SyntaxKind2;
+
+  /** Current token text (always materialized). */
+  tokenText: string;
+
+  /** Token flags including rollback safety and contextual flags. */
+  tokenFlags: TokenFlags2;
+
+  /** Where the next token will start (offset into the source). */
+  offsetNext: number;
 }
 
-/**
- * Content processing mode - only one active at a time
- */
+/** Content processing mode - only one active at a time. */
 const enum ContentMode {
-  Normal = 0,                    // Regular Markdown tokenization
-  RawText = 1,                   // Literal text until end tag (script, style)
-  RCData = 2,                    // Text with entities until end tag (textarea, title)
+  /** Regular Markdown tokenization. */
+  Normal = 0,
+
+  /** Literal text until end tag (e.g. <script>, <style>). */
+  RawText = 1,
+
+  /** Text with entities until end tag (e.g. <textarea>, <title>). */
+  RCData = 2,
 }
 
-/**
- * Context flags - affect token emission
- */
+/** Context flags that affect token emission. */
 const enum ContextFlags {
+  /** No flags set. */
   None = 0,
-  AtLineStart = 1 << 0,          // 0x01 - Currently at line start
-  InParagraph = 1 << 1,          // 0x02 - Inside paragraph content
-  PrecedingLineBreak = 1 << 2,   // 0x04 - Line break before current position
+
+  /** 0x01 - Currently at the start of a line. */
+  AtLineStart = 1 << 0,
+
+  /** 0x02 - Inside paragraph content. */
+  InParagraph = 1 << 1,
+
+  /** 0x04 - There was a line break before the current position. */
+  PrecedingLineBreak = 1 << 2,
 }
 
 /**
  * Debug state interface for zero-allocation diagnostics
  */
 export interface ScannerDebugState {
-  // Position state
+  /** Current absolute position (index) in the source. */
   pos: number;
-  line: number;
-  column: number;
-  mode: string;                    // Human-readable mode name
 
-  // Basic state
+  /** Current 1-based line number. */
+  line: number;
+
+  /** Current 1-based column number. */
+  column: number;
+
+  /** Human-readable mode name (e.g. 'Normal', 'RawText', 'RCData'). */
+  mode: string;
+
+  /** True when the scanner is at the start of a line. */
   atLineStart: boolean;
+
+  /** True when currently inside paragraph content. */
   inParagraph: boolean;
+
+  /** True when there was a line break immediately before the current pos. */
   precedingLineBreak: boolean;
 
-  // Token state
+  /** The current token kind reported by the scanner. */
   currentToken: SyntaxKind2;
+
+  /** The current token's text. */
   currentTokenText: string;
+
+  /** Flags associated with the current token. */
   currentTokenFlags: TokenFlags2;
+
+  /** The offset where the next token will start. */
   nextOffset: number;
 }
 
@@ -406,7 +440,7 @@ export function createScanner2(): Scanner2 {
     scan,
     rollback,
     fillDebugState,
-    setText,
+    initText: setText,
     
     // Direct field access - these are the 4 public fields
     get token() { return token; },

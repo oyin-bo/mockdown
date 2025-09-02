@@ -8,6 +8,42 @@ Everything comes as text tokens (1 per line with normalized text content), plus 
 ### Stage 2: Testing Infrastructure
 Build annotated Markdown testing system for comprehensive validation. All subsequent stages will use this testing approach.
 
+Testing will be based on annotated text format where Markdown and test expectations are interleaved.
+
+ˋˋˋ
+const tokenTest = ˋ
+# Heading1
+1 2
+@1 HeadingMarker ...optionally attributes to expect...
+@2 Text
+* List1
+1 2
+@1 ListMarker ...optionally attributes to expect...
+ˋ;
+
+expect(verifyTokens(tokenTest)).toBe(tokenTest);
+ˋˋˋ
+
+Here you can see any Markdown line optionally followed with
+a list of digits 1 to 9, then letters A to Z marking positions in text.
+These positions on the next lines can be referred to with @1, @2, etc.
+Any line with incremental digits, then letters is considered
+position-reference line.
+Lines immediately following position-reference lines and starting
+with @ then digit or letter are for asserting tokens at corresponding position.
+The first word after that @1, @2 is token kind.
+After that separated with a space can optionally go attribute assertions.
+We should support syntax like propertyName: <JSON-serialized value>.
+
+As of the Stage 1 we may only support only 2 token types,
+so the testing infrastructure will not be that useful yet.
+
+Functionally this is exposed with verifyTokens that takes in
+the annotated format, and if its expectations match, returns
+the same original string.
+If any of the expectations don't match, it injects an error message
+as an extra line below the expectation in the original string.
+
 ### Stage 3: Inline Formatting (Bold, Italic, Code)
 - Bold (`**text**`, `__text__`)
 - Italic (`*text*`, `_text_`)

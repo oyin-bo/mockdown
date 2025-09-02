@@ -29,7 +29,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle only whitespace', () => {
-    scanner.setText('   \t   ');
+    scanner.initText('   \t   ');
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.WhitespaceTrivia);
@@ -40,7 +40,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle only newlines', () => {
-    scanner.setText('\n\n\n');
+    scanner.initText('\n\n\n');
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
@@ -61,7 +61,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle mixed line endings', () => {
-    scanner.setText('Line 1\nLine 2\r\nLine 3\rLine 4');
+    scanner.initText('Line 1\nLine 2\r\nLine 3\rLine 4');
     
     const tokens = [];
     while (scanner.token !== SyntaxKind2.EndOfFileToken) {
@@ -86,7 +86,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle lines with only whitespace', () => {
-    scanner.setText('Line 1\n   \t   \nLine 2');
+    scanner.initText('Line 1\n   \t   \nLine 2');
     
     scanner.scan(); // Line 1
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
@@ -110,7 +110,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
 
   test('should handle very long lines', () => {
     const longText = 'A'.repeat(10000);
-    scanner.setText(longText);
+    scanner.initText(longText);
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
@@ -119,7 +119,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle unicode characters', () => {
-    scanner.setText('Hello 世界\nBonjour 🌍');
+    scanner.initText('Hello 世界\nBonjour 🌍');
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
@@ -134,7 +134,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle line ending at EOF without newline', () => {
-    scanner.setText('Line 1\nLine 2 without newline');
+    scanner.initText('Line 1\nLine 2 without newline');
     
     scanner.scan(); // Line 1
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
@@ -152,7 +152,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle multiple consecutive spaces and tabs', () => {
-    scanner.setText('  \t  \t  Text with\t\t\tspaces  \t  ');
+    scanner.initText('  \t  \t  Text with\t\t\tspaces  \t  ');
     
     scanner.scan(); // Leading whitespace
     expect(scanner.token).toBe(SyntaxKind2.WhitespaceTrivia);
@@ -164,7 +164,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should preserve exact whitespace in whitespace tokens', () => {
-    scanner.setText('\t  \t');
+    scanner.initText('\t  \t');
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.WhitespaceTrivia);
@@ -172,7 +172,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle rollback to various positions', () => {
-    scanner.setText('Line 1\nLine 2\nLine 3');
+    scanner.initText('Line 1\nLine 2\nLine 3');
     
     // Scan several tokens
     scanner.scan(); // Line 1
@@ -200,7 +200,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
     const fullText = 'PREFIX: Line 1\nLine 2\nLine 3 :SUFFIX';
     
     // Test start boundary
-    scanner.setText(fullText, 8, 6); // Just "Line 1"
+    scanner.initText(fullText, 8, 6); // Just "Line 1"
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
@@ -209,7 +209,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
     expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
     
     // Test middle section with newline
-    scanner.setText(fullText, 8, 14); // "Line 1\nLine 2"
+    scanner.initText(fullText, 8, 14); // "Line 1\nLine 2"
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
@@ -223,7 +223,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle debug state correctly', () => {
-    scanner.setText('Line 1\n  Line 2');
+    scanner.initText('Line 1\n  Line 2');
     
     // Initial state
     scanner.fillDebugState(debugState);
@@ -252,7 +252,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle rollback type parameter correctly', () => {
-    scanner.setText('Test content');
+    scanner.initText('Test content');
     
     // Test different rollback types
     scanner.rollback(0, RollbackType.DocumentStart);
@@ -269,7 +269,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should throw error for invalid rollback positions', () => {
-    scanner.setText('Test');
+    scanner.initText('Test');
     
     expect(() => scanner.rollback(-1, RollbackType.DocumentStart))
       .toThrow('Invalid rollback position: -1');
@@ -279,7 +279,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle edge case of empty lines at end', () => {
-    scanner.setText('Content\n\n');
+    scanner.initText('Content\n\n');
     
     scanner.scan(); // Content
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);

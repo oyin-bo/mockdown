@@ -29,7 +29,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should handle empty input', () => {
-    scanner.setText('');
+    scanner.initText('');
     scanner.scan();
     
     expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
@@ -38,7 +38,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should tokenize simple text line', () => {
-    scanner.setText('Hello world');
+    scanner.initText('Hello world');
     scanner.scan();
     
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
@@ -51,7 +51,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should handle line breaks', () => {
-    scanner.setText('Line 1\nLine 2');
+    scanner.initText('Line 1\nLine 2');
     
     // First line
     scanner.scan();
@@ -77,7 +77,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should handle CRLF line breaks', () => {
-    scanner.setText('Line 1\r\nLine 2');
+    scanner.initText('Line 1\r\nLine 2');
     
     // First line
     scanner.scan();
@@ -97,7 +97,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should handle whitespace', () => {
-    scanner.setText('  Hello  \t  world  ');
+    scanner.initText('  Hello  \t  world  ');
     
     // Leading whitespace
     scanner.scan();
@@ -111,7 +111,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should handle blank lines', () => {
-    scanner.setText('Line 1\n\nLine 2');
+    scanner.initText('Line 1\n\nLine 2');
     
     // First line
     scanner.scan();
@@ -136,7 +136,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should normalize whitespace within lines', () => {
-    scanner.setText('  Text\twith\t\tmultiple   spaces  ');
+    scanner.initText('  Text\twith\t\tmultiple   spaces  ');
     
     // Leading whitespace
     scanner.scan();
@@ -149,7 +149,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should track position correctly', () => {
-    scanner.setText('Line 1\nLine 2\nLine 3');
+    scanner.initText('Line 1\nLine 2\nLine 3');
     
     scanner.fillDebugState(debugState);
     expect(debugState.pos).toBe(0);
@@ -171,7 +171,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   });
 
   test('should support rollback functionality', () => {
-    scanner.setText('Line 1\nLine 2\nLine 3');
+    scanner.initText('Line 1\nLine 2\nLine 3');
     
     // Scan first line
     scanner.scan();
@@ -205,7 +205,7 @@ Third line here
 
 Final line after blank`;
     
-    scanner.setText(text);
+    scanner.initText(text);
     
     const tokens: Array<{kind: SyntaxKind, text: string, flags: TokenFlags}> = [];
     
@@ -234,7 +234,7 @@ Final line after blank`;
   });
 
   test('should set rollback flags appropriately', () => {
-    scanner.setText('Line 1\nLine 2');
+    scanner.initText('Line 1\nLine 2');
     
     // First line should have rollback capability (at line start)
     scanner.scan();
@@ -250,7 +250,7 @@ Final line after blank`;
   });
   
   test('should handle setText with start and length parameters', () => {
-    scanner.setText('PREFIX: Line 1\nLine 2 :SUFFIX', 8, 14); // Just "Line 1\nLine 2"
+    scanner.initText('PREFIX: Line 1\nLine 2 :SUFFIX', 8, 14); // Just "Line 1\nLine 2"
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
