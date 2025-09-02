@@ -5,7 +5,7 @@
 
 import { describe, test, expect, beforeEach } from 'vitest';
 import { createScanner2, type Scanner2, type ScannerDebugState } from '../scanner2.js';
-import { SyntaxKind, TokenFlags } from '../token-types.js';
+import { SyntaxKind2, TokenFlags2 } from '../scanner2-token-types.js';
 
 describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   let scanner: Scanner2;
@@ -21,9 +21,9 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
       atLineStart: false,
       inParagraph: false,
       precedingLineBreak: false,
-      currentToken: SyntaxKind.Unknown,
+      currentToken: SyntaxKind2.Unknown,
       currentTokenText: '',
-      currentTokenFlags: TokenFlags.None,
+      currentTokenFlags: TokenFlags2.None,
       nextOffset: 0
     };
   });
@@ -32,7 +32,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     scanner.setText('');
     scanner.scan();
     
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
     expect(scanner.tokenText).toBe('');
     expect(scanner.offsetNext).toBe(0);
   });
@@ -41,13 +41,13 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     scanner.setText('Hello world');
     scanner.scan();
     
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Hello world');
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
+    expect(scanner.tokenFlags & TokenFlags2.IsAtLineStart).toBeTruthy();
     expect(scanner.offsetNext).toBe(11);
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
   });
 
   test('should handle line breaks', () => {
@@ -55,25 +55,25 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // First line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
     expect(scanner.offsetNext).toBe(6);
     
     // Newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     expect(scanner.tokenText).toBe('\n');
     expect(scanner.offsetNext).toBe(7);
     
     // Second line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 2');
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
+    expect(scanner.tokenFlags & TokenFlags2.IsAtLineStart).toBeTruthy();
     expect(scanner.offsetNext).toBe(13);
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
   });
 
   test('should handle CRLF line breaks', () => {
@@ -81,18 +81,18 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // First line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
     
     // CRLF newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     expect(scanner.tokenText).toBe('\r\n');
     expect(scanner.offsetNext).toBe(8);
     
     // Second line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 2');
   });
 
@@ -101,12 +101,12 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // Leading whitespace
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.WhitespaceTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.WhitespaceTrivia);
     expect(scanner.tokenText).toBe('  ');
     
     // Text content (should be normalized)
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Hello world'); // Normalized whitespace
   });
 
@@ -115,23 +115,23 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // First line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
     
     // First newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     expect(scanner.tokenText).toBe('\n');
     
     // Blank line newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     expect(scanner.tokenText).toBe('\n');
-    expect(scanner.tokenFlags & TokenFlags.IsBlankLine).toBeTruthy();
+    expect(scanner.tokenFlags & TokenFlags2.IsBlankLine).toBeTruthy();
     
     // Second line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 2');
   });
 
@@ -140,11 +140,11 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // Leading whitespace
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.WhitespaceTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.WhitespaceTrivia);
     
     // Normalized text content
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Text with multiple spaces'); // Normalized
   });
 
@@ -175,12 +175,12 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // Scan first line
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
     
     // Scan newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     
     // Rollback to beginning
     scanner.rollback(0, 0 /* DocumentStart */);
@@ -194,7 +194,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     
     // Should scan same content again
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
   });
 
@@ -209,9 +209,9 @@ Final line after blank`;
     
     const tokens: Array<{kind: SyntaxKind, text: string, flags: TokenFlags}> = [];
     
-    while (scanner.token !== SyntaxKind.EndOfFileToken) {
+    while (scanner.token !== SyntaxKind2.EndOfFileToken) {
       scanner.scan();
-      if (scanner.token !== SyntaxKind.EndOfFileToken) {
+      if (scanner.token !== SyntaxKind2.EndOfFileToken) {
         tokens.push({
           kind: scanner.token,
           text: scanner.tokenText,
@@ -224,9 +224,9 @@ Final line after blank`;
     expect(tokens.length).toBeGreaterThan(5); // Multiple lines and newlines
     
     // Check that we have the expected token types
-    const textTokens = tokens.filter(t => t.kind === SyntaxKind.StringLiteral);
-    const newlineTokens = tokens.filter(t => t.kind === SyntaxKind.NewLineTrivia);
-    const blankLineTokens = tokens.filter(t => t.flags & TokenFlags.IsBlankLine);
+    const textTokens = tokens.filter(t => t.kind === SyntaxKind2.StringLiteral);
+    const newlineTokens = tokens.filter(t => t.kind === SyntaxKind2.NewLineTrivia);
+    const blankLineTokens = tokens.filter(t => t.flags & TokenFlags2.IsBlankLine);
     
     expect(textTokens.length).toBe(4); // Four lines of text
     expect(newlineTokens.length).toBe(4); // Four newlines
@@ -238,32 +238,32 @@ Final line after blank`;
     
     // First line should have rollback capability (at line start)
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenFlags & TokenFlags.CanRollbackHere).toBeTruthy();
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
+    expect(scanner.tokenFlags & TokenFlags2.CanRollbackHere).toBeTruthy();
+    expect(scanner.tokenFlags & TokenFlags2.IsAtLineStart).toBeTruthy();
     
     scanner.scan(); // newline
     scanner.scan(); // second line
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenFlags & TokenFlags.CanRollbackHere).toBeTruthy();
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
+    expect(scanner.tokenFlags & TokenFlags2.CanRollbackHere).toBeTruthy();
+    expect(scanner.tokenFlags & TokenFlags2.IsAtLineStart).toBeTruthy();
   });
   
   test('should handle setText with start and length parameters', () => {
     scanner.setText('PREFIX: Line 1\nLine 2 :SUFFIX', 8, 14); // Just "Line 1\nLine 2"
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.token).toBe(SyntaxKind2.NewLineTrivia);
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.token).toBe(SyntaxKind2.StringLiteral);
     expect(scanner.tokenText).toBe('Line 2');
     
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(scanner.token).toBe(SyntaxKind2.EndOfFileToken);
   });
 });

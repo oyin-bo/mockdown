@@ -13,24 +13,13 @@
  * - Establishes basic scanning interface
  */
 
-import { SyntaxKind, TokenFlags, ScannerErrorCode } from './token-types.js';
+import { SyntaxKind2, TokenFlags2, RollbackType, ScannerErrorCode2 } from './scanner2-token-types.js';
 import {
   CharacterCodes,
   isLineBreak,
   isWhiteSpaceSingleLine,
   isWhiteSpace
 } from './character-codes.js';
-
-/**
- * Rollback type enumeration for structured rollback
- */
-export const enum RollbackType {
-  DocumentStart = 0,        // Position 0 - always safe
-  BlankLineBoundary = 1,    // After blank line - resets block context
-  RawTextContent = 2,       // Within <script>/<style> - any position safe
-  CodeBlockContent = 3,     // Within fenced code - line boundaries safe
-  HtmlElementInner = 4,     // Within HTML element content (non-raw)
-}
 
 /**
  * Debug state interface for zero-allocation diagnostics
@@ -48,9 +37,9 @@ export interface ScannerDebugState {
   precedingLineBreak: boolean;
   
   // Token state
-  currentToken: SyntaxKind;
+  currentToken: SyntaxKind2;
   currentTokenText: string;
-  currentTokenFlags: TokenFlags;
+  currentTokenFlags: TokenFlags2;
   nextOffset: number;
 }
 
@@ -66,9 +55,9 @@ export interface Scanner2 {
   fillDebugState(state: ScannerDebugState): void;  // Zero-allocation diagnostics
   
   // Token fields - updated by scan() and rollback() - direct access
-  token: SyntaxKind;           // Current token type
+  token: SyntaxKind2;           // Current token type
   tokenText: string;           // Current token text (always materialized)
-  tokenFlags: TokenFlags;      // Token flags including rollback safety
+  tokenFlags: TokenFlags2;      // Token flags including rollback safety
   offsetNext: number;          // Where the next token will start
   
   // Initialization method
@@ -115,9 +104,9 @@ export function createScanner2(): Scanner2 {
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
   
   // Scanner interface fields - these are the 4 public fields
-  let token: SyntaxKind = SyntaxKind.Unknown;
+  let token: SyntaxKind2 = SyntaxKind2.Unknown;
   let tokenText: string = '';
-  let tokenFlags: TokenFlags = TokenFlags.None;
+  let tokenFlags: TokenFlags2 = TokenFlags2.None;
   let offsetNext: number = 0;
   
   // Cross-line state continuity
@@ -195,7 +184,7 @@ export function createScanner2(): Scanner2 {
    * Token emission functions
    */
   
-  function emitToken(kind: SyntaxKind, start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
+  function emitToken(kind: SyntaxKind2, start: number, endPos: number, flags: TokenFlags2 = TokenFlags2.None): void {
     token = kind;
     tokenText = source.substring(start, endPos);
     tokenFlags = flags;
@@ -203,10 +192,10 @@ export function createScanner2(): Scanner2 {
     
     // Add context-based flags
     if (contextFlags & ContextFlags.PrecedingLineBreak) {
-      tokenFlags |= TokenFlags.PrecedingLineBreak;
+      tokenFlags |= TokenFlags2.PrecedingLineBreak;
     }
     if (contextFlags & ContextFlags.AtLineStart) {
-      tokenFlags |= TokenFlags.IsAtLineStart;
+      tokenFlags |= TokenFlags2.IsAtLineStart;
     }
     
     // Update position tracking
@@ -229,23 +218,23 @@ export function createScanner2(): Scanner2 {
       const rawText = source.substring(lineStart, lineEnd);
       const normalizedText = normalizeLineWhitespace(rawText);
       
-      let flags = TokenFlags.None;
+      let flags = TokenFlags2.None;
       
       // Add rollback flags for safe restart points
       if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags.CanRollbackHere;
+        flags |= TokenFlags2.CanRollbackHere;
       }
       
       // Add context flags
       if (contextFlags & ContextFlags.PrecedingLineBreak) {
-        flags |= TokenFlags.PrecedingLineBreak;
+        flags |= TokenFlags2.PrecedingLineBreak;
       }
       if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags.IsAtLineStart;
+        flags |= TokenFlags2.IsAtLineStart;
       }
       
       // Manually set token fields instead of using emitToken to use normalized text
-      token = SyntaxKind.StringLiteral;
+      token = SyntaxKind2.StringLiteral;
       tokenText = normalizedText;
       tokenFlags = flags;
       offsetNext = lineEnd;
@@ -262,7 +251,7 @@ export function createScanner2(): Scanner2 {
       }
     } else {
       // Empty line content - this shouldn't happen in normal flow
-      emitToken(SyntaxKind.StringLiteral, start, start, TokenFlags.IsBlankLine);
+      emitToken(SyntaxKind2.StringLiteral, start, start, TokenFlags2.IsBlankLine);
     }
   }
   
@@ -273,7 +262,7 @@ export function createScanner2(): Scanner2 {
     }
     
     if (wsEnd > start) {
-      emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
+      emitToken(SyntaxKind2.WhitespaceTrivia, start, wsEnd);
     }
   }
   
@@ -289,16 +278,16 @@ export function createScanner2(): Scanner2 {
       nlEnd++; // LF or other line break
     }
     
-    let flags = TokenFlags.None;
+    let flags = TokenFlags2.None;
     
     // Check if this newline ends a blank line
     if (isBlankLine()) {
-      flags |= TokenFlags.IsBlankLine;
+      flags |= TokenFlags2.IsBlankLine;
       lastBlankLinePos = start;
       contextFlags &= ~ContextFlags.InParagraph; // Reset paragraph context
     }
     
-    emitToken(SyntaxKind.NewLineTrivia, start, nlEnd, flags);
+    emitToken(SyntaxKind2.NewLineTrivia, start, nlEnd, flags);
     contextFlags |= ContextFlags.AtLineStart | ContextFlags.PrecedingLineBreak;
   }
   
@@ -307,7 +296,7 @@ export function createScanner2(): Scanner2 {
    */
   function scanImpl(): void {
     if (pos >= end) {
-      emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      emitToken(SyntaxKind2.EndOfFileToken, pos, pos);
       return;
     }
     
@@ -352,9 +341,9 @@ export function createScanner2(): Scanner2 {
     lastBlankLinePos = -1;
     
     // Reset token fields
-    token = SyntaxKind.Unknown;
+    token = SyntaxKind2.Unknown;
     tokenText = '';
-    tokenFlags = TokenFlags.None;
+    tokenFlags = TokenFlags2.None;
     offsetNext = start;
   }
   
@@ -399,9 +388,9 @@ export function createScanner2(): Scanner2 {
     }
     
     // Reset token fields
-    token = SyntaxKind.Unknown;
+    token = SyntaxKind2.Unknown;
     tokenText = '';
-    tokenFlags = TokenFlags.None;
+    tokenFlags = TokenFlags2.None;
     offsetNext = position;
   }
   
@@ -435,13 +424,13 @@ export function createScanner2(): Scanner2 {
     
     // Direct field access - these are the 4 public fields
     get token() { return token; },
-    set token(value: SyntaxKind) { token = value; },
+    set token(value: SyntaxKind2) { token = value; },
     
     get tokenText() { return tokenText; },
     set tokenText(value: string) { tokenText = value; },
     
     get tokenFlags() { return tokenFlags; },
-    set tokenFlags(value: TokenFlags) { tokenFlags = value; },
+    set tokenFlags(value: TokenFlags2) { tokenFlags = value; },
     
     get offsetNext() { return offsetNext; },
     set offsetNext(value: number) { offsetNext = value; }
