@@ -286,12 +286,7 @@ export function verifyTokens(annotatedText: string): string {
       return modifiedLines.join('\n');
     }
     
-    // If no errors and we normalized the input, return the normalized version
-    if (normalizedText !== annotatedText) {
-      return normalizedText;
-    }
-    
-    // Otherwise return the original
+    // If verification succeeds, always return the original input unchanged
     return annotatedText;
     
   } catch (error) {
