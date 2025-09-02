@@ -57,20 +57,20 @@ describe('Scanner2 Stage 4: HTML Entities', () => {
 
   test('invalid entities fall back to ampersand', () => {
     expect(verifyTokens(`&invalid
-1       2
+12345678
 @1 AmpersandToken text: "&"
 @2 StringLiteral text: "invalid"`)).toBe(`&invalid
-1       2
+12345678
 @1 AmpersandToken text: "&"
 @2 StringLiteral text: "invalid"`);
   });
 
   test('unterminated entities fall back to ampersand', () => {
     expect(verifyTokens(`&amp
-1   2
+12
 @1 AmpersandToken text: "&"
 @2 StringLiteral text: "amp"`)).toBe(`&amp
-1   2
+12
 @1 AmpersandToken text: "&"
 @2 StringLiteral text: "amp"`);
   });

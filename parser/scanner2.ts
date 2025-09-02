@@ -35,6 +35,9 @@ export interface Scanner2 {
 
   /** Where the next token will start (offset into the source). */
   offsetNext: number;
+  
+  /** Where the current token started (offset into the source). */
+  tokenStart: number;
 }
 
 /** Content processing mode - only one active at a time. */
@@ -123,15 +126,17 @@ export function createScanner2(): Scanner2 {
   // Context flags
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
   
-  // Scanner interface fields - these are the 4 public fields
+  // Scanner interface fields - these are the 5 public fields
   let token: SyntaxKind2 = SyntaxKind2.Unknown;
   let tokenText: string = '';
   let tokenFlags: TokenFlags2 = TokenFlags2.None;
   let offsetNext: number = 0;
+  let tokenStart: number = 0;
   
   // Cross-line state continuity
   let currentIndentLevel = 0;
   let lastBlankLinePos = -1;
+  let lineMixedMode = false; // Track if current line is in mixed token mode
   
   /**
    * Helper functions reused from existing scanner
@@ -208,6 +213,7 @@ export function createScanner2(): Scanner2 {
     token = kind;
     tokenText = source.substring(start, endPos);
     tokenFlags = flags;
+    tokenStart = start;
     offsetNext = endPos;
     
     // Add context-based flags
@@ -820,6 +826,7 @@ export function createScanner2(): Scanner2 {
       token = SyntaxKind2.StringLiteral;
       tokenText = normalizedText;
       tokenFlags = flags;
+      tokenStart = lineStart;
       offsetNext = lineEnd;
       
       // Update position tracking
@@ -872,6 +879,7 @@ export function createScanner2(): Scanner2 {
     
     emitToken(SyntaxKind2.NewLineTrivia, start, nlEnd, flags);
     contextFlags |= ContextFlags.AtLineStart | ContextFlags.PrecedingLineBreak;
+    lineMixedMode = false; // Reset mixed mode for new line
   }
   
   /**
@@ -889,6 +897,8 @@ export function createScanner2(): Scanner2 {
     // Update indent level at line start
     if (contextFlags & ContextFlags.AtLineStart) {
       currentIndentLevel = getCurrentIndentLevel();
+      // Reset mixed mode for new line
+      lineMixedMode = lineContainsSpecialChars(start);
     }
     
     // Handle special content modes first
@@ -936,8 +946,8 @@ export function createScanner2(): Scanner2 {
       return;
     }
     
-    // Check if this line contains any special characters that need individual tokenization
-    if (lineContainsSpecialChars(start)) {
+    // Check if this line needs individual tokenization
+    if (lineMixedMode) {
       // Stage 3: Handle inline formatting tokens
       if (ch === CharacterCodes.asterisk) {
         scanAsterisk(start);
@@ -1007,11 +1017,13 @@ export function createScanner2(): Scanner2 {
     contextFlags = ContextFlags.AtLineStart;
     currentIndentLevel = 0;
     lastBlankLinePos = -1;
+    lineMixedMode = false;
     
     // Reset token fields
     token = SyntaxKind2.Unknown;
     tokenText = '';
     tokenFlags = TokenFlags2.None;
+    tokenStart = start;
     offsetNext = start;
   }
   
@@ -1059,6 +1071,7 @@ export function createScanner2(): Scanner2 {
     token = SyntaxKind2.Unknown;
     tokenText = '';
     tokenFlags = TokenFlags2.None;
+    tokenStart = position;
     offsetNext = position;
   }
   
@@ -1090,7 +1103,7 @@ export function createScanner2(): Scanner2 {
     fillDebugState,
     initText: setText,
     
-    // Direct field access - these are the 4 public fields
+    // Direct field access - these are the 5 public fields
     get token() { return token; },
     set token(value: SyntaxKind2) { token = value; },
     
@@ -1101,7 +1114,10 @@ export function createScanner2(): Scanner2 {
     set tokenFlags(value: TokenFlags2) { tokenFlags = value; },
     
     get offsetNext() { return offsetNext; },
-    set offsetNext(value: number) { offsetNext = value; }
+    set offsetNext(value: number) { offsetNext = value; },
+    
+    get tokenStart() { return tokenStart; },
+    set tokenStart(value: number) { tokenStart = value; }
   };
   
   return scanner;

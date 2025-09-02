@@ -166,7 +166,7 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
     
     if (scanner.token === SyntaxKind2.EndOfFileToken) break;
     
-    const tokenStart = scanner.offsetNext - scanner.tokenText.length;
+    const tokenStart = scanner.tokenStart;
     const tokenEnd = scanner.offsetNext;
     
     // Check if any position markers fall within this token
