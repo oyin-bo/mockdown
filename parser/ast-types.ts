@@ -20,6 +20,7 @@ export enum NodeKind {
   Emphasis,
   Strong,
   InlineCode,
+  Strikethrough,
   Link,
   Image,
   MathInline,
@@ -102,6 +103,15 @@ export interface StrongNode extends Node {
   children: InlineNode[];
 }
 
+export interface InlineCodeNode extends Node {
+  /** The number of backticks used to delimit this code span */
+  backtickCount: number;
+}
+
+export interface StrikethroughNode extends Node {
+  children: InlineNode[];
+}
+
 export interface WhitespaceSeparationNode extends Node {
   count: number;
 }
@@ -110,4 +120,4 @@ export type BlockNode =
   | ParagraphNode | HeadingNode | HtmlElementNode | WhitespaceSeparationNode;
 
 export type InlineNode =
-  | TextNode | EmphasisNode | StrongNode | HtmlElementNode;
+  | TextNode | EmphasisNode | StrongNode | InlineCodeNode | StrikethroughNode | HtmlElementNode;

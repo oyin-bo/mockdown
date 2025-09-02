@@ -18,9 +18,15 @@ export const enum SyntaxKind2 {
   WhitespaceTrivia,         // Leading whitespace at line start
   NewLineTrivia,            // Line breaks (LF, CRLF, CR)
   
+  // Stage 3: Inline formatting tokens
+  AsteriskToken,            // *
+  AsteriskAsterisk,         // **
+  UnderscoreToken,          // _
+  UnderscoreUnderscore,     // __
+  BacktickToken,            // `
+  TildeTilde,               // ~~
+  
   // Future stages will add more tokens as needed:
-  // Stage 2: Testing infrastructure  
-  // Stage 3: Inline formatting (bold, italic, code)
   // Stage 4: HTML and entities
   // Later stages: Progressive Markdown construct addition
 }
@@ -46,6 +52,10 @@ export const enum TokenFlags2 {
   RollbackRawText = 2 << 4,           // Within raw text content
   RollbackCodeBlock = 3 << 4,         // Within code block content
   RollbackHtmlInner = 4 << 4,         // Within HTML element content
+  
+  // Stage 3: Emphasis delimiter flags
+  CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
+  CanClose = 1 << 10,            // Delimiter can close emphasis/strong
 }
 
 /**

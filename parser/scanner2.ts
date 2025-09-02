@@ -225,6 +225,201 @@ export function createScanner2(): Scanner2 {
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
   
+  /**
+   * Stage 3: Inline formatting scanner functions
+   */
+  
+  function scanAsterisk(start: number): void {
+    // Count consecutive asterisks from current position
+    let runEnd = start;
+    while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.asterisk) {
+      runEnd++;
+    }
+    
+    const runLength = runEnd - start;
+    let tokenType: SyntaxKind2;
+    let flags = TokenFlags2.None;
+    
+    // For runs of 2 or more, emit double asterisk token
+    if (runLength >= 2) {
+      tokenType = SyntaxKind2.AsteriskAsterisk;
+      // Consume only 2 characters for double asterisk
+      runEnd = start + 2;
+    } else {
+      tokenType = SyntaxKind2.AsteriskToken;
+      // Single asterisk - runEnd is already start + 1
+    }
+    
+    // Apply flanking rules for CanOpen/CanClose flags
+    flags |= computeFlankingFlags(start, runEnd, CharacterCodes.asterisk);
+    
+    emitToken(tokenType, start, runEnd, flags);
+    updatePosition(runEnd);
+  }
+  
+  function scanUnderscore(start: number): void {
+    // Count consecutive underscores from current position
+    let runEnd = start;
+    while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.underscore) {
+      runEnd++;
+    }
+    
+    const runLength = runEnd - start;
+    let tokenType: SyntaxKind2;
+    let flags = TokenFlags2.None;
+    
+    // For runs of 2 or more, emit double underscore token
+    if (runLength >= 2) {
+      tokenType = SyntaxKind2.UnderscoreUnderscore;
+      // Consume only 2 characters for double underscore
+      runEnd = start + 2;
+    } else {
+      tokenType = SyntaxKind2.UnderscoreToken;
+      // Single underscore - runEnd is already start + 1
+    }
+    
+    // Apply flanking rules for CanOpen/CanClose flags
+    flags |= computeFlankingFlags(start, runEnd, CharacterCodes.underscore);
+    
+    emitToken(tokenType, start, runEnd, flags);
+    updatePosition(runEnd);
+  }
+  
+  function scanBacktick(start: number): void {
+    let runEnd = start;
+    
+    // Count consecutive backticks
+    while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.backtick) {
+      runEnd++;
+    }
+    
+    // For backticks, we always emit BacktickToken regardless of run length
+    // The run length will be encoded in flags for parser use
+    const runLength = runEnd - start;
+    let flags = TokenFlags2.None;
+    
+    // TODO: Add run length encoding to flags when needed for parser
+    
+    emitToken(SyntaxKind2.BacktickToken, start, runEnd, flags);
+    updatePosition(runEnd);
+  }
+  
+  function scanTilde(start: number): void {
+    let runEnd = start;
+    
+    // Count consecutive tildes
+    while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.tilde) {
+      runEnd++;
+    }
+    
+    const runLength = runEnd - start;
+    
+    // Only emit TildeTilde for runs of 2 or more
+    if (runLength >= 2) {
+      emitToken(SyntaxKind2.TildeTilde, start, runEnd, TokenFlags2.None);
+      updatePosition(runEnd);
+    } else {
+      // Single tilde - treat as regular text
+      emitTextRun(start);
+    }
+  }
+  
+  function emitTextRun(start: number): void {
+    let textEnd = start;
+    
+    // Scan until we hit a special character or line break
+    while (textEnd < end) {
+      const ch = source.charCodeAt(textEnd);
+      
+      if (isLineBreak(ch) ||
+          ch === CharacterCodes.asterisk ||
+          ch === CharacterCodes.underscore ||
+          ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.tilde) {
+        break;
+      }
+      textEnd++;
+    }
+    
+    if (textEnd > start) {
+      const text = source.substring(start, textEnd);
+      let flags = TokenFlags2.None;
+      
+      if (contextFlags & ContextFlags.PrecedingLineBreak) {
+        flags |= TokenFlags2.PrecedingLineBreak;
+      }
+      if (contextFlags & ContextFlags.AtLineStart) {
+        flags |= TokenFlags2.IsAtLineStart;
+      }
+      
+      emitToken(SyntaxKind2.StringLiteral, start, textEnd, flags);
+      updatePosition(textEnd);
+      
+      // Reset line start flag after emitting text
+      contextFlags &= ~ContextFlags.AtLineStart;
+    }
+  }
+  
+  function computeFlankingFlags(start: number, end: number, char: number): TokenFlags2 {
+    let flags = TokenFlags2.None;
+    
+    // Get previous and next characters for flanking rules
+    const prevChar = start > 0 ? source.charCodeAt(start - 1) : 0;
+    const nextChar = end < source.length ? source.charCodeAt(end) : 0;
+    
+    // Simplified flanking rules - can be refined later
+    const prevIsWhitespace = prevChar === 0 || isWhiteSpace(prevChar);
+    const nextIsWhitespace = nextChar === 0 || isWhiteSpace(nextChar);
+    const prevIsPunctuation = !prevIsWhitespace && isPunctuation(prevChar);
+    const nextIsPunctuation = !nextIsWhitespace && isPunctuation(nextChar);
+    
+    // Left-flanking: not followed by whitespace and either:
+    // - not followed by punctuation, or
+    // - followed by punctuation and preceded by whitespace or punctuation
+    const leftFlanking = !nextIsWhitespace && 
+      (!nextIsPunctuation || prevIsWhitespace || prevIsPunctuation);
+    
+    // Right-flanking: not preceded by whitespace and either:
+    // - not preceded by punctuation, or  
+    // - preceded by punctuation and followed by whitespace or punctuation
+    const rightFlanking = !prevIsWhitespace &&
+      (!prevIsPunctuation || nextIsWhitespace || nextIsPunctuation);
+    
+    if (leftFlanking) {
+      flags |= TokenFlags2.CanOpen;
+    }
+    if (rightFlanking) {
+      flags |= TokenFlags2.CanClose;
+    }
+    
+    // Special rule for underscore: intraword underscore can't open/close
+    if (char === CharacterCodes.underscore) {
+      const prevIsAlnum = isAlphaNumeric(prevChar);
+      const nextIsAlnum = isAlphaNumeric(nextChar);
+      
+      if (prevIsAlnum && nextIsAlnum) {
+        // Intraword underscore - remove flanking capabilities
+        flags &= ~(TokenFlags2.CanOpen | TokenFlags2.CanClose);
+      }
+    }
+    
+    return flags;
+  }
+  
+  function isPunctuation(ch: number): boolean {
+    // Basic punctuation check - can be refined
+    return (ch >= 0x21 && ch <= 0x2F) ||
+           (ch >= 0x3A && ch <= 0x40) ||
+           (ch >= 0x5B && ch <= 0x60) ||
+           (ch >= 0x7B && ch <= 0x7E);
+  }
+  
+  function isAlphaNumeric(ch: number): boolean {
+    return (ch >= CharacterCodes.a && ch <= CharacterCodes.z) ||
+           (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
+           (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9);
+  }
+  
   function emitTextContent(start: number): void {
     const lineStart = start;
     let lineEnd = start;
@@ -312,7 +507,7 @@ export function createScanner2(): Scanner2 {
   }
   
   /**
-   * Main scanning function - Stage 1 implementation
+   * Main scanning function - Stage 3 implementation with inline formatting
    */
   function scanImpl(): void {
     if (pos >= end) {
@@ -328,16 +523,30 @@ export function createScanner2(): Scanner2 {
       currentIndentLevel = getCurrentIndentLevel();
     }
     
-    // Stage 1: Handle only text, whitespace, and newlines
+    // Handle newlines
     if (isLineBreak(ch)) {
       emitNewline(start);
-    } else if (isWhiteSpaceSingleLine(ch) && (contextFlags & ContextFlags.AtLineStart)) {
-      // Leading whitespace at line start
+      return;
+    }
+    
+    // Handle leading whitespace at line start
+    if (isWhiteSpaceSingleLine(ch) && (contextFlags & ContextFlags.AtLineStart)) {
       emitWhitespace(start);
+      return;
+    }
+    
+    // Stage 3: Handle inline formatting tokens
+    if (ch === CharacterCodes.asterisk) {
+      scanAsterisk(start);
+    } else if (ch === CharacterCodes.underscore) {
+      scanUnderscore(start);
+    } else if (ch === CharacterCodes.backtick) {
+      scanBacktick(start);
+    } else if (ch === CharacterCodes.tilde) {
+      scanTilde(start);
     } else {
-      // Everything else is text content for Stage 1
-      // This includes whitespace within text
-      emitTextContent(start);
+      // Regular text content - scan until next special character
+      emitTextRun(start);
     }
   }
   
