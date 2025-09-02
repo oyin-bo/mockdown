@@ -208,6 +208,15 @@ function syntaxKindToString(kind: SyntaxKind2): string {
     case SyntaxKind2.UnderscoreUnderscore: return 'UnderscoreUnderscore';
     case SyntaxKind2.BacktickToken: return 'BacktickToken';
     case SyntaxKind2.TildeTilde: return 'TildeTilde';
+    // Stage 4: HTML and entities
+    case SyntaxKind2.HtmlEntity: return 'HtmlEntity';
+    case SyntaxKind2.LessThanToken: return 'LessThanToken';
+    case SyntaxKind2.GreaterThanToken: return 'GreaterThanToken';
+    case SyntaxKind2.LessThanSlashToken: return 'LessThanSlashToken';
+    case SyntaxKind2.SlashGreaterThanToken: return 'SlashGreaterThanToken';
+    case SyntaxKind2.HtmlText: return 'HtmlText';
+    case SyntaxKind2.HtmlComment: return 'HtmlComment';
+    case SyntaxKind2.AmpersandToken: return 'AmpersandToken';
     default: return `SyntaxKind2(${kind})`;
   }
 }

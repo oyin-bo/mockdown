@@ -226,6 +226,341 @@ export function createScanner2(): Scanner2 {
   }
   
   /**
+   * Stage 4: HTML and entity scanner functions
+   */
+  
+  function scanAmpersand(start: number): void {
+    // Try to scan as HTML entity first
+    const entityEnd = tryParseEntity(start);
+    if (entityEnd > start) {
+      // Valid entity found
+      emitToken(SyntaxKind2.HtmlEntity, start, entityEnd);
+      updatePosition(entityEnd);
+    } else {
+      // Not a valid entity - emit as ampersand token
+      emitToken(SyntaxKind2.AmpersandToken, start, start + 1);
+      updatePosition(start + 1);
+    }
+  }
+  
+  function tryParseEntity(start: number): number {
+    if (start >= end || source.charCodeAt(start) !== CharacterCodes.ampersand) {
+      return start;
+    }
+    
+    let pos = start + 1;
+    
+    // Check for numeric entity: &#123; or &#x1F;
+    if (pos < end && source.charCodeAt(pos) === CharacterCodes.hash) {
+      pos++; // consume '#'
+      
+      if (pos < end && (source.charCodeAt(pos) === CharacterCodes.x || source.charCodeAt(pos) === CharacterCodes.X)) {
+        pos++; // consume 'x' for hex
+        // Hex digits
+        const hexStart = pos;
+        while (pos < end && isHexDigit(source.charCodeAt(pos))) {
+          pos++;
+        }
+        if (pos > hexStart && pos < end && source.charCodeAt(pos) === CharacterCodes.semicolon) {
+          return pos + 1; // Include semicolon
+        }
+      } else {
+        // Decimal digits
+        const decStart = pos;
+        while (pos < end && isDigit(source.charCodeAt(pos))) {
+          pos++;
+        }
+        if (pos > decStart && pos < end && source.charCodeAt(pos) === CharacterCodes.semicolon) {
+          return pos + 1; // Include semicolon
+        }
+      }
+    }
+    
+    // Check for named entity
+    if (pos < end && isLetter(source.charCodeAt(pos))) {
+      const nameStart = pos;
+      while (pos < end && (isLetter(source.charCodeAt(pos)) || isDigit(source.charCodeAt(pos)))) {
+        pos++;
+      }
+      if (pos > nameStart && pos < end && source.charCodeAt(pos) === CharacterCodes.semicolon) {
+        // Check if it's a known entity name
+        const entityName = source.substring(nameStart, pos);
+        if (isKnownEntityName(entityName)) {
+          return pos + 1; // Include semicolon
+        }
+      }
+    }
+    
+    return start; // Not a valid entity
+  }
+  
+  function isKnownEntityName(name: string): boolean {
+    // Basic set of known HTML entities
+    const knownEntities = ['amp', 'lt', 'gt', 'quot', 'apos', 'nbsp'];
+    return knownEntities.includes(name);
+  }
+  
+  function scanLessThan(start: number): void {
+    let pos = start + 1;
+    
+    // Check for </
+    if (pos < end && source.charCodeAt(pos) === CharacterCodes.slash) {
+      // This is a closing tag - scan the entire tag
+      scanHtmlTag(start);
+      return;
+    }
+    
+    // Check for HTML comment <!--
+    if (pos + 2 < end && 
+        source.charCodeAt(pos) === CharacterCodes.exclamation &&
+        source.charCodeAt(pos + 1) === CharacterCodes.minus &&
+        source.charCodeAt(pos + 2) === CharacterCodes.minus) {
+      scanHtmlComment(start);
+      return;
+    }
+    
+    // Check if this looks like an HTML tag
+    if (pos < end && (isLetter(source.charCodeAt(pos)) || source.charCodeAt(pos) === CharacterCodes.exclamation)) {
+      // Scan as HTML tag
+      scanHtmlTag(start);
+      return;
+    }
+    
+    // Just a less-than token
+    emitToken(SyntaxKind2.LessThanToken, start, start + 1);
+    updatePosition(start + 1);
+  }
+  
+  function scanHtmlComment(start: number): void {
+    let pos = start + 4; // Skip <!--
+    
+    // Scan until -->
+    while (pos + 2 < end) {
+      if (source.charCodeAt(pos) === CharacterCodes.minus &&
+          source.charCodeAt(pos + 1) === CharacterCodes.minus &&
+          source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
+        // Found closing -->
+        emitToken(SyntaxKind2.HtmlComment, start, pos + 3);
+        updatePosition(pos + 3);
+        return;
+      }
+      pos++;
+    }
+    
+    // Unterminated comment
+    emitToken(SyntaxKind2.HtmlComment, start, end, TokenFlags2.Unterminated);
+    updatePosition(end);
+  }
+  
+  function scanHtmlTag(start: number): void {
+    let pos = start;
+    let foundClosing = false;
+    
+    // Scan until > or end of input
+    while (pos < end && source.charCodeAt(pos) !== CharacterCodes.greaterThan) {
+      pos++;
+    }
+    
+    if (pos < end && source.charCodeAt(pos) === CharacterCodes.greaterThan) {
+      pos++; // Include >
+      foundClosing = true;
+    }
+    
+    const tagText = source.substring(start, pos);
+    let flags = TokenFlags2.None;
+    
+    // Check if unterminated (didn't find closing >)
+    if (!foundClosing) {
+      flags |= TokenFlags2.Unterminated;
+    }
+    
+    // Determine if this should set HTML block context
+    if (contextFlags & ContextFlags.AtLineStart) {
+      const tagName = extractTagName(tagText);
+      if (isBlockLevelTag(tagName)) {
+        flags |= TokenFlags2.ContainsHtmlBlock;
+        
+        // Check if this is a raw text tag
+        if (isRawTextTag(tagName)) {
+          contentMode = ContentMode.RawText;
+          endPattern = `</${tagName}>`;
+        } else if (isRCDataTag(tagName)) {
+          contentMode = ContentMode.RCData;
+          endPattern = `</${tagName}>`;
+        }
+      }
+    }
+    
+    emitToken(SyntaxKind2.HtmlText, start, pos, flags);
+    updatePosition(pos);
+  }
+  
+  function extractTagName(tagText: string): string {
+    // Extract tag name from <tagname ...> or </tagname>
+    const match = tagText.match(/<\/?([a-zA-Z][a-zA-Z0-9]*)/);
+    return match ? match[1].toLowerCase() : '';
+  }
+  
+  function isBlockLevelTag(tagName: string): boolean {
+    const blockTags = [
+      'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'blockquote', 'pre', 'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+      'table', 'thead', 'tbody', 'tr', 'td', 'th',
+      'form', 'fieldset', 'address', 'article', 'aside',
+      'footer', 'header', 'nav', 'section', 'main'
+    ];
+    return blockTags.includes(tagName);
+  }
+  
+  function isRawTextTag(tagName: string): boolean {
+    return tagName === 'script' || tagName === 'style';
+  }
+  
+  function isRCDataTag(tagName: string): boolean {
+    return tagName === 'textarea' || tagName === 'title';
+  }
+  
+  function scanGreaterThan(start: number): void {
+    // Check for />
+    if (start > 0 && source.charCodeAt(start - 1) === CharacterCodes.slash) {
+      // This is part of />, should have been handled by tag scanning
+      emitToken(SyntaxKind2.SlashGreaterThanToken, start - 1, start + 1);
+      updatePosition(start + 1);
+    } else {
+      emitToken(SyntaxKind2.GreaterThanToken, start, start + 1);
+      updatePosition(start + 1);
+    }
+  }
+  
+  function scanRawTextContent(start: number): void {
+    let pos = start;
+    
+    // Look for the end pattern
+    if (endPattern) {
+      const endIndex = source.indexOf(endPattern, pos);
+      if (endIndex !== -1) {
+        // Found end pattern - emit content before it
+        if (endIndex > pos) {
+          emitToken(SyntaxKind2.HtmlText, start, endIndex, TokenFlags2.IsInRawText);
+          updatePosition(endIndex);
+          return;
+        }
+        // If endIndex == pos, we're at the end pattern already, let normal scanning handle it
+        contentMode = ContentMode.Normal;
+        endPattern = undefined;
+        // Continue with normal scanning to handle the end tag
+        scanImpl();
+        return;
+      }
+    }
+    
+    // No end pattern found - scan to end of input or end of line for now
+    while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
+      pos++;
+    }
+    
+    if (pos > start) {
+      let flags = TokenFlags2.IsInRawText;
+      if (pos >= end) {
+        flags |= TokenFlags2.Unterminated;
+      }
+      emitToken(SyntaxKind2.HtmlText, start, pos, flags);
+      updatePosition(pos);
+    } else if (pos >= end) {
+      // At end of file
+      contentMode = ContentMode.Normal;
+      endPattern = undefined;
+      emitToken(SyntaxKind2.EndOfFileToken, pos, pos);
+    }
+  }
+  
+  function scanRCDataContent(start: number): void {
+    let pos = start;
+    
+    // In RCDATA mode, we need to handle entities but look for end pattern
+    if (endPattern) {
+      const endIndex = source.indexOf(endPattern, pos);
+      if (endIndex !== -1) {
+        // Found end pattern - scan content with entity handling
+        if (endIndex > pos) {
+          scanTextWithEntities(start, endIndex, TokenFlags2.IsInRcdata);
+          return;
+        }
+        // If endIndex == pos, we're at the end pattern already
+        contentMode = ContentMode.Normal;
+        endPattern = undefined;
+        // Continue with normal scanning to handle the end tag
+        scanImpl();
+        return;
+      }
+    }
+    
+    // No end pattern found - scan line with entities
+    while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
+      pos++;
+    }
+    
+    if (pos > start) {
+      let flags = TokenFlags2.IsInRcdata;
+      if (pos >= end) {
+        flags |= TokenFlags2.Unterminated;
+      }
+      scanTextWithEntities(start, pos, flags);
+    } else if (pos >= end) {
+      // At end of file
+      contentMode = ContentMode.Normal;
+      endPattern = undefined;
+      emitToken(SyntaxKind2.EndOfFileToken, pos, pos);
+    }
+  }
+  
+  function scanTextWithEntities(start: number, endPos: number, baseFlags: TokenFlags2): void {
+    let pos = start;
+    
+    while (pos < endPos) {
+      // Look for entities
+      if (source.charCodeAt(pos) === CharacterCodes.ampersand) {
+        const entityEnd = tryParseEntity(pos);
+        if (entityEnd > pos) {
+          // Emit any text before the entity
+          if (pos > start) {
+            emitToken(SyntaxKind2.HtmlText, start, pos, baseFlags);
+            updatePosition(pos);
+          }
+          // Emit the entity
+          emitToken(SyntaxKind2.HtmlEntity, pos, entityEnd, baseFlags);
+          updatePosition(entityEnd);
+          start = entityEnd;
+          pos = entityEnd;
+          continue;
+        }
+      }
+      pos++;
+    }
+    
+    // Emit remaining text
+    if (pos > start) {
+      emitToken(SyntaxKind2.HtmlText, start, pos, baseFlags);
+      updatePosition(pos);
+    }
+  }
+  
+  function isHexDigit(ch: number): boolean {
+    return (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9) ||
+           (ch >= CharacterCodes.a && ch <= CharacterCodes.f) ||
+           (ch >= CharacterCodes.A && ch <= CharacterCodes.F);
+  }
+  
+  function isDigit(ch: number): boolean {
+    return ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9;
+  }
+  
+  function isLetter(ch: number): boolean {
+    return (ch >= CharacterCodes.a && ch <= CharacterCodes.z) ||
+           (ch >= CharacterCodes.A && ch <= CharacterCodes.Z);
+  }
+
+  /**
    * Stage 3: Inline formatting scanner functions
    */
   
@@ -320,17 +655,20 @@ export function createScanner2(): Scanner2 {
   function emitTextRun(start: number): void {
     let textEnd = start;
     
-    // Scan until we hit a special character or line break
+    // Scan until we hit a special character, whitespace, or line break
     while (textEnd < end) {
       const ch = source.charCodeAt(textEnd);
       
-      if (isLineBreak(ch)) {
+      if (isLineBreak(ch) || isWhiteSpaceSingleLine(ch)) {
         break;
       }
       
       // Check for special characters, but handle intraword underscores specially
       if (ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.backtick) {
+          ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.lessThan ||
+          ch === CharacterCodes.greaterThan) {
         break;
       }
       
@@ -537,7 +875,7 @@ export function createScanner2(): Scanner2 {
   }
   
   /**
-   * Main scanning function - Stage 3 implementation with inline formatting
+   * Main scanning function - Stage 4 implementation with HTML and entities
    */
   function scanImpl(): void {
     if (pos >= end) {
@@ -553,6 +891,17 @@ export function createScanner2(): Scanner2 {
       currentIndentLevel = getCurrentIndentLevel();
     }
     
+    // Handle special content modes first
+    if (contentMode === ContentMode.RawText) {
+      scanRawTextContent(start);
+      return;
+    }
+    
+    if (contentMode === ContentMode.RCData) {
+      scanRCDataContent(start);
+      return;
+    }
+    
     // Handle newlines
     if (isLineBreak(ch)) {
       emitNewline(start);
@@ -562,6 +911,28 @@ export function createScanner2(): Scanner2 {
     // Handle leading whitespace at line start
     if (isWhiteSpaceSingleLine(ch) && (contextFlags & ContextFlags.AtLineStart)) {
       emitWhitespace(start);
+      return;
+    }
+    
+    // Handle whitespace in the middle of a line (between tokens)
+    if (isWhiteSpaceSingleLine(ch)) {
+      emitWhitespace(start);
+      return;
+    }
+    
+    // Stage 4: Handle HTML and entity tokens
+    if (ch === CharacterCodes.ampersand) {
+      scanAmpersand(start);
+      return;
+    }
+    
+    if (ch === CharacterCodes.lessThan) {
+      scanLessThan(start);
+      return;
+    }
+    
+    if (ch === CharacterCodes.greaterThan) {
+      scanGreaterThan(start);
       return;
     }
     
@@ -592,7 +963,10 @@ export function createScanner2(): Scanner2 {
       const ch = source.charCodeAt(pos);
       
       if (ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.backtick) {
+          ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.lessThan ||
+          ch === CharacterCodes.greaterThan) {
         return true;
       }
       
