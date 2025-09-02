@@ -31,21 +31,31 @@ function createScanner() {
 **Core Philosophy**: Move complexity INTO the scanner with structured ambiguity resolution, making the parser simpler and incremental parsing efficient.
 
 ```typescript
-// New approach - typed ambiguity scanner  
+// New approach - simplified scanner interface
 interface Scanner {
-  scan(): SyntaxKind;              // Always returns definitive tokens
+  // Core methods - only 3 methods total
+  scan(): void;                                    // Advances to next token, updates all fields
   rollback(pos: number, type: RollbackType): void; // Structured rollback
-  fillDebugState(state: ScannerDebugState): void;   // Zero-allocation diagnostics
+  fillDebugState(state: ScannerDebugState): void;  // Zero-allocation diagnostics
+  
+  // Token fields - updated by scan() and rollback()
+  token: SyntaxKind;           // Current token type
+  tokenText: string;           // Current token text (always materialized)
+  tokenFlags: TokenFlags;      // Token flags including rollback safety
+  offsetNext: number;          // Where the next token will start
 }
 
-// Parser becomes simpler - no speculation needed
+// Parser becomes even simpler - direct field access
 function parseBlock(): BlockNode {
-  const token = scanner.scan();    // Definitive token, no ambiguity
-  switch (token) {
+  const tokenStart = pos;              // Parser tracks current position
+  scanner.scan();                      // Updates all scanner fields
+  const tokenLength = scanner.offsetNext - tokenStart; // Derived length
+  
+  switch (scanner.token) {             // Direct field access, no method call
     case SyntaxKind.TableHeaderStart:
-      return parseTable();         // Scanner resolved table vs paragraph
+      return parseTable();             // Scanner resolved table vs paragraph
     case SyntaxKind.SetextHeadingStart:  
-      return parseSetextHeading(); // Scanner resolved setext vs paragraph
+      return parseSetextHeading();     // Scanner resolved setext vs paragraph
   }
 }
 ```
@@ -105,7 +115,7 @@ Unlike a flat array of "pending constructs", Markdown ambiguities have **structu
 
 ```typescript
 // Content processing mode - only one active at a time
-enum ContentMode {
+const enum ContentMode {
   Normal = 0,                    // Regular Markdown tokenization
   RawText = 1,                   // Literal text until end tag (script, style)
   RCData = 2,                    // Text with entities until end tag (textarea, title)
@@ -118,7 +128,7 @@ enum ContentMode {
 }
 
 // Speculation flags - multiple can be active simultaneously
-enum SpeculationFlags {
+const enum SpeculationFlags {
   None = 0,
   Table = 1 << 0,                // 0x01 - Collecting table evidence
   SetextHeading = 1 << 1,        // 0x02 - Checking for setext underline
@@ -128,7 +138,7 @@ enum SpeculationFlags {
 }
 
 // Context flags - affect token emission
-enum ContextFlags {
+const enum ContextFlags {
   None = 0,
   HtmlBlockActive = 1 << 0,      // 0x01 - Apply HTML block token flags
   AtLineStart = 1 << 1,          // 0x02 - Currently at line start
@@ -196,7 +206,7 @@ if (hasValidListPattern() && hasValidTablePattern()) {
 **Negative Speculation Optimization**:
 ```typescript
 // Doubt avoidance flags - single variable with bit flags
-enum DoubtAvoidanceFlags {
+const enum DoubtAvoidanceFlags {
   None = 0,
   NoSetextThisLine = 1 << 0,      // 0x01 - No setext possible this line
   NoTableThisBlock = 1 << 1,      // 0x02 - No table possible this block
@@ -204,7 +214,7 @@ enum DoubtAvoidanceFlags {
   NoCodeFenceThisLine = 1 << 3,   // 0x08 - No code fence possible this line
 }
 
-function scan(): SyntaxKind {
+function scan(): void {           // Returns nothing - updates scanner fields directly
   const ch = source.charCodeAt(pos);
   
   // Natural doubt flag resets at appropriate boundaries
@@ -233,7 +243,8 @@ function scan(): SyntaxKind {
       // Attempt setext speculation
       const setextResult = speculateSetext(setext_startPos, setext_underlineChar);
       if (setextResult.isValid) {
-        return emitSetextHeading(setextResult);
+        emitSetextHeading(setextResult);  // Updates scanner fields
+        return;
       } else {
         // Cache negative result - no more setext checks this line
         doubtAvoidanceFlags |= DoubtAvoidanceFlags.NoSetextThisLine;
@@ -252,7 +263,8 @@ function scan(): SyntaxKind {
       // Attempt table speculation
       const tableResult = speculateTable(table_startPos, table_columnCount);
       if (tableResult.isValid) {
-        return emitTableStart(tableResult);
+        emitTableStart(tableResult);      // Updates scanner fields
+        return;
       } else {
         // Cache negative result - no more table checks this block
         doubtAvoidanceFlags |= DoubtAvoidanceFlags.NoTableThisBlock;
@@ -262,6 +274,8 @@ function scan(): SyntaxKind {
   }
   
   // Similar pattern for other speculations...
+  // Always update scanner fields before returning
+  updateScannerFields();
 }
 }
 
@@ -270,23 +284,23 @@ function processLongLine(): void {
   setText("This is a very long line with many tokens but no setext underline below\nJust regular content");
   
   // First token "This" - attempts setext speculation, fails, sets NoSetextThisLine
-  scan(); // "This"
+  scanner.scan(); // Updates scanner.token, scanner.tokenText, etc.
   
   // Subsequent tokens skip setext speculation entirely
-  scan(); // "is" - no setext check (cached avoidance)
-  scan(); // "a" - no setext check (cached avoidance)  
-  scan(); // "very" - no setext check (cached avoidance)
+  scanner.scan(); // "is" - no setext check (cached avoidance)
+  scanner.scan(); // "a" - no setext check (cached avoidance)  
+  scanner.scan(); // "very" - no setext check (cached avoidance)
   // ... much faster processing for rest of line
   
-  scan(); // NewLine - naturally resets NoSetextThisLine for next line
-  scan(); // "Just" - setext speculation re-enabled for new line
+  scanner.scan(); // NewLine - naturally resets NoSetextThisLine for next line
+  scanner.scan(); // "Just" - setext speculation re-enabled for new line
 }
 ```
 
 **Natural Reset Rules**:
 ```typescript
-// Doubt avoidance flags reset at appropriate boundaries
-function scan(): SyntaxKind {
+// Natural doubt flag resets at appropriate boundaries
+function scan(): void {          // Returns nothing - updates scanner fields
   if (atLineStart) {
     // Line-scoped flags reset automatically each line
     doubtAvoidanceFlags &= ~(DoubtAvoidanceFlags.NoSetextThisLine | DoubtAvoidanceFlags.NoCodeFenceThisLine);
@@ -300,6 +314,9 @@ function scan(): SyntaxKind {
       lastBlankLinePos = pos;
     }
   }
+  
+  // Update scanner fields including rollback safety
+  updateScannerFields();         // Sets token, tokenText, tokenLength, tokenStart, offsetNext, rollbackSafe
 }
 ```
 
@@ -606,7 +623,7 @@ The scanner needs to remember:
 Instead of arbitrary position rollback, use typed rollback states:
 
 ```typescript
-enum RollbackType {
+const enum RollbackType {
   DocumentStart = 0,    // Clean slate, no state
   BlockStart = 1,       // Start of block construct
   LineStart = 2,        // Beginning of line
@@ -615,12 +632,21 @@ enum RollbackType {
   CodeBlockStart = 5,   // Inside code block
 }
 
-// Scanner API
+// Scanner API - simplified to just 3 methods
 interface Scanner {
+  // Core methods
+  scan(): void;                                    // Updates all scanner fields
   rollback(position: number, type: RollbackType): void;
+  fillDebugState(state: ScannerDebugState): void;
   
-  // Diagnostic hook for testing
-  getDebugState(): ScannerDebugState;
+  // Token fields - updated by scan() and rollback()
+  token: SyntaxKind;           // Current token type
+  tokenText: string;           // Current token text (always materialized)
+  tokenLength: number;         // Length of current token
+  tokenFlags: TokenFlags;      // Token flags including rollback safety
+  tokenStart: number;          // Start position of current token
+  offsetNext: number;          // Where the next token will start
+  rollbackSafe: boolean;       // Whether rollback is safe at current position
 }
 
 // Example usage
@@ -632,7 +658,7 @@ scanner.rollback(nodePosition, RollbackType.BlockStart);
 Scanner emits rollback capability as token flags:
 
 ```typescript
-enum TokenFlags {
+const enum TokenFlags {
   // ... existing flags ...
   
   // Rollback capability flags (3 bits = 8 rollback types)
@@ -645,7 +671,7 @@ enum TokenFlags {
   CanRollbackCodeBlock = 5 << 24,        // Can restart from code block
 }
 
-// Extract rollback type from token
+// Extract rollback type from token flags
 function getRollbackType(flags: TokenFlags): RollbackType {
   return (flags & TokenFlags.CanRollbackMask) >> 24;
 }
@@ -847,8 +873,8 @@ describe('Mode-Unified Scanner State', () => {
     const scanner = createScanner();
     scanner.setText('| header |');
     
-    scanner.scan();
-    scanner.fillDebugState(debugState); // No allocation!
+    scanner.scan();                      // Updates all scanner fields
+    scanner.fillDebugState(debugState);  // No allocation!
     
     expect(debugState.mode).toBe('TableSpeculation');
     expect(debugState.isSpeculating).toBe(true);
@@ -931,7 +957,7 @@ mode: ScanMode;                             // 4 bytes total
 Since rescanning is cheap, stick to absolutely safe points only:
 
 ```typescript
-enum RollbackType {
+const enum RollbackType {
   DocumentStart = 0,        // Position 0 - always safe
   BlankLineBoundary = 1,    // After blank line - resets block context
   RawTextContent = 2,       // Within <script>/<style> - any position safe
@@ -946,7 +972,7 @@ Mark positions WHERE scanning can safely restart (before token):
 
 ```typescript
 // Token flag indicates: "Scanning can safely restart at this position"
-enum TokenFlags {
+const enum TokenFlags {
   // ... existing flags ...
   
   // Rollback safety flags (position BEFORE this token is safe)
@@ -959,42 +985,39 @@ enum TokenFlags {
   RollbackHtmlInner = 4 << 25,         // Within HTML content
 }
 
-// Extract rollback info
-function canRollbackBefore(flags: TokenFlags): boolean {
-  return !!(flags & TokenFlags.CanRollbackHere);
+// Extract rollback info from scanner fields
+function canRollbackBefore(): boolean {
+  return !!(scanner.tokenFlags & TokenFlags.CanRollbackHere);
 }
 
-function getRollbackType(flags: TokenFlags): RollbackType {
-  return (flags & TokenFlags.RollbackTypeMask) >> 25;
+function getRollbackType(): RollbackType {
+  return (scanner.tokenFlags & TokenFlags.RollbackTypeMask) >> 25;
 }
 ```
 
 ### Scanner Token Interface
 
 ```typescript
+// Simplified scanner interface - only fields, no getter methods
 interface Scanner {
-  scan(): SyntaxKind;
-  getToken(): SyntaxKind;
-  getTokenText(): string;        // Always materialized
-  getTokenLength(): number;      // Length of current token
-  getTokenFlags(): TokenFlags;   // Includes rollback flags
-  getTokenStart(): number;       // Current position (for parser offset tracking)
+  // Core methods
+  scan(): void;                        // Updates all scanner fields
+  rollback(pos: number, type: RollbackType): void;
+  fillDebugState(state: ScannerDebugState): void;
+  
+  // Token fields - direct access, updated by scan()
+  token: SyntaxKind;           // Current token type
+  tokenText: string;           // Always materialized text
+  tokenFlags: TokenFlags;      // Includes rollback flags
+  offsetNext: number;          // Where the next token will start
 }
 
-// Example token materialization
-function getTokenText(): string {
-  switch (token) {
-    case SyntaxKind.HtmlOpeningElement:
-      return extractTagName();              // "div", "span", etc.
-    case SyntaxKind.HtmlAttributeName:
-      return extractAttributeName();        // "class", "id", etc.
-    case SyntaxKind.TextContent:
-      return normalizeLineWhitespace();     // Line-based normalization
-    case SyntaxKind.Identifier:
-      return source.substring(start, pos); // Raw identifier
-    default:
-      return source.substring(start, pos);
-  }
+// Example token field updates during scan()
+function updateScannerFields(kind: SyntaxKind, start: number, end: number): void {
+  scanner.token = kind;
+  scanner.offsetNext = end;
+  scanner.tokenText = extractTokenText(kind, start, end);
+  scanner.tokenFlags = computeTokenFlags(kind, start);
 }
 ```
 
@@ -1004,7 +1027,7 @@ function getTokenText(): string {
 
 ```typescript
 // Editor-friendly approach: Line-based text tokens
-function scanTextContent(): SyntaxKind {
+function scanTextContent(): void {       // Returns nothing - updates scanner fields
   const lineStart = pos;
   
   // Scan to end of line or significant punctuation
@@ -1013,11 +1036,10 @@ function scanTextContent(): SyntaxKind {
     pos++;
   }
   
-  // Normalize whitespace within this line only
-  const rawText = source.substring(lineStart, pos);
-  const normalizedText = collapseInlineWhitespace(rawText);
-  
-  return SyntaxKind.TextContent;
+  // Update scanner fields
+  scanner.token = SyntaxKind.TextContent;
+  scanner.offsetNext = pos;
+  scanner.tokenText = normalizeLineWhitespace(source.substring(lineStart, pos));
 }
 
 // Example tokenization of multi-line paragraph:
@@ -1028,14 +1050,14 @@ line by line in editors.`;
 
 // Produces token stream:
 [
-  { kind: SyntaxKind.TextContent, text: "This is a long paragraph", length: 25 },
-  { kind: SyntaxKind.NewLineTrivia, text: "\n", length: 1 },
-  { kind: SyntaxKind.TextContent, text: "that spans multiple lines", length: 25 },
-  { kind: SyntaxKind.WhitespaceTrivia, text: "  ", length: 2 }, // Trailing spaces
-  { kind: SyntaxKind.NewLineTrivia, text: "\n", length: 1 },
-  { kind: SyntaxKind.TextContent, text: "and should be editable", length: 22 },
-  { kind: SyntaxKind.NewLineTrivia, text: "\n", length: 1 },
-  { kind: SyntaxKind.TextContent, text: "line by line in editors.", length: 24 }
+  { kind: SyntaxKind.TextContent, text: "This is a long paragraph", offsetNext: 25 },
+  { kind: SyntaxKind.NewLineTrivia, text: "\n", offsetNext: 26 },
+  { kind: SyntaxKind.TextContent, text: "that spans multiple lines", offsetNext: 51 },
+  { kind: SyntaxKind.WhitespaceTrivia, text: "  ", offsetNext: 53 }, // Trailing spaces
+  { kind: SyntaxKind.NewLineTrivia, text: "\n", offsetNext: 54 },
+  { kind: SyntaxKind.TextContent, text: "and should be editable", offsetNext: 76 },
+  { kind: SyntaxKind.NewLineTrivia, text: "\n", offsetNext: 77 },
+  { kind: SyntaxKind.TextContent, text: "line by line in editors.", offsetNext: 101 }
 ]
 ```
 
@@ -1047,20 +1069,20 @@ Parser combines line-based text tokens into paragraph content:
 function parseParagraphContent(): TextNode[] {
   const textRuns: TextNode[] = [];
   
-  while (scanner.getToken() === SyntaxKind.TextContent || 
-         scanner.getToken() === SyntaxKind.NewLineTrivia) {
+  while (scanner.token === SyntaxKind.TextContent || 
+         scanner.token === SyntaxKind.NewLineTrivia) {
     
-    if (scanner.getToken() === SyntaxKind.TextContent) {
-      textRuns.push(createTextNode(
-        scanner.getTokenStart(),
-        scanner.getTokenStart() + scanner.getTokenLength(),
-        scanner.getTokenText()
-      ));
+    if (scanner.token === SyntaxKind.TextContent) {
+      const tokenStart = pos;  // Parser tracks current position
       scanner.scan();
+      const tokenEnd = scanner.offsetNext;
+      
+      textRuns.push(createTextNode(tokenStart, tokenEnd, scanner.tokenText));
       
       // Insert soft break for line boundaries
-      if (scanner.getToken() === SyntaxKind.NewLineTrivia) {
+      if (scanner.token === SyntaxKind.NewLineTrivia) {
         textRuns.push(createSoftBreakNode());
+        const lineBreakStart = pos;
         scanner.scan();
       }
     }
@@ -1073,12 +1095,12 @@ function parseParagraphContent(): TextNode[] {
 function getParagraphText(): string {
   const parts: string[] = [];
   
-  while (scanner.getToken() === SyntaxKind.TextContent || 
-         scanner.getToken() === SyntaxKind.NewLineTrivia) {
+  while (scanner.token === SyntaxKind.TextContent || 
+         scanner.token === SyntaxKind.NewLineTrivia) {
     
-    if (scanner.getToken() === SyntaxKind.TextContent) {
-      parts.push(scanner.getTokenText());
-    } else if (scanner.getToken() === SyntaxKind.NewLineTrivia) {
+    if (scanner.token === SyntaxKind.TextContent) {
+      parts.push(scanner.tokenText);
+    } else if (scanner.token === SyntaxKind.NewLineTrivia) {
       parts.push(' '); // Convert line breaks to spaces
     }
     scanner.scan();
@@ -1103,19 +1125,27 @@ Line three of text`;
 
 #### 2. **Preserved Document Structure**
 ```typescript
-// Original offsets maintained for ProseMirror/editor integration
-interface TextToken {
-  kind: SyntaxKind.TextContent;
-  text: string;           // Normalized content
-  originalStart: number;  // Position in original document
-  originalLength: number; // Length in original document
+// Parser can derive token boundaries from position tracking
+function parseToken(): void {
+  const tokenStart = pos;              // Parser tracks current position
+  scanner.scan();                      // Updates scanner fields
+  const tokenLength = scanner.offsetNext - tokenStart; // Derived length
+  
+  // Create token with derived boundaries
+  const token = {
+    kind: scanner.token,
+    text: scanner.tokenText,
+    start: tokenStart,
+    length: tokenLength
+  };
 }
 
 // Editor can apply changes back to original document using offsets
-function applyEdit(edit: TextEdit, token: TextToken): void {
+function applyEdit(edit: TextEdit, tokenStartPos: number, token: Scanner): void {
+  const tokenLength = token.offsetNext - tokenStartPos;
   const originalRange = { 
-    start: token.originalStart, 
-    end: token.originalStart + token.originalLength 
+    start: tokenStartPos, 
+    end: tokenStartPos + tokenLength 
   };
   document.replaceRange(originalRange, edit.newText);
 }
@@ -1151,32 +1181,27 @@ This approach provides the **best of both worlds**:
 ### Ultra-Safe Point Detection
 
 ```typescript
-function scan(): SyntaxKind {
+function scan(): void {                  // Returns nothing - updates scanner fields
   const startPos = pos;
-  const token = scanToken();
+  scanTokenInternally();                 // Internal token scanning logic
   
-  // Mark ultra-safe rollback points
-  let rollbackFlags = TokenFlags.None;
-  
+  // Update scanner fields including rollback safety via token flags
   if (startPos === 0) {
     // Document start - always safe
-    rollbackFlags = TokenFlags.CanRollbackHere | TokenFlags.RollbackDocumentStart;
+    scanner.tokenFlags |= TokenFlags.CanRollbackHere | TokenFlags.RollbackDocumentStart;
   } else if (precedingBlankLine) {
     // After blank line - block context reset
-    rollbackFlags = TokenFlags.CanRollbackHere | TokenFlags.RollbackBlankLine;
+    scanner.tokenFlags |= TokenFlags.CanRollbackHere | TokenFlags.RollbackBlankLine;
   } else if (mode === ScanMode.RawText) {
     // Within <script>/<style> - any position safe
-    rollbackFlags = TokenFlags.CanRollbackHere | TokenFlags.RollbackRawText;
+    scanner.tokenFlags |= TokenFlags.CanRollbackHere | TokenFlags.RollbackRawText;
   } else if (mode === ScanMode.CodeBlockContent && atLineStart) {
     // Within fenced code at line start - safe
-    rollbackFlags = TokenFlags.CanRollbackHere | TokenFlags.RollbackCodeBlock;
+    scanner.tokenFlags |= TokenFlags.CanRollbackHere | TokenFlags.RollbackCodeBlock;
   } else if (mode === ScanMode.Normal && withinHtmlElement && !withinRawText) {
     // Within HTML element content (non-raw) - potentially safe
-    rollbackFlags = TokenFlags.CanRollbackHere | TokenFlags.RollbackHtmlInner;
+    scanner.tokenFlags |= TokenFlags.CanRollbackHere | TokenFlags.RollbackHtmlInner;
   }
-  
-  tokenFlags |= rollbackFlags;
-  return token;
 }
 ```
 
