@@ -1,19 +1,9 @@
-/**
- * New Scanner Implementation - Stage 1: Text Lines + Whitespace/Newlines
- * 
- * Based on the parser-scanner responsibility shift plan:
- * - Smart scanner with structured ambiguity resolution
- * - Zero-allocation operation with primitive variables
- * - 4-field interface: token, tokenText, tokenFlags, offsetNext
- * - Line-by-line text tokenization for editor integration
- * 
- * Stage 1 Focus:
- * - Text tokens (1 per line with normalized content)
- * - Whitespace and newline tokens per CommonMark spec
- * - Establishes basic scanning interface
- */
-
-import { SyntaxKind2, TokenFlags2, RollbackType, ScannerErrorCode2 } from './scanner2-token-types.js';
+import {
+  SyntaxKind2,
+  TokenFlags2,
+  RollbackType,
+  ScannerErrorCode2
+} from './scanner2-token-types.js';
 import {
   CharacterCodes,
   isLineBreak,
@@ -21,33 +11,6 @@ import {
   isWhiteSpace
 } from './character-codes.js';
 
-/**
- * Debug state interface for zero-allocation diagnostics
- */
-export interface ScannerDebugState {
-  // Position state
-  pos: number;
-  line: number;
-  column: number;
-  mode: string;                    // Human-readable mode name
-  
-  // Basic state
-  atLineStart: boolean;
-  inParagraph: boolean;
-  precedingLineBreak: boolean;
-  
-  // Token state
-  currentToken: SyntaxKind2;
-  currentTokenText: string;
-  currentTokenFlags: TokenFlags2;
-  nextOffset: number;
-}
-
-/**
- * New Scanner Interface - Stage 1
- * 
- * Simplified interface with only 3 methods and 4 fields for direct access
- */
 export interface Scanner2 {
   // Core methods - only 3 methods total
   scan(): void;                                    // Advances to next token, updates all fields
@@ -82,6 +45,29 @@ const enum ContextFlags {
   InParagraph = 1 << 1,          // 0x02 - Inside paragraph content
   PrecedingLineBreak = 1 << 2,   // 0x04 - Line break before current position
 }
+
+/**
+ * Debug state interface for zero-allocation diagnostics
+ */
+export interface ScannerDebugState {
+  // Position state
+  pos: number;
+  line: number;
+  column: number;
+  mode: string;                    // Human-readable mode name
+
+  // Basic state
+  atLineStart: boolean;
+  inParagraph: boolean;
+  precedingLineBreak: boolean;
+
+  // Token state
+  currentToken: SyntaxKind2;
+  currentTokenText: string;
+  currentTokenFlags: TokenFlags2;
+  nextOffset: number;
+}
+
 
 /**
  * Scanner2 implementation with closure-based architecture
