@@ -1,0 +1,71 @@
+/**
+ * Token types for Scanner2 - New Parser-Scanner Architecture
+ * 
+ * This is a simplified, focused token set for the new scanner architecture.
+ * Unlike the original token-types.ts, this focuses only on tokens needed
+ * for the stage-based Scanner2 implementation.
+ */
+
+/**
+ * Token types for Scanner2 - Stage 1 focuses on basic text tokenization
+ */
+export const enum SyntaxKind2 {
+  Unknown,
+  EndOfFileToken,
+
+  // Stage 1: Basic text and whitespace tokens
+  StringLiteral,            // Text content (normalized, one per line)
+  WhitespaceTrivia,         // Leading whitespace at line start
+  NewLineTrivia,            // Line breaks (LF, CRLF, CR)
+  
+  // Future stages will add more tokens as needed:
+  // Stage 2: Testing infrastructure  
+  // Stage 3: Inline formatting (bold, italic, code)
+  // Stage 4: HTML and entities
+  // Later stages: Progressive Markdown construct addition
+}
+
+/**
+ * Token flags for Scanner2 - simplified and focused on new architecture needs
+ */
+export const enum TokenFlags2 {
+  None = 0,
+  
+  // Line and position context
+  PrecedingLineBreak = 1 << 0,   // Token follows a line break
+  IsAtLineStart = 1 << 1,        // Token appears at start of line
+  IsBlankLine = 1 << 2,          // Newline token ends a whitespace-only line
+  
+  // Rollback safety flags for new scanner architecture
+  CanRollbackHere = 1 << 3,      // Scanning can safely restart at this position
+  RollbackTypeMask = 0x7 << 4,   // 3 bits for rollback type (8 types max)
+  
+  // Specific rollback type flags
+  RollbackDocumentStart = 0 << 4,     // Position 0 - always safe
+  RollbackBlankLine = 1 << 4,         // After blank line - resets block context
+  RollbackRawText = 2 << 4,           // Within raw text content
+  RollbackCodeBlock = 3 << 4,         // Within code block content
+  RollbackHtmlInner = 4 << 4,         // Within HTML element content
+}
+
+/**
+ * Rollback type enumeration for structured rollback
+ */
+export const enum RollbackType {
+  DocumentStart = 0,        // Position 0 - always safe
+  BlankLineBoundary = 1,    // After blank line - resets block context
+  RawTextContent = 2,       // Within <script>/<style> - any position safe
+  CodeBlockContent = 3,     // Within fenced code - line boundaries safe
+  HtmlElementInner = 4,     // Within HTML element content (non-raw)
+}
+
+/**
+ * Scanner error codes for Scanner2 diagnostics
+ */
+export enum ScannerErrorCode2 {
+  None,
+  UnexpectedEndOfFile,
+  InvalidCharacter,
+  InvalidRollbackPosition,
+  InvalidRollbackType,
+}
