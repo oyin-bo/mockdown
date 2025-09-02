@@ -3,6 +3,43 @@
  * 
  * Implements annotated text format testing system as described in
  * 13-parser-scanner-shift-plan.md Stage 2 section.
+ * 
+ * Simplified version that works with exact position specifications.
+ * 
+ * Usage:
+ * ------
+ * 
+ * The `verifyTokens` function takes annotated text in this format:
+ * 
+ * ```
+ * Markdown content here
+ * More markdown content
+ * @<position> <TokenKind> [optional attributes]
+ * @<position> <TokenKind> [optional attributes]
+ * ```
+ * 
+ * Example:
+ * ```
+ * Hello World
+ * @0 StringLiteral
+ * @11 EndOfFileToken
+ * ```
+ * 
+ * The function returns the original string if all assertions pass,
+ * or injects error messages if any assertions fail.
+ * 
+ * Supported attributes:
+ * - text: "expected text content"
+ * - start: expected start position
+ * - end: expected end position
+ * - flags: expected token flags
+ * 
+ * Stage 1 tokens available:
+ * - StringLiteral: Text content (normalized, one per line)
+ * - WhitespaceTrivia: Leading whitespace at line start
+ * - NewLineTrivia: Line breaks (LF, CRLF, CR)
+ * - EndOfFileToken: End of input
+ * - Unknown: Fallback token type
  */
 
 import { createScanner2, type Scanner2 } from '../scanner2.js';
@@ -20,49 +57,16 @@ interface TokenInfo {
 }
 
 /**
- * Position marker mapping from marker character to text position
- */
-interface PositionMarker {
-  marker: string; // '1', '2', 'A', 'B', etc.
-  position: number; // character offset in source text
-}
-
-/**
  * Token assertion extracted from test annotation
  */
 interface TokenAssertion {
-  marker: string; // '1', '2', 'A', 'B', etc.
+  position: number; // exact character position
   expectedKind: string; // token kind name like 'StringLiteral'
   attributes?: Record<string, unknown>; // optional attributes to check
 }
 
 /**
- * Parse a single line to extract position markers
- * Position marker lines contain digits 1-9 and letters A-Z marking positions
- */
-function parsePositionMarkers(line: string, textLine: string): PositionMarker[] {
-  const markers: PositionMarker[] = [];
-  const trimmedLine = line.trim();
-  
-  // Check if this looks like a position marker line (contains only digits/letters and spaces)
-  if (!/^[1-9A-Z\s]*$/.test(trimmedLine) || trimmedLine.length === 0) {
-    return markers;
-  }
-  
-  // Map each character position in the marker line to position in text line
-  // The marker line should align with the text line above it
-  for (let i = 0; i < line.length && i < textLine.length; i++) {
-    const char = line[i];
-    if (char >= '1' && char <= '9' || char >= 'A' && char <= 'Z') {
-      markers.push({ marker: char, position: i });
-    }
-  }
-  
-  return markers;
-}
-
-/**
- * Parse a token assertion line starting with @
+ * Parse a token assertion line starting with @<position>
  */
 function parseTokenAssertion(line: string): TokenAssertion | null {
   const trimmed = line.trim();
@@ -70,13 +74,14 @@ function parseTokenAssertion(line: string): TokenAssertion | null {
     return null;
   }
   
-  // Extract marker and expected kind
-  const match = trimmed.match(/^@([1-9A-Z])\s+(\w+)(?:\s+(.*))?$/);
+  // Extract position and expected kind: @<position> <tokenKind> [attributes]
+  const match = trimmed.match(/^@(\d+)\s+(\w+)(?:\s+(.*))?$/);
   if (!match) {
     return null;
   }
   
-  const [, marker, expectedKind, attributesPart] = match;
+  const [, posStr, expectedKind, attributesPart] = match;
+  const position = parseInt(posStr, 10);
   let attributes: Record<string, unknown> | undefined;
   
   // Parse attributes if present (simple JSON-like format)
@@ -98,7 +103,7 @@ function parseTokenAssertion(line: string): TokenAssertion | null {
     }
   }
   
-  return { marker, expectedKind, attributes };
+  return { position, expectedKind, attributes };
 }
 
 /**
@@ -150,35 +155,34 @@ function scanAllTokens(text: string): TokenInfo[] {
  * Find token at or near the specified position
  */
 function findTokenAtPosition(tokens: TokenInfo[], position: number): TokenInfo | null {
-  // Find token that contains this position
+  // Find token that starts at this position or contains this position
   for (const token of tokens) {
-    if (position >= token.start && position < token.end) {
+    if (token.start === position) {
+      return token;
+    }
+    if (position > token.start && position < token.end) {
       return token;
     }
   }
   
-  // If no exact match, find the closest token
-  let closest: TokenInfo | null = null;
-  let minDistance = Infinity;
-  
+  // Special case: EndOfFileToken - it has start === end, look for exact match
   for (const token of tokens) {
-    const distance = Math.min(
-      Math.abs(position - token.start),
-      Math.abs(position - token.end)
-    );
-    if (distance < minDistance) {
-      minDistance = distance;
-      closest = token;
+    if (token.start === token.end && token.start === position) {
+      return token;
     }
   }
   
-  return closest;
+  return null;
 }
 
 /**
  * Main function: verify tokens in annotated test format
  * Returns the original string if all assertions pass,
  * or injects error messages if any assertions fail.
+ * 
+ * Format: 
+ * - Markdown content lines
+ * - @<position> <TokenKind> [attributes] - assertions
  */
 export function verifyTokens(annotatedText: string): string {
   const lines = annotatedText.split('\n');
@@ -186,35 +190,18 @@ export function verifyTokens(annotatedText: string): string {
   
   // Separate markdown content from test annotations
   const markdownLines: string[] = [];
-  const positionMarkers: PositionMarker[] = [];
   const tokenAssertions: TokenAssertion[] = [];
   
-  let lastMarkdownLineIndex = -1;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    
+  for (const line of lines) {
     if (line.trim().startsWith('@')) {
       // Token assertion
       const assertion = parseTokenAssertion(line);
       if (assertion) {
         tokenAssertions.push(assertion);
       }
-    } else if (i > 0 && /^[1-9A-Z\s]*$/.test(line.trim()) && line.trim().length > 0) {
-      // Position marker line - applies to the previous line
-      if (lastMarkdownLineIndex >= 0) {
-        const prevLineIndex = lastMarkdownLineIndex;
-        const markers = parsePositionMarkers(line, markdownLines[prevLineIndex]);
-        // Adjust positions to account for all previous lines
-        const lineOffset = markdownLines.slice(0, prevLineIndex).join('\n').length + (prevLineIndex > 0 ? 1 : 0);
-        for (const marker of markers) {
-          positionMarkers.push({ marker: marker.marker, position: marker.position + lineOffset });
-        }
-      }
-    } else if (!line.trim().startsWith('@')) {
+    } else {
       // Markdown content
       markdownLines.push(line);
-      lastMarkdownLineIndex = markdownLines.length - 1;
     }
   }
   
@@ -226,24 +213,17 @@ export function verifyTokens(annotatedText: string): string {
   
   // Verify each assertion
   for (const assertion of tokenAssertions) {
-    // Find the position for this marker
-    const marker = positionMarkers.find(m => m.marker === assertion.marker);
-    if (!marker) {
-      errors.push(`ERROR: Position marker '${assertion.marker}' not found`);
-      continue;
-    }
-    
     // Find token at this position
-    const token = findTokenAtPosition(tokens, marker.position);
+    const token = findTokenAtPosition(tokens, assertion.position);
     if (!token) {
-      errors.push(`ERROR: No token found at position ${marker.position} (marker '${assertion.marker}')`);
+      errors.push(`ERROR: No token found at position ${assertion.position}`);
       continue;
     }
     
     // Check token kind
     const actualKindName = getTokenKindName(token.kind);
     if (actualKindName !== assertion.expectedKind) {
-      errors.push(`ERROR: At position ${marker.position} (marker '${assertion.marker}'), expected ${assertion.expectedKind} but got ${actualKindName}`);
+      errors.push(`ERROR: At position ${assertion.position}, expected ${assertion.expectedKind} but got ${actualKindName}`);
       continue;
     }
     
@@ -266,12 +246,12 @@ export function verifyTokens(annotatedText: string): string {
             actualValue = token.flags;
             break;
           default:
-            errors.push(`ERROR: Unknown attribute '${key}' for token at position ${marker.position}`);
+            errors.push(`ERROR: Unknown attribute '${key}' for token at position ${assertion.position}`);
             continue;
         }
         
         if (actualValue !== expectedValue) {
-          errors.push(`ERROR: At position ${marker.position} (marker '${assertion.marker}'), expected ${key}: ${JSON.stringify(expectedValue)} but got ${JSON.stringify(actualValue)}`);
+          errors.push(`ERROR: At position ${assertion.position}, expected ${key}: ${JSON.stringify(expectedValue)} but got ${JSON.stringify(actualValue)}`);
         }
       }
     }

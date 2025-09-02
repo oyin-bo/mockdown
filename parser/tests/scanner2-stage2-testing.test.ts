@@ -10,9 +10,8 @@ describe('Scanner2 Stage 2: Testing Infrastructure', () => {
   
   test('should pass when token assertions are correct', () => {
     const annotatedTest = `Hello World
-1          E
-@1 StringLiteral
-@E EndOfFileToken`;
+@0 StringLiteral
+@11 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
@@ -20,21 +19,19 @@ describe('Scanner2 Stage 2: Testing Infrastructure', () => {
   
   test('should inject error when token type is wrong', () => {
     const annotatedTest = `Hello World
-1
-@1 WhitespaceTrivia`;
+@0 WhitespaceTrivia`;
     
     const result = verifyTokens(annotatedTest);
-    expect(result).toContain('ERROR: At position 0 (marker \'1\'), expected WhitespaceTrivia but got StringLiteral');
+    expect(result).toContain('ERROR: At position 0, expected WhitespaceTrivia but got StringLiteral');
   });
   
   test('should handle multiple tokens correctly', () => {
     const annotatedTest = `Line1
 Line2
-1    56    E
-@1 StringLiteral
+@0 StringLiteral
 @5 NewLineTrivia
 @6 StringLiteral
-@E EndOfFileToken`;
+@11 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
@@ -42,10 +39,9 @@ Line2
   
   test('should handle whitespace tokens', () => {
     const annotatedTest = `  Hello
-12     E
-@1 WhitespaceTrivia
+@0 WhitespaceTrivia
 @2 StringLiteral
-@E EndOfFileToken`;
+@7 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
@@ -53,9 +49,8 @@ Line2
   
   test('should verify token attributes', () => {
     const annotatedTest = `Test
-1   E
-@1 StringLiteral text: "Test"
-@E EndOfFileToken`;
+@0 StringLiteral text: "Test"
+@4 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
@@ -63,19 +58,16 @@ Line2
   
   test('should inject error when attribute is wrong', () => {
     const annotatedTest = `Test
-1   E
-@1 StringLiteral text: "Wrong"
-@E EndOfFileToken`;
+@0 StringLiteral text: "Wrong"
+@4 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
-    expect(result).toContain('ERROR: At position 0 (marker \'1\'), expected text: "Wrong" but got "Test"');
+    expect(result).toContain('ERROR: At position 0, expected text: "Wrong" but got "Test"');
   });
   
   test('should handle empty input', () => {
-    // For empty input, the EndOfFileToken is at position 0
     const annotatedTest = `
-1
-@1 EndOfFileToken`;
+@0 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
@@ -84,11 +76,25 @@ Line2
   test('should handle newlines properly', () => {
     const annotatedTest = `First
 Second
-1    56    E
-@1 StringLiteral
+@0 StringLiteral
 @5 NewLineTrivia
 @6 StringLiteral
-@E EndOfFileToken`;
+@12 EndOfFileToken`;
+    
+    const result = verifyTokens(annotatedTest);
+    expect(result).toBe(annotatedTest);
+  });
+
+  test('comprehensive example with all Stage 1 token types', () => {
+    // Note: no trailing newline in this input
+    const annotatedTest = `  Line1
+  Line2
+@0 WhitespaceTrivia
+@2 StringLiteral
+@7 NewLineTrivia
+@8 WhitespaceTrivia
+@10 StringLiteral
+@15 EndOfFileToken`;
     
     const result = verifyTokens(annotatedTest);
     expect(result).toBe(annotatedTest);
