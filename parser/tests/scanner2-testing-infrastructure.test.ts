@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { verifyTokens } from '../scanner2.js';
+import { verifyTokens, createScanner2 } from '../scanner2.js';
 
 describe('Scanner2 Testing Infrastructure', () => {
   test('should return original string when all expectations match', () => {
@@ -135,5 +135,85 @@ A           B
     const result = verifyTokens(tokenTest);
     // WhitespaceTrivia should have IsAtLineStart flag (1 << 1 = 2)
     expect(result).toBe(tokenTest);
+  });
+
+  test('infrastructure failure: wrong position marker should inject descriptive error', () => {
+    // Position 12 should be beyond the "Hello world" token (which ends at position 10)
+    const tokenTest = `Hello world
+            1
+@1 StringLiteral`;
+    
+    const result = verifyTokens(tokenTest);
+    expect(result).toContain("ERROR: No token found at position marked by '1'");
+    expect(result).not.toBe(tokenTest);
+    
+    // The error should be injected below the expectation line
+    const lines = result.split('\n');
+    const expectationLineIndex = lines.findIndex(line => line.includes('@1 StringLiteral'));
+    expect(expectationLineIndex).toBeGreaterThan(-1);
+    expect(lines[expectationLineIndex + 1]).toContain("ERROR: No token found at position marked by '1'");
+  });
+
+  test('infrastructure failure: wrong attribute value should show actual vs expected', () => {
+    const tokenTest = `Hello world
+1
+@1 StringLiteral text: "Wrong content"`;
+    
+    const result = verifyTokens(tokenTest);
+    expect(result).toContain('ERROR: Attribute \'text\' expected "Wrong content" but got "Hello world"');
+    expect(result).not.toBe(tokenTest);
+    
+    // Verify error is in the right place
+    const lines = result.split('\n');
+    const expectationLineIndex = lines.findIndex(line => line.includes('@1 StringLiteral text:'));
+    expect(expectationLineIndex).toBeGreaterThan(-1);
+    expect(lines[expectationLineIndex + 1]).toContain('ERROR: Attribute \'text\' expected "Wrong content" but got "Hello world"');
+  });
+
+  test('infrastructure failure: unknown attribute should produce error', () => {
+    const tokenTest = `Hello world
+1
+@1 StringLiteral unknownAttr: "value"`;
+    
+    const result = verifyTokens(tokenTest);
+    expect(result).toContain("ERROR: Unknown attribute 'unknownAttr' for token validation");
+    expect(result).not.toBe(tokenTest);
+  });
+
+  test('should strip single leading/trailing newlines', () => {
+    const tokenTestWithNewlines = `
+Hello world
+1
+@1 StringLiteral
+`;
+    
+    const tokenTestClean = `Hello world
+1
+@1 StringLiteral`;
+    
+    const result = verifyTokens(tokenTestWithNewlines);
+    expect(result).toBe(tokenTestClean);
+  });
+
+  test('should properly align position markers with token starts', () => {
+    // Test that digit 1 aligns with the start of "Hello" (position 0)
+    const tokenTest = `Hello world
+1
+@1 StringLiteral`;
+    
+    const result = verifyTokens(tokenTest);
+    expect(result).toBe(tokenTest);
+    
+    // Test that digit 1 aligns with the start of whitespace, digit 2 with "Hello"
+    // For "  Hello world":
+    // Position 0-1: "  " (WhitespaceTrivia)
+    // Position 2-12: "Hello world" (StringLiteral)
+    const tokenTest2 = `  Hello world
+1 2
+@1 WhitespaceTrivia
+@2 StringLiteral`;
+    
+    const result2 = verifyTokens(tokenTest2);
+    expect(result2).toBe(tokenTest2);
   });
 });

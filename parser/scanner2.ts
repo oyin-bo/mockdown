@@ -669,7 +669,10 @@ function syntaxKindToString(kind: SyntaxKind2): string {
  */
 export function verifyTokens(annotatedText: string): string {
   try {
-    const parsed = parseAnnotatedTest(annotatedText);
+    // Strip single leading/trailing newlines for cleaner format
+    const normalizedText = annotatedText.replace(/^\n/, '').replace(/\n$/, '');
+    
+    const parsed = parseAnnotatedTest(normalizedText);
     const actualTokens = getTokensAtPositions(parsed.cleanMarkdown, parsed.positionMarkers);
     
     const modifiedLines = [...parsed.originalLines];
@@ -729,9 +732,21 @@ export function verifyTokens(annotatedText: string): string {
       }
     }
     
-    return modifiedLines.join('\n');
+    // If there are errors, return the modified text
+    if (lineOffset > 0) {
+      return modifiedLines.join('\n');
+    }
+    
+    // If no errors and we normalized the input, return the normalized version
+    if (normalizedText !== annotatedText) {
+      return normalizedText;
+    }
+    
+    // Otherwise return the original
+    return annotatedText;
     
   } catch (error) {
-    return annotatedText + '\nERROR: Failed to parse annotated test format: ' + (error as Error).message;
+    const normalizedText = annotatedText.replace(/^\n/, '').replace(/\n$/, '');
+    return normalizedText + '\nERROR: Failed to parse annotated test format: ' + (error as Error).message;
   }
 }

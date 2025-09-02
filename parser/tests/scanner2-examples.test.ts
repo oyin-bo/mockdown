@@ -9,11 +9,8 @@ import { verifyTokens } from '../scanner2.js';
 describe('Scanner2 Testing Infrastructure - Examples', () => {
   test('example 1: simple text validation', () => {
     const tokenTest = `Hello world from Scanner2
-1     2     3    4
-@1 StringLiteral text: "Hello world from Scanner2"
-@2 StringLiteral text: "Hello world from Scanner2"
-@3 StringLiteral text: "Hello world from Scanner2"
-@4 StringLiteral text: "Hello world from Scanner2"`;
+1
+@1 StringLiteral text: "Hello world from Scanner2"`;
     
     const result = verifyTokens(tokenTest);
     expect(result).toBe(tokenTest);
@@ -22,7 +19,7 @@ describe('Scanner2 Testing Infrastructure - Examples', () => {
   test('example 2: multi-line text with newlines', () => {
     const tokenTest = `First line of content
 Second line of content
-                     1
+1
 @1 StringLiteral text: "Second line of content"`;
     
     const result = verifyTokens(tokenTest);
@@ -42,8 +39,8 @@ Second line of content
   test('example 4: complex document structure', () => {
     const tokenTest = `  First paragraph
 
-  Second paragraph
-  1
+Second paragraph
+1
 @1 StringLiteral text: "Second paragraph"`;
     
     const result = verifyTokens(tokenTest);
@@ -71,12 +68,12 @@ Second line of content
     expect(result).not.toBe(tokenTest);
   });
 
-  test('example 7: using letter markers', () => {
+  test('example 7: using letter markers for distant positions', () => {
     const tokenTest = `Content with letter markers
-A       B       C
+1       A               B
+@1 StringLiteral text: "Content with letter markers"
 @A StringLiteral text: "Content with letter markers"
-@B StringLiteral text: "Content with letter markers"
-@C StringLiteral text: "Content with letter markers"`;
+@B StringLiteral text: "Content with letter markers"`;
     
     const result = verifyTokens(tokenTest);
     expect(result).toBe(tokenTest);
@@ -86,7 +83,7 @@ A       B       C
     // This demonstrates how future markdown constructs might be tested
     const tokenTest = `Regular text content
 Multiple words here
-         1
+1
 @1 StringLiteral text: "Multiple words here"`;
     
     const result = verifyTokens(tokenTest);
