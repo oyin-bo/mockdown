@@ -108,7 +108,16 @@ export const enum TokenFlags {
 
   // Additional flags beyond the run-length bitfield
   MaybeDefinition = 1 << 22,     // Line-start '[' ... ']' ':' pattern hint
-  IsBlankLine = 1 << 23          // Newline token ends a whitespace-only line
+  IsBlankLine = 1 << 23,         // Newline token ends a whitespace-only line
+  
+  // Rollback safety flags (for Stage 1+ scanner architecture)
+  CanRollbackHere = 1 << 24,     // Scanning can safely restart at this position
+  RollbackTypeMask = 0x7 << 25,  // 3 bits for rollback type (8 types max)
+  RollbackDocumentStart = 0 << 25,     // Position 0
+  RollbackBlankLine = 1 << 25,         // After blank line
+  RollbackRawText = 2 << 25,           // Within raw text
+  RollbackCodeBlock = 3 << 25,         // Within code block
+  RollbackHtmlInner = 4 << 25,         // Within HTML content
 }
 
 // Packed run-length for certain tokens (e.g., backtick/tilde). We pack the integer
