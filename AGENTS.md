@@ -2,6 +2,11 @@
 
 The project's goals and principles are well described in the opening README.
 
+Here are strict rules for an agentic work:
+* NEVER create stray dummy files for debugging around the repository. Use genuine unit tests to verify behaviour if you need to.
+* DO NOT try to run TypeScript compiler to produce JavaScript output. That is forbidden.
+* Testing framework is the key, and it must be followed strictly to the letter
+
 Please focus majorly on understanding the testing philosophy using annotated Markdown.
 
 ## Annotated Markdown Testing Philosophy
