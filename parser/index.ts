@@ -1,0 +1,1 @@
+export { createScanner as createScanner2 } from './scanner.js';

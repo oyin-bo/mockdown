@@ -9,7 +9,7 @@
 /**
  * Token types for Scanner2 - Stage 1 focuses on basic text tokenization
  */
-export const enum SyntaxKind2 {
+export const enum SyntaxKind {
   Unknown,
   EndOfFileToken,
 
@@ -34,7 +34,7 @@ export const enum SyntaxKind2 {
 /**
  * Token flags for Scanner2 - simplified and focused on new architecture needs
  */
-export const enum TokenFlags2 {
+export const enum TokenFlags {
   None = 0,
   
   // Line and position context
@@ -72,7 +72,7 @@ export const enum RollbackType {
 /**
  * Scanner error codes for Scanner2 diagnostics
  */
-export enum ScannerErrorCode2 {
+export enum ScannerErrorCode {
   None,
   UnexpectedEndOfFile,
   InvalidCharacter,

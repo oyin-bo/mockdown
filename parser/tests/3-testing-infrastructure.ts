@@ -5,8 +5,8 @@
  * This allows writing tests with position markers and token expectations.
  */
 
-import { createScanner2 } from '../scanner2.js';
-import { SyntaxKind2, TokenFlags2 } from '../scanner2-token-types.js';
+import { createScanner } from '../scanner.js';
+import { SyntaxKind, TokenFlags } from '../scanner-token-types.js';
 
 /**
  * Position marker in annotated test format
@@ -151,20 +151,20 @@ function parseAnnotatedTest(annotatedText: string): ParsedAnnotatedTest {
 /**
  * Get all tokens from scanner at specified positions
  */
-function getTokensAtPositions(markdownText: string, positions: PositionMarker[]): Map<string, {token: SyntaxKind2, text: string, flags: TokenFlags2, offset: number}> {
-  const scanner = createScanner2();
+function getTokensAtPositions(markdownText: string, positions: PositionMarker[]): Map<string, {token: SyntaxKind, text: string, flags: TokenFlags, offset: number}> {
+  const scanner = createScanner();
   scanner.initText(markdownText);
   
-  const tokenMap = new Map<string, {token: SyntaxKind2, text: string, flags: TokenFlags2, offset: number}>();
+  const tokenMap = new Map<string, {token: SyntaxKind, text: string, flags: TokenFlags, offset: number}>();
   const sortedPositions = [...positions].sort((a, b) => a.position - b.position);
   
   let positionIndex = 0;
   
   // Scan through all tokens
-  while (scanner.token !== SyntaxKind2.EndOfFileToken && positionIndex < sortedPositions.length) {
+  while (scanner.token !== SyntaxKind.EndOfFileToken && positionIndex < sortedPositions.length) {
     scanner.scan();
     
-    if ((scanner.token as SyntaxKind2) === SyntaxKind2.EndOfFileToken) break;
+    if ((scanner.token as SyntaxKind) === SyntaxKind.EndOfFileToken) break;
 
     const tokenStart = scanner.offsetNext - scanner.tokenText.length;
     const tokenEnd = scanner.offsetNext;
@@ -195,19 +195,19 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
 /**
  * Convert SyntaxKind2 enum value to string name
  */
-function syntaxKindToString(kind: SyntaxKind2): string {
+function syntaxKindToString(kind: SyntaxKind): string {
   switch (kind) {
-    case SyntaxKind2.Unknown: return 'Unknown';
-    case SyntaxKind2.EndOfFileToken: return 'EndOfFileToken';
-    case SyntaxKind2.StringLiteral: return 'StringLiteral';
-    case SyntaxKind2.WhitespaceTrivia: return 'WhitespaceTrivia';
-    case SyntaxKind2.NewLineTrivia: return 'NewLineTrivia';
-    case SyntaxKind2.AsteriskToken: return 'AsteriskToken';
-    case SyntaxKind2.AsteriskAsterisk: return 'AsteriskAsterisk';
-    case SyntaxKind2.UnderscoreToken: return 'UnderscoreToken';
-    case SyntaxKind2.UnderscoreUnderscore: return 'UnderscoreUnderscore';
-    case SyntaxKind2.BacktickToken: return 'BacktickToken';
-    case SyntaxKind2.TildeTilde: return 'TildeTilde';
+    case SyntaxKind.Unknown: return 'Unknown';
+    case SyntaxKind.EndOfFileToken: return 'EndOfFileToken';
+    case SyntaxKind.StringLiteral: return 'StringLiteral';
+    case SyntaxKind.WhitespaceTrivia: return 'WhitespaceTrivia';
+    case SyntaxKind.NewLineTrivia: return 'NewLineTrivia';
+    case SyntaxKind.AsteriskToken: return 'AsteriskToken';
+    case SyntaxKind.AsteriskAsterisk: return 'AsteriskAsterisk';
+    case SyntaxKind.UnderscoreToken: return 'UnderscoreToken';
+    case SyntaxKind.UnderscoreUnderscore: return 'UnderscoreUnderscore';
+    case SyntaxKind.BacktickToken: return 'BacktickToken';
+    case SyntaxKind.TildeTilde: return 'TildeTilde';
     default: return `SyntaxKind2(${kind})`;
   }
 }

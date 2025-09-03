@@ -5,7 +5,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { verifyTokens } from './3-testing-infrastructure.js';
-import { createScanner2 } from '../scanner2.js';
+import { createScanner } from '../scanner.js';
 
 describe('Scanner2 Testing Infrastructure', () => {
   test('should return original string when all expectations match', () => {

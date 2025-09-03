@@ -1,17 +1,17 @@
 import {
-  SyntaxKind2,
-  TokenFlags2,
+  SyntaxKind,
+  TokenFlags,
   RollbackType,
-  ScannerErrorCode2
-} from './scanner2-token-types.js';
+  ScannerErrorCode
+} from './scanner-token-types';
 import {
   CharacterCodes,
   isLineBreak,
   isWhiteSpaceSingleLine,
   isWhiteSpace
-} from './character-codes.js';
+} from './character-codes';
 
-export interface Scanner2 {
+export interface Scanner {
   /** Initialize scanner text and optional start/length. */
   initText(text: string, start?: number, length?: number): void;
 
@@ -25,13 +25,13 @@ export interface Scanner2 {
   fillDebugState(state: ScannerDebugState): void;
 
   /** Current token type. Updated by scan() and rollback(). */
-  token: SyntaxKind2;
+  token: SyntaxKind;
 
   /** Current token text (always materialized). */
   tokenText: string;
 
   /** Token flags including rollback safety and contextual flags. */
-  tokenFlags: TokenFlags2;
+  tokenFlags: TokenFlags;
 
   /** Where the next token will start (offset into the source). */
   offsetNext: number;
@@ -90,13 +90,13 @@ export interface ScannerDebugState {
   precedingLineBreak: boolean;
 
   /** The current token kind reported by the scanner. */
-  currentToken: SyntaxKind2;
+  currentToken: SyntaxKind;
 
   /** The current token's text. */
   currentTokenText: string;
 
   /** Flags associated with the current token. */
-  currentTokenFlags: TokenFlags2;
+  currentTokenFlags: TokenFlags;
 
   /** The offset where the next token will start. */
   nextOffset: number;
@@ -107,7 +107,7 @@ export interface ScannerDebugState {
  * Scanner2 implementation with closure-based architecture
  * Stage 1: Basic text lines + whitespace/newlines only
  */
-export function createScanner2(): Scanner2 {
+export function createScanner(): Scanner {
   // Scanner state - encapsulated within closure
   let source = '';
   let pos = 0;
@@ -124,9 +124,9 @@ export function createScanner2(): Scanner2 {
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
   
   // Scanner interface fields - these are the 4 public fields
-  let token: SyntaxKind2 = SyntaxKind2.Unknown;
+  let token: SyntaxKind = SyntaxKind.Unknown;
   let tokenText: string = '';
-  let tokenFlags: TokenFlags2 = TokenFlags2.None;
+  let tokenFlags: TokenFlags = TokenFlags.None;
   let offsetNext: number = 0;
   
   // Cross-line state continuity
@@ -204,7 +204,7 @@ export function createScanner2(): Scanner2 {
    * Token emission functions
    */
   
-  function emitToken(kind: SyntaxKind2, start: number, endPos: number, flags: TokenFlags2 = TokenFlags2.None): void {
+  function emitToken(kind: SyntaxKind, start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = kind;
     tokenText = source.substring(start, endPos);
     tokenFlags = flags;
@@ -212,10 +212,10 @@ export function createScanner2(): Scanner2 {
     
     // Add context-based flags
     if (contextFlags & ContextFlags.PrecedingLineBreak) {
-      tokenFlags |= TokenFlags2.PrecedingLineBreak;
+      tokenFlags |= TokenFlags.PrecedingLineBreak;
     }
     if (contextFlags & ContextFlags.AtLineStart) {
-      tokenFlags |= TokenFlags2.IsAtLineStart;
+      tokenFlags |= TokenFlags.IsAtLineStart;
     }
     
     // Update position tracking
@@ -237,16 +237,16 @@ export function createScanner2(): Scanner2 {
     }
     
     const runLength = runEnd - start;
-    let tokenType: SyntaxKind2;
-    let flags = TokenFlags2.None;
+    let tokenType: SyntaxKind;
+    let flags = TokenFlags.None;
     
     // For runs of 2 or more, emit double asterisk token
     if (runLength >= 2) {
-      tokenType = SyntaxKind2.AsteriskAsterisk;
+      tokenType = SyntaxKind.AsteriskAsterisk;
       // Consume only 2 characters for double asterisk
       runEnd = start + 2;
     } else {
-      tokenType = SyntaxKind2.AsteriskToken;
+      tokenType = SyntaxKind.AsteriskToken;
       // Single asterisk - runEnd is already start + 1
     }
     
@@ -265,16 +265,16 @@ export function createScanner2(): Scanner2 {
     }
     
     const runLength = runEnd - start;
-    let tokenType: SyntaxKind2;
-    let flags = TokenFlags2.None;
+    let tokenType: SyntaxKind;
+    let flags = TokenFlags.None;
     
     // For runs of 2 or more, emit double underscore token
     if (runLength >= 2) {
-      tokenType = SyntaxKind2.UnderscoreUnderscore;
+      tokenType = SyntaxKind.UnderscoreUnderscore;
       // Consume only 2 characters for double underscore
       runEnd = start + 2;
     } else {
-      tokenType = SyntaxKind2.UnderscoreToken;
+      tokenType = SyntaxKind.UnderscoreToken;
       // Single underscore - runEnd is already start + 1
     }
     
@@ -296,11 +296,11 @@ export function createScanner2(): Scanner2 {
     // For backticks, we always emit BacktickToken regardless of run length
     // The run length will be encoded in flags for parser use
     const runLength = runEnd - start;
-    let flags = TokenFlags2.None;
+    let flags = TokenFlags.None;
     
     // TODO: Add run length encoding to flags when needed for parser
     
-    emitToken(SyntaxKind2.BacktickToken, start, runEnd, flags);
+    emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
     updatePosition(runEnd);
   }
   
@@ -309,7 +309,7 @@ export function createScanner2(): Scanner2 {
     // Double check that we have at least 2 tildes
     if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.tilde) {
       // This is a double tilde - emit TildeTilde token
-      emitToken(SyntaxKind2.TildeTilde, start, start + 2, TokenFlags2.None);
+      emitToken(SyntaxKind.TildeTilde, start, start + 2, TokenFlags.None);
       updatePosition(start + 2);
     } else {
       // This shouldn't happen now, but fallback to text
@@ -355,16 +355,16 @@ export function createScanner2(): Scanner2 {
     
     if (textEnd > start) {
       const text = source.substring(start, textEnd);
-      let flags = TokenFlags2.None;
+      let flags = TokenFlags.None;
       
       if (contextFlags & ContextFlags.PrecedingLineBreak) {
-        flags |= TokenFlags2.PrecedingLineBreak;
+        flags |= TokenFlags.PrecedingLineBreak;
       }
       if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags2.IsAtLineStart;
+        flags |= TokenFlags.IsAtLineStart;
       }
       
-      emitToken(SyntaxKind2.StringLiteral, start, textEnd, flags);
+      emitToken(SyntaxKind.StringLiteral, start, textEnd, flags);
       updatePosition(textEnd);
       
       // Reset line start flag after emitting text
@@ -390,8 +390,8 @@ export function createScanner2(): Scanner2 {
     return true;
   }
   
-  function computeFlankingFlags(start: number, end: number, char: number): TokenFlags2 {
-    let flags = TokenFlags2.None;
+  function computeFlankingFlags(start: number, end: number, char: number): TokenFlags {
+    let flags = TokenFlags.None;
     
     // Get previous and next characters for flanking rules
     const prevChar = start > 0 ? source.charCodeAt(start - 1) : 0;
@@ -416,10 +416,10 @@ export function createScanner2(): Scanner2 {
       (!prevIsPunctuation || nextIsWhitespace || nextIsPunctuation);
     
     if (leftFlanking) {
-      flags |= TokenFlags2.CanOpen;
+      flags |= TokenFlags.CanOpen;
     }
     if (rightFlanking) {
-      flags |= TokenFlags2.CanClose;
+      flags |= TokenFlags.CanClose;
     }
     
     // Special rule for underscore: intraword underscore can't open/close
@@ -429,7 +429,7 @@ export function createScanner2(): Scanner2 {
       
       if (prevIsAlnum && nextIsAlnum) {
         // Intraword underscore - remove flanking capabilities
-        flags &= ~(TokenFlags2.CanOpen | TokenFlags2.CanClose);
+        flags &= ~(TokenFlags.CanOpen | TokenFlags.CanClose);
       }
     }
     
@@ -463,23 +463,23 @@ export function createScanner2(): Scanner2 {
       const rawText = source.substring(lineStart, lineEnd);
       const normalizedText = normalizeLineWhitespace(rawText);
       
-      let flags = TokenFlags2.None;
+      let flags = TokenFlags.None;
       
       // Add rollback flags for safe restart points
       if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags2.CanRollbackHere;
+        flags |= TokenFlags.CanRollbackHere;
       }
       
       // Add context flags
       if (contextFlags & ContextFlags.PrecedingLineBreak) {
-        flags |= TokenFlags2.PrecedingLineBreak;
+        flags |= TokenFlags.PrecedingLineBreak;
       }
       if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags2.IsAtLineStart;
+        flags |= TokenFlags.IsAtLineStart;
       }
       
       // Manually set token fields instead of using emitToken to use normalized text
-      token = SyntaxKind2.StringLiteral;
+      token = SyntaxKind.StringLiteral;
       tokenText = normalizedText;
       tokenFlags = flags;
       offsetNext = lineEnd;
@@ -496,7 +496,7 @@ export function createScanner2(): Scanner2 {
       }
     } else {
       // Empty line content - this shouldn't happen in normal flow
-      emitToken(SyntaxKind2.StringLiteral, start, start, TokenFlags2.IsBlankLine);
+      emitToken(SyntaxKind.StringLiteral, start, start, TokenFlags.IsBlankLine);
     }
   }
   
@@ -507,7 +507,7 @@ export function createScanner2(): Scanner2 {
     }
     
     if (wsEnd > start) {
-      emitToken(SyntaxKind2.WhitespaceTrivia, start, wsEnd);
+      emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
     }
   }
   
@@ -523,16 +523,16 @@ export function createScanner2(): Scanner2 {
       nlEnd++; // LF or other line break
     }
     
-    let flags = TokenFlags2.None;
+    let flags = TokenFlags.None;
     
     // Check if this newline ends a blank line
     if (isBlankLine()) {
-      flags |= TokenFlags2.IsBlankLine;
+      flags |= TokenFlags.IsBlankLine;
       lastBlankLinePos = start;
       contextFlags &= ~ContextFlags.InParagraph; // Reset paragraph context
     }
     
-    emitToken(SyntaxKind2.NewLineTrivia, start, nlEnd, flags);
+    emitToken(SyntaxKind.NewLineTrivia, start, nlEnd, flags);
     contextFlags |= ContextFlags.AtLineStart | ContextFlags.PrecedingLineBreak;
   }
   
@@ -541,7 +541,7 @@ export function createScanner2(): Scanner2 {
    */
   function scanImpl(): void {
     if (pos >= end) {
-      emitToken(SyntaxKind2.EndOfFileToken, pos, pos);
+      emitToken(SyntaxKind.EndOfFileToken, pos, pos);
       return;
     }
     
@@ -635,9 +635,9 @@ export function createScanner2(): Scanner2 {
     lastBlankLinePos = -1;
     
     // Reset token fields
-    token = SyntaxKind2.Unknown;
+    token = SyntaxKind.Unknown;
     tokenText = '';
-    tokenFlags = TokenFlags2.None;
+    tokenFlags = TokenFlags.None;
     offsetNext = start;
   }
   
@@ -682,9 +682,9 @@ export function createScanner2(): Scanner2 {
     }
     
     // Reset token fields
-    token = SyntaxKind2.Unknown;
+    token = SyntaxKind.Unknown;
     tokenText = '';
-    tokenFlags = TokenFlags2.None;
+    tokenFlags = TokenFlags.None;
     offsetNext = position;
   }
   
@@ -709,7 +709,7 @@ export function createScanner2(): Scanner2 {
   }
   
   // Return the scanner interface object
-  const scanner: Scanner2 = {
+  const scanner: Scanner = {
     // Methods
     scan,
     rollback,
@@ -718,13 +718,13 @@ export function createScanner2(): Scanner2 {
     
     // Direct field access - these are the 4 public fields
     get token() { return token; },
-    set token(value: SyntaxKind2) { token = value; },
+    set token(value: SyntaxKind) { token = value; },
     
     get tokenText() { return tokenText; },
     set tokenText(value: string) { tokenText = value; },
     
     get tokenFlags() { return tokenFlags; },
-    set tokenFlags(value: TokenFlags2) { tokenFlags = value; },
+    set tokenFlags(value: TokenFlags) { tokenFlags = value; },
     
     get offsetNext() { return offsetNext; },
     set offsetNext(value: number) { offsetNext = value; }
