@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { createScanner } from '../../scanner.js';
-import { SyntaxKind, TokenFlags } from '../../token-types.js';
+import { SyntaxKind, TokenFlags } from '../../../token-types.js';
 import { scanTokens, scanTokensStrings } from '../utils.test.js';
 
 describe('Context and Advanced Features', () => {

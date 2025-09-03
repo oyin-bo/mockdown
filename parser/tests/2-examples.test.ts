@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { verifyTokens } from './scanner2-testing-infrastructure.js';
+import { verifyTokens } from './3-testing-infrastructure.js';
 
 describe('Scanner2 Testing Infrastructure - Examples', () => {
   test('example 1: simple text validation', () => {

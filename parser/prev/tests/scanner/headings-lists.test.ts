@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { createScanner } from '../../scanner.js';
-import { SyntaxKind, TokenFlags } from '../../token-types.js';
+import { SyntaxKind, TokenFlags } from '../../../token-types.js';
 import { scanTokensStrings, syntaxKind } from '../utils.test.js';
 
 describe('ATX Headings and Lists', () => {

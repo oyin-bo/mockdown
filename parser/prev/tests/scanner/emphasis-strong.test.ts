@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { TokenFlags } from '../../token-types.js';
+import { TokenFlags } from '../../../token-types.js';
 import { scanTokens, scanTokensStrings } from '../utils.test.js';
 
 describe('Emphasis and Strong', () => {

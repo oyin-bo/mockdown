@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { createScanner } from '../../scanner.js';
-import { SyntaxKind, TokenFlags } from '../../token-types.js';
+import { SyntaxKind, TokenFlags } from '../../../token-types.js';
 import { scanTokensStrings } from '../utils.test.js';
 
 describe('HTML Tags and Disambiguation', () => {
