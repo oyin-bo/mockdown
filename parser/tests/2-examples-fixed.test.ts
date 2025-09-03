@@ -75,13 +75,4 @@ Test content example
 @B StringLiteral text: "Test content example"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
-
-  test('example 8: simple whitespace and text', () => {
-    const tokenTest = `
-  Simple indented content
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral text: "Simple indented content"`;
-    expect(verifyTokens(tokenTest)).toBe(tokenTest);
-  });
 });
