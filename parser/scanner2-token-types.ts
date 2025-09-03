@@ -26,8 +26,17 @@ export const enum SyntaxKind2 {
   BacktickToken,            // `
   TildeTilde,               // ~~
   
-  // Future stages will add more tokens as needed:
   // Stage 4: HTML and entities
+  HtmlEntity,               // &amp;, &#123;, &#x41;
+  LessThanToken,            // <
+  GreaterThanToken,         // >
+  LessThanSlashToken,       // </
+  SlashGreaterThanToken,    // />
+  HtmlText,                 // Content inside HTML tags or HTML blocks
+  HtmlComment,              // <!-- comment -->
+  AmpersandToken,           // & (when not part of valid entity)
+  
+  // Future stages will add more tokens as needed:
   // Later stages: Progressive Markdown construct addition
 }
 
@@ -56,6 +65,13 @@ export const enum TokenFlags2 {
   // Stage 3: Emphasis delimiter flags
   CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
   CanClose = 1 << 10,            // Delimiter can close emphasis/strong
+  
+  // Stage 4: HTML context flags
+  IsInHtmlTag = 1 << 11,         // Token is inside an HTML tag
+  IsInRawText = 1 << 12,         // Token is in raw text context (script, style)
+  IsInRcdata = 1 << 13,          // Token is in RCDATA context (textarea, title)
+  ContainsHtmlBlock = 1 << 14,   // Token is part of HTML block content
+  Unterminated = 1 << 15,        // Token is unterminated (e.g., unclosed tag)
 }
 
 /**

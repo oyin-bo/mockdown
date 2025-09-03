@@ -159,16 +159,18 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
   const sortedPositions = [...positions].sort((a, b) => a.position - b.position);
   
   let positionIndex = 0;
+  let previousOffsetNext = 0; // Track the previous token's end position
   
   // Scan through all tokens
-  while (scanner.token !== SyntaxKind2.EndOfFileToken && positionIndex < sortedPositions.length) {
+  while (positionIndex < sortedPositions.length) {
+    const tokenStart = previousOffsetNext; // Current token starts where previous token ended
     scanner.scan();
     
-    if ((scanner.token as SyntaxKind2) === SyntaxKind2.EndOfFileToken) break;
-
-    const tokenStart = scanner.offsetNext - scanner.tokenText.length;
+    if (scanner.token === SyntaxKind2.EndOfFileToken) break;
+    
     const tokenEnd = scanner.offsetNext;
-
+    previousOffsetNext = tokenEnd; // Update for next iteration
+    
     // Check if any position markers fall within this token
     while (positionIndex < sortedPositions.length) {
       const marker = sortedPositions[positionIndex];
@@ -188,7 +190,7 @@ function getTokensAtPositions(markdownText: string, positions: PositionMarker[])
       }
     }
   }
-
+  
   return tokenMap;
 }
 
@@ -208,6 +210,15 @@ function syntaxKindToString(kind: SyntaxKind2): string {
     case SyntaxKind2.UnderscoreUnderscore: return 'UnderscoreUnderscore';
     case SyntaxKind2.BacktickToken: return 'BacktickToken';
     case SyntaxKind2.TildeTilde: return 'TildeTilde';
+    // Stage 4: HTML and entities
+    case SyntaxKind2.HtmlEntity: return 'HtmlEntity';
+    case SyntaxKind2.LessThanToken: return 'LessThanToken';
+    case SyntaxKind2.GreaterThanToken: return 'GreaterThanToken';
+    case SyntaxKind2.LessThanSlashToken: return 'LessThanSlashToken';
+    case SyntaxKind2.SlashGreaterThanToken: return 'SlashGreaterThanToken';
+    case SyntaxKind2.HtmlText: return 'HtmlText';
+    case SyntaxKind2.HtmlComment: return 'HtmlComment';
+    case SyntaxKind2.AmpersandToken: return 'AmpersandToken';
     default: return `SyntaxKind2(${kind})`;
   }
 }
