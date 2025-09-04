@@ -189,4 +189,14 @@ Hello world
 @2 StringLiteral`;
     expect(verifyTokens(tokenTest2)).toBe(tokenTest2);
   });
+
+  test('readme example test', () => {
+    const tokenTest = `
+**bold text**
+1 2        3
+@1 AsteriskAsterisk CanOpen
+@2 StringLiteral "bold text"  
+@3 AsteriskAsterisk CanClose`;
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
 });

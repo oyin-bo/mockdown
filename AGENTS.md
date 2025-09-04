@@ -21,9 +21,9 @@ Tests use position markers and token assertions written directly in markdown-lik
 expect(verifyTokens(`
 **bold text**
 1 2        3
-@1 AsteriskAsterisk flags: 514
-@2 StringLiteral text: "bold text"  
-@3 AsteriskAsterisk flags: 1024`)).toBe(/* same input */);
+@1 AsteriskAsterisk CanOpen
+@2 StringLiteral "bold text"
+@3 AsteriskAsterisk CanClose`)).toBe(/* same input */);
 ```
 
 ### Key Components
@@ -61,15 +61,15 @@ From the scanner2 tests, this approach handles complex scenarios:
 expect(verifyTokens(`
   Hello world
 1 2
-@1 WhitespaceTrivia text: "  "
-@2 StringLiteral text: "Hello world"`))
+@1 WhitespaceTrivia "  "
+@2 StringLiteral "Hello world"`))
 
 // Line breaks and positioning
 expect(verifyTokens(`
 Line1
 Line2
 1
-@1 StringLiteral text: "Line2"`))
+@1 StringLiteral "Line2"`))
 ```
 
 This testing philosophy is central to MixPad's ability to move fast while staying grounded - every feature is specified, verified, and documented through this unified approach, creating a feedback loop that accelerates development while maintaining reliability.
