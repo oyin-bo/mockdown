@@ -128,5 +128,32 @@ single~tilde
 @2 StringLiteral "Text with multiple spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
+
+    test('mid-line text with excessive whitespace gets normalized consistently', () => {
+      const tokenTest = `
+**bold** text\twith\t\tmultiple   spaces
+1       2
+@1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "text with multiple spaces"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('text after other formatting tokens gets normalized consistently', () => {
+      const tokenTest = `
+*italic* and\tthen\t\tmore   text
+1       2
+@1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "and then more text"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('all text positions have consistent whitespace normalization behavior', () => {
+      const tokenTest = `
+  Leading\t\tspaces   first
+1 2
+@1 WhitespaceTrivia "  "
+@2 StringLiteral "Leading spaces first"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
   });
 });

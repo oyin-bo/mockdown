@@ -224,6 +224,34 @@ export function createScanner(): Scanner {
     // Reset preceding line break flag after first token
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
+
+  function emitStringLiteralToken(start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
+    token = SyntaxKind.StringLiteral;
+    // Always normalize text for StringLiteral tokens for consistent behavior
+    const rawText = source.substring(start, endPos);
+    tokenText = normalizeLineWhitespace(rawText);
+    tokenFlags = flags;
+    offsetNext = endPos;
+    
+    // Add context-based flags
+    if (contextFlags & ContextFlags.PrecedingLineBreak) {
+      tokenFlags |= TokenFlags.PrecedingLineBreak;
+    }
+    if (contextFlags & ContextFlags.AtLineStart) {
+      tokenFlags |= TokenFlags.IsAtLineStart;
+    }
+    
+    // Update position tracking
+    updatePosition(endPos);
+    
+    // Reset preceding line break flag after first token
+    contextFlags &= ~ContextFlags.PrecedingLineBreak;
+    
+    // Update paragraph state
+    if (tokenText.length > 0) {
+      contextFlags |= ContextFlags.InParagraph;
+    }
+  }
   
   /**
    * Stage 3: Inline formatting scanner functions
@@ -371,36 +399,9 @@ export function createScanner(): Scanner {
         }
       }
       
-      // Only do normalization for full-line spans when at line start (original emitTextContent behavior)
-      // This preserves zero-allocation scanning for partial text runs and individual tokens
-      if (scannedToLineEnd && (contextFlags & ContextFlags.AtLineStart)) {
-        // Full line processing - extract and normalize for compatibility with original behavior
-        // This matches the original emitTextContent() path for lines without special characters
-        const rawText = source.substring(start, textEnd);
-        const normalizedText = normalizeLineWhitespace(rawText);
-        
-        // Manually set token fields like original emitTextContent
-        token = SyntaxKind.StringLiteral;
-        tokenText = normalizedText;
-        tokenFlags = flags;
-        offsetNext = textEnd;
-        
-        // Update position tracking
-        updatePosition(textEnd);
-        
-        // Reset preceding line break flag after first token
-        contextFlags &= ~ContextFlags.PrecedingLineBreak;
-        
-        // Update paragraph state
-        if (normalizedText.length > 0) {
-          contextFlags |= ContextFlags.InParagraph;
-        }
-      } else {
-        // Partial line or mid-line processing - use standard token emission
-        // This preserves zero-allocation scanning principles by avoiding unnecessary string operations
-        emitToken(SyntaxKind.StringLiteral, start, textEnd, flags);
-        updatePosition(textEnd);
-      }
+      // Always use normalized text for StringLiteral tokens regardless of position
+      // String manipulation only happens at token emission time
+      emitStringLiteralToken(start, textEnd, flags);
       
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
