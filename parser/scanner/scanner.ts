@@ -354,7 +354,11 @@ export function createScanner(): Scanner {
     }
     
     if (textEnd > start) {
-      const text = source.substring(start, textEnd);
+      const rawText = source.substring(start, textEnd);
+      
+      // Check if we scanned to end of line - if so, apply normalization for compatibility
+      const scannedToLineEnd = textEnd >= end || isLineBreak(source.charCodeAt(textEnd));
+      
       let flags = TokenFlags.None;
       
       if (contextFlags & ContextFlags.PrecedingLineBreak) {
@@ -362,10 +366,38 @@ export function createScanner(): Scanner {
       }
       if (contextFlags & ContextFlags.AtLineStart) {
         flags |= TokenFlags.IsAtLineStart;
+        
+        // Add rollback flags for safe restart points when at line start and no special chars encountered
+        if (scannedToLineEnd) {
+          flags |= TokenFlags.CanRollbackHere;
+        }
       }
       
-      emitToken(SyntaxKind.StringLiteral, start, textEnd, flags);
-      updatePosition(textEnd);
+      if (scannedToLineEnd) {
+        // Full line processing - normalize whitespace like emitTextContent
+        const normalizedText = normalizeLineWhitespace(rawText);
+        
+        // Manually set token fields like emitTextContent does
+        token = SyntaxKind.StringLiteral;
+        tokenText = normalizedText;
+        tokenFlags = flags;
+        offsetNext = textEnd;
+        
+        // Update position tracking
+        updatePosition(textEnd);
+        
+        // Reset preceding line break flag after first token
+        contextFlags &= ~ContextFlags.PrecedingLineBreak;
+        
+        // Update paragraph state
+        if (normalizedText.length > 0) {
+          contextFlags |= ContextFlags.InParagraph;
+        }
+      } else {
+        // Partial line processing - keep raw text
+        emitToken(SyntaxKind.StringLiteral, start, textEnd, flags);
+        updatePosition(textEnd);
+      }
       
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
@@ -450,55 +482,6 @@ export function createScanner(): Scanner {
            (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9);
   }
   
-  function emitTextContent(start: number): void {
-    const lineStart = start;
-    let lineEnd = start;
-    
-    // Scan to end of line, but not including the line break
-    while (lineEnd < end && !isLineBreak(source.charCodeAt(lineEnd))) {
-      lineEnd++;
-    }
-    
-    if (lineEnd > lineStart) {
-      const rawText = source.substring(lineStart, lineEnd);
-      const normalizedText = normalizeLineWhitespace(rawText);
-      
-      let flags = TokenFlags.None;
-      
-      // Add rollback flags for safe restart points
-      if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags.CanRollbackHere;
-      }
-      
-      // Add context flags
-      if (contextFlags & ContextFlags.PrecedingLineBreak) {
-        flags |= TokenFlags.PrecedingLineBreak;
-      }
-      if (contextFlags & ContextFlags.AtLineStart) {
-        flags |= TokenFlags.IsAtLineStart;
-      }
-      
-      // Manually set token fields instead of using emitToken to use normalized text
-      token = SyntaxKind.StringLiteral;
-      tokenText = normalizedText;
-      tokenFlags = flags;
-      offsetNext = lineEnd;
-      
-      // Update position tracking
-      updatePosition(lineEnd);
-      
-      // Reset preceding line break flag after first token
-      contextFlags &= ~ContextFlags.PrecedingLineBreak;
-      
-      // Update paragraph state
-      if (normalizedText.length > 0) {
-        contextFlags |= ContextFlags.InParagraph;
-      }
-    } else {
-      // Empty line content - this shouldn't happen in normal flow
-      emitToken(SyntaxKind.StringLiteral, start, start, TokenFlags.IsBlankLine);
-    }
-  }
   
   function emitWhitespace(start: number): void {
     let wsEnd = start;
@@ -565,50 +548,19 @@ export function createScanner(): Scanner {
       return;
     }
     
-    // Check if this line contains any special characters that need individual tokenization
-    if (lineContainsSpecialChars(start)) {
-      // Stage 3: Handle inline formatting tokens
-      if (ch === CharacterCodes.asterisk) {
-        scanAsterisk(start);
-      } else if (ch === CharacterCodes.underscore) {
-        scanUnderscore(start);
-      } else if (ch === CharacterCodes.backtick) {
-        scanBacktick(start);
-      } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
-        scanTilde(start);
-      } else {
-        // Regular text content - scan until next special character
-        emitTextRun(start);
-      }
+    // Direct character-based scanning - no line look-ahead needed
+    if (ch === CharacterCodes.asterisk) {
+      scanAsterisk(start);
+    } else if (ch === CharacterCodes.underscore && canUnderscoreBeDelimiter(pos)) {
+      scanUnderscore(start);
+    } else if (ch === CharacterCodes.backtick) {
+      scanBacktick(start);
+    } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
+      scanTilde(start);
     } else {
-      // No special characters on this line - use Stage 1 behavior for compatibility
-      emitTextContent(start);
+      // Regular text content - scan until next special character
+      emitTextRun(start);
     }
-  }
-  
-  function lineContainsSpecialChars(start: number): boolean {
-    let pos = start;
-    while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
-      const ch = source.charCodeAt(pos);
-      
-      if (ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.backtick) {
-        return true;
-      }
-      
-      // Check for emphasis-capable underscores
-      if (ch === CharacterCodes.underscore && canUnderscoreBeDelimiter(pos)) {
-        return true;
-      }
-      
-      // Check for double tildes
-      if (ch === CharacterCodes.tilde && isDoubleTilde(pos)) {
-        return true;
-      }
-      
-      pos++;
-    }
-    return false;
   }
   
   function isDoubleTilde(pos: number): boolean {
