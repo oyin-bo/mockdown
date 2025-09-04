@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { verifyTokens } from './verify-tokens2.js';
+import { verifyTokens } from './verify-tokens.js';
 
 describe('Stage 3: Inline Formatting', () => {
   describe('Basic token recognition', () => {

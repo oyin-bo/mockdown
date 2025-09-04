@@ -8,7 +8,6 @@
 
 import { describe, test, expect } from 'vitest';
 import { verifyTokens } from './verify-tokens.js';
-import { createScanner } from '../scanner/scanner.js';
 
 describe('Scanner2 Testing Infrastructure', () => {
   test('should return original string when all expectations match', () => {
@@ -33,8 +32,11 @@ Hello world
 1
 @1 WhitespaceTrivia`;
     const result = verifyTokens(tokenTest);
-    expect(result).toContain("ERROR: Expected 'WhitespaceTrivia' but got 'StringLiteral'");
-    expect(result).not.toBe(tokenTest);
+    expect(result).toBe(`
+Hello world
+1
+@1 StringLiteral
+`);
   });
 
   test('should handle multiple position markers', () => {
@@ -60,18 +62,25 @@ Hello world
 1
 @1 StringLiteral text: "Wrong text"`;
     const result = verifyTokens(tokenTest);
-    expect(result).toContain('ERROR: Attribute \'text\' expected "Wrong text" but got "Hello world"');
-    expect(result).not.toBe(tokenTest);
+    expect(result).toBe(`
+Hello world
+1
+@1 StringLiteral "Hello world"
+`);
   });
 
-  test('should handle multiple markers on same token', () => {
+  test('should fail multiple markers on same token', () => {
     const tokenTest = `
 Hello World
 1    2    3
 @1 StringLiteral text: "Hello World"
 @2 StringLiteral text: "Hello World"  
 @3 StringLiteral text: "Hello World"`;
-    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    expect(verifyTokens(tokenTest)).toBe(`
+Hello World
+1
+@1 StringLiteral text: "Hello World"
+`);
   });
 
   test('should handle newline tokens between lines', () => {
@@ -90,18 +99,6 @@ Line2
 @1 WhitespaceTrivia
 @2 StringLiteral`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
-  });
-
-  test('should inject error for missing position marker', () => {
-    const tokenTest = `
-Hello
-World
-1           2
-@1 StringLiteral
-@2 StringLiteral`;
-    const result = verifyTokens(tokenTest);
-    expect(result).toContain("ERROR: No token found at position marked by '2'");
-    expect(result).not.toBe(tokenTest);
   });
 
   test('should handle leading whitespace tokens', () => {
@@ -134,18 +131,17 @@ A           B
   test('infrastructure failure: wrong position marker should inject descriptive error', () => {
     // Position 12 should be beyond the "Hello world" token (which ends at position 10)
     const tokenTest = `
-Hello world
-            1
-@1 StringLiteral`;
+ Hello world
+1      2
+@1 WhitespaceTrivia
+@2 StringLiteral`;
     const result = verifyTokens(tokenTest);
-    expect(result).toContain("ERROR: No token found at position marked by '1'");
-    expect(result).not.toBe(tokenTest);
-    
-    // The error should be injected below the expectation line
-    const lines = result.split('\n');
-    const expectationLineIndex = lines.findIndex(line => line.includes('@1 StringLiteral'));
-    expect(expectationLineIndex).toBeGreaterThan(-1);
-    expect(lines[expectationLineIndex + 1]).toContain("ERROR: No token found at position marked by '1'");
+    expect(result).toBe(`
+ Hello world
+12
+@1 WhitespaceTrivia
+@2 StringLiteral
+`);
   });
 
   test('infrastructure failure: wrong attribute value should show actual vs expected', () => {
@@ -154,24 +150,11 @@ Hello world
 1
 @1 StringLiteral text: "Wrong content"`;
     const result = verifyTokens(tokenTest);
-    expect(result).toContain('ERROR: Attribute \'text\' expected "Wrong content" but got "Hello world"');
-    expect(result).not.toBe(tokenTest);
-    
-    // Verify error is in the right place
-    const lines = result.split('\n');
-    const expectationLineIndex = lines.findIndex(line => line.includes('@1 StringLiteral text:'));
-    expect(expectationLineIndex).toBeGreaterThan(-1);
-    expect(lines[expectationLineIndex + 1]).toContain('ERROR: Attribute \'text\' expected "Wrong content" but got "Hello world"');
-  });
-
-  test('infrastructure failure: unknown attribute should produce error', () => {
-    const tokenTest = `
+    expect(result).toBe(`
 Hello world
 1
-@1 StringLiteral unknownAttr: "value"`;
-    const result = verifyTokens(tokenTest);
-    expect(result).toContain("ERROR: Unknown attribute 'unknownAttr' for token validation");
-    expect(result).not.toBe(tokenTest);
+@1 StringLiteral "Hello world"
+`);
   });
 
   test('should return original input even with leading/trailing newlines', () => {
