@@ -196,8 +196,8 @@ export function createScanner(): Scanner {
     // Normalize whitespace within a line according to CommonMark:
     // - Convert tabs to spaces (4-space tabs)
     // - Collapse multiple consecutive spaces to single space
-    // - Trim leading and trailing whitespace
-    return text.replace(/\t/g, '    ').replace(/ +/g, ' ').trim();
+    // - Trim only trailing whitespace (preserve leading whitespace for token separation)
+    return text.replace(/\t/g, '    ').replace(/ +/g, ' ').replace(/ +$/, '');
   }
   
   /**
