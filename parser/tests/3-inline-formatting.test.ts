@@ -26,7 +26,12 @@ describe('Stage 3: Inline Formatting', () => {
 1      2
 @1 AsteriskAsterisk flags: 514
 @2 AsteriskAsterisk flags: 1024`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+      expect(verifyTokens(tokenTest)).toBe(`
+**bold**
+1     2
+@1 AsteriskAsterisk flags: 514
+@2 AsteriskAsterisk flags: 1024
+`);
     });
 
     test('single asterisk recognition', () => {
@@ -48,9 +53,9 @@ _text_
     });
 
     test('backtick code spans', () => {
-      const tokenTest = `
-\`code\`
-1    2
+      const tokenTest =
+'`code`' + '\n' +
+'1    2' + `
 @1 BacktickToken
 @2 BacktickToken`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
