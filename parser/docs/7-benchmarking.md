@@ -342,3 +342,177 @@ jobs:
 - Establish new performance standards
 
 This benchmarking framework will position Mixpad as a performance leader in the Markdown parsing ecosystem while ensuring we maintain our architectural advantages through systematic measurement and comparison.
+
+## Implementation: step-by-step guide
+
+Below are concrete, copy-pasteable steps to implement the benchmark. Two workflows are shown: (A) a self-contained `parser/benchmark` project with local dev dependencies, and (B) a zero-dependency, minimal runner that uses only Node.js builtins. Both approaches keep your root `package.json` unchanged.
+
+### Checklist (what we'll do)
+- Create `parser/benchmark` directory and a nested `package.json` (optional)
+- Add dataset generator and parser adapters (`mixpad` + competitors)
+- Add runner that measures time and memory and writes JSON results
+- Provide an incremental-change harness and a zero-allocation check
+- Add simple npm scripts and README explaining how to run
+
+---
+
+### A — Recommended: self-contained `parser/benchmark` project (local deps)
+
+1) Create the folder and init a nested project (Windows `cmd.exe`):
+
+```bat
+mkdir parser\benchmark
+cd parser\benchmark
+npm init -y
+```
+
+2) Install only benchmark-related dev dependencies locally (keeps root clean):
+
+```bat
+npm install --save-dev benchmark benchtable typescript ts-node @types/node
+```
+
+Add competitor parsers (optional, one-by-one when you actually need them):
+
+```bat
+npm install --no-save marked markdown-it micromark remark commonmark
+```
+
+3) Create minimal TypeScript/JS files inside `parser/benchmark`:
+
+- `datasets.ts` — generate or load test documents (programmatic generators help reproducibility)
+- `adapters.ts` — small adapter objects for each parser. Example for Mixpad:
+
+```ts
+// ...existing code...
+import { createScanner } from '..\scanner\scanner.js';
+
+export const MixpadAdapter = {
+  name: 'mixpad',
+  parse(content: string) {
+    const scanner = createScanner();
+    scanner.initText(content);
+    while (scanner.offsetNext < content.length) scanner.scan();
+  }
+};
+// ...existing code...
+```
+
+- `runner.ts` — iterate datasets and adapters, measure using `performance.now()` and `process.memoryUsage()`; write results to `results/` as JSON.
+
+4) Example `runner.ts` skeleton (timing + memory):
+
+```ts
+import { datasets } from './datasets';
+import { adapters } from './adapters';
+
+function measureParse(adapter, content) {
+  if (global.gc) global.gc();
+  const memBefore = process.memoryUsage().heapUsed;
+  const t0 = performance.now();
+  adapter.parse(content);
+  const t1 = performance.now();
+  if (global.gc) global.gc();
+  const memAfter = process.memoryUsage().heapUsed;
+  return {
+    parseTimeMs: t1 - t0,
+    memoryPeakBytes: Math.max(0, memAfter - memBefore)
+  };
+}
+
+async function runAll() {
+  const results = [];
+  for (const ds of datasets) {
+    for (const ad of adapters) {
+      const metrics = measureParse(ad, ds.content);
+      results.push({ parser: ad.name, dataset: ds.name, metrics });
+    }
+  }
+  console.log(JSON.stringify(results, null, 2));
+}
+
+runAll();
+```
+
+5) Add scripts to `parser/benchmark/package.json`:
+
+```json
+{
+  "scripts": {
+    "bench": "node --expose-gc --loader ts-node/esm runner.ts",
+    "bench:node": "node runner.js"
+  }
+}
+```
+
+6) Run the bench (from `parser\benchmark`):
+
+```bat
+npm install
+npm run bench
+```
+
+---
+
+### B — Minimal, zero-dependency runner (no local node_modules required)
+
+Use this when you want to avoid any installs. It relies only on built-in `performance.now()` and `process.memoryUsage()`.
+
+1) Create a single file `parser/benchmark/run-minimal.js` with plain Node (CommonJS) code. Important: import your scanner using a relative path.
+
+2) Minimal runner sketch (CommonJS):
+
+```js
+// parser/benchmark/run-minimal.js
+const fs = require('fs');
+const { createScanner } = require('../scanner/scanner.js');
+
+function generateLargeDoc(kb) {
+  return ('# heading\n\n' + 'lorem ipsum dolor sit amet. ').repeat((kb * 1024) / 40);
+}
+
+function measure(adapter, content) {
+  if (global.gc) global.gc();
+  const memBefore = process.memoryUsage().heapUsed;
+  const t0 = Date.now();
+  adapter.parse(content);
+  const t1 = Date.now();
+  if (global.gc) global.gc();
+  const memAfter = process.memoryUsage().heapUsed;
+  return { parseTimeMs: t1 - t0, memoryDelta: memAfter - memBefore };
+}
+
+const adapter = {
+  name: 'mixpad',
+  parse(content) {
+    const s = createScanner();
+    s.initText(content);
+    while (s.offsetNext < content.length) s.scan();
+  }
+};
+
+const doc = generateLargeDoc(100); // 100KB
+console.log(measure(adapter, doc));
+```
+
+3) Run with Node (Windows `cmd.exe`):
+
+```bat
+cd parser\benchmark
+node --expose-gc run-minimal.js
+```
+
+Notes: this minimal runner is excellent for smoke tests and quick comparisons. It lacks the statistical rigor of repeated-sample benchmarking libraries but has zero overhead and no new dependencies.
+
+---
+
+### Zero-allocation verification and incremental harness
+
+- To verify zero-allocation behavior, run the scanner on a large document while forcing GC before/after and measuring heap delta (as shown earlier). Run multiple iterations and use median.
+- For incremental benchmarks, build a small harness that applies an array of `ChangeOperation` objects to a base document and measures the time for the scanner to rescan only the affected region (or full document if that's your current API). Emit JSON lines with timings for each operation.
+
+### Next steps I can do for you now
+- Create the `parser/benchmark` folder and add `run-minimal.js` and a `README.md` (zero-deps runner) so you can run it immediately.
+- Or scaffold the TypeScript benchmark project (local deps) with `datasets.ts`, `adapters.ts`, `runner.ts`, and `package.json`.
+
+Tell me which of the two you'd like me to create and I will scaffold the files and run a local smoke check.
