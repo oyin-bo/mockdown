@@ -682,7 +682,7 @@ export function createScanner(): Scanner {
     // Scan HTML comment: <!-- ... -->
     let pos = start + 4; // Skip <!--
     
-    while (pos < end - 2) {
+    while (pos <= end - 3) {
       if (source.charCodeAt(pos) === CharacterCodes.minus &&
           source.charCodeAt(pos + 1) === CharacterCodes.minus &&
           source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
@@ -701,7 +701,7 @@ export function createScanner(): Scanner {
     // Scan CDATA: <![CDATA[ ... ]]>
     let pos = start + 9; // Skip <![CDATA[
     
-    while (pos < end - 2) {
+    while (pos <= end - 3) {
       if (source.charCodeAt(pos) === CharacterCodes.closeBracket &&
           source.charCodeAt(pos + 1) === CharacterCodes.closeBracket &&
           source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
@@ -720,7 +720,7 @@ export function createScanner(): Scanner {
     // Scan PI: <? ... ?>
     let pos = start + 2; // Skip <?
     
-    while (pos < end - 1) {
+    while (pos <= end - 2) {
       if (source.charCodeAt(pos) === CharacterCodes.question &&
           source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
         // Found end ?>
