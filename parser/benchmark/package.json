@@ -1,0 +1,21 @@
+{
+  "name": "mixpad-benchmark",
+  "version": "1.0.0",
+  "description": "Performance benchmarking for Mixpad scanner vs competitors",
+  "main": "runner.js",
+  "scripts": {
+    "bench": "node --expose-gc --loader ts-node/esm runner.ts",
+    "bench:node": "node --expose-gc runner.js",
+    "bench:simple": "node --expose-gc run-simple.js",
+    "install-competitors": "npm install --no-save marked markdown-it micromark remark commonmark",
+    "start": "npm run bench:simple"
+  },
+  "keywords": ["benchmark", "markdown", "parser", "performance"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0"
+  }
+}
