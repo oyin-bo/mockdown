@@ -7,12 +7,13 @@
 Our testing infrastructure uses an innovative **annotated markdown format** that serves triple duty as documentation, verification, and implementation guide. Tests use position markers to specify exact token expectations:
 
 ```typescript
-expect(verifyTokens(`
+const tokenTest = `
 **bold text**
 1 2        3
-@1 AsteriskAsterisk flags: 514
-@2 StringLiteral text: "bold text"  
-@3 AsteriskAsterisk flags: 1024`)).toBe(/* same input */);
+@1 AsteriskAsterisk CanOpen
+@2 StringLiteral "bold text"  
+@3 AsteriskAsterisk CanClose`;
+expect(verifyTokens(tokenTest)).toBe(tokenTest);
 ```
 
 Position markers (`1 2 3`) map to token assertions (`@1 @2 @3`) with expected token types and attributes. This creates tests that are simultaneously human-readable specifications, robust verification suites, and clear implementation roadmaps. When tests fail, errors are injected directly into the annotated format, making debugging immediate and contextual.
