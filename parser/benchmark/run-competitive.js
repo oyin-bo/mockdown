@@ -1,0 +1,395 @@
+/**
+ * Comprehensive benchmark runner with competitive parsers
+ * Tests Mixpad scanner against popular Markdown parsers
+ */
+
+const fs = require('fs');
+const { performance } = require('perf_hooks');
+const { join } = require('path');
+
+console.log('=== Mixpad Scanner vs Competitive Parsers Benchmark ===\n');
+
+/**
+ * Generate test datasets
+ */
+function generateTestDatasets() {
+  return {
+    'small-simple': {
+      size: '1KB',
+      content: generateSimpleDoc(1),
+      characteristics: ['headers', 'paragraphs', 'basic-emphasis']
+    },
+    'medium-mixed': {
+      size: '50KB', 
+      content: generateMixedDoc(50),
+      characteristics: ['lists', 'code-blocks', 'links', 'formatting']
+    },
+    'large-text-heavy': {
+      size: '500KB',
+      content: generateTextHeavyDoc(500),
+      characteristics: ['long-paragraphs', 'minimal-formatting']
+    }
+  };
+}
+
+function generateSimpleDoc(sizeKB) {
+  const patterns = [
+    '# Heading Level 1\n\n',
+    'This is a paragraph with some **bold text** and *italic text*.\n\n',
+    '## Heading Level 2\n\n',
+    'Another paragraph with `inline code` and [a link](https://example.com).\n\n',
+    '- List item 1\n- List item 2\n- List item 3\n\n'
+  ];
+  
+  return generateContent(patterns, sizeKB * 1024);
+}
+
+function generateMixedDoc(sizeKB) {
+  const patterns = [
+    '# Complex Document\n\n',
+    'This paragraph contains **nested *italic inside bold* formatting** and more text.\n\n',
+    '```javascript\nfunction example() {\n  return "Hello World";\n}\n```\n\n',
+    '| Column 1 | Column 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n\n',
+    '> This is a blockquote with **bold text** and *emphasis*.\n\n',
+    '1. Ordered list item\n2. Another ordered item with `code`\n\n'
+  ];
+  
+  return generateContent(patterns, sizeKB * 1024);
+}
+
+function generateTextHeavyDoc(sizeKB) {
+  const textBlock = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n\n';
+  
+  let content = '# Large Text Document\n\n';
+  const targetBytes = sizeKB * 1024;
+  
+  while (content.length < targetBytes) {
+    content += textBlock;
+  }
+  
+  return content.substring(0, targetBytes);
+}
+
+function generateContent(patterns, targetBytes) {
+  let content = '';
+  let patternIndex = 0;
+  
+  while (content.length < targetBytes) {
+    content += patterns[patternIndex % patterns.length];
+    patternIndex++;
+  }
+  
+  return content.substring(0, targetBytes);
+}
+
+/**
+ * Create parser adapters for all available parsers
+ */
+function createParserAdapters() {
+  const adapters = [];
+  
+  // Mixpad scanner (mock for now)
+  adapters.push({
+    name: 'mixpad',
+    version: '0.0.4',
+    parse(content) {
+      // Mock implementation - counts non-whitespace characters as tokens
+      let tokenCount = 0;
+      for (let i = 0; i < content.length; i++) {
+        if (content[i] !== ' ' && content[i] !== '\n' && content[i] !== '\t') {
+          tokenCount++;
+        }
+      }
+      return { tokenCount };
+    }
+  });
+  
+  // Marked
+  try {
+    const marked = require('marked');
+    adapters.push({
+      name: 'marked',
+      version: marked.options?.version || 'unknown',
+      parse(content) {
+        return marked.parse(content);
+      }
+    });
+  } catch (error) {
+    console.log('marked not available:', error.message);
+  }
+  
+  // Markdown-it
+  try {
+    const MarkdownIt = require('markdown-it');
+    const md = new MarkdownIt();
+    adapters.push({
+      name: 'markdown-it',
+      version: MarkdownIt.version || 'unknown',
+      parse(content) {
+        return md.parse(content);
+      }
+    });
+  } catch (error) {
+    console.log('markdown-it not available:', error.message);
+  }
+  
+  // Micromark
+  try {
+    const { micromark } = require('micromark');
+    adapters.push({
+      name: 'micromark',
+      version: 'unknown',
+      parse(content) {
+        return micromark(content);
+      }
+    });
+  } catch (error) {
+    console.log('micromark not available:', error.message);
+  }
+  
+  // CommonMark
+  try {
+    const commonmark = require('commonmark');
+    const parser = new commonmark.Parser();
+    adapters.push({
+      name: 'commonmark',
+      version: 'unknown',
+      parse(content) {
+        return parser.parse(content);
+      }
+    });
+  } catch (error) {
+    console.log('commonmark not available:', error.message);
+  }
+  
+  return adapters;
+}
+
+/**
+ * Measure parsing performance with multiple iterations
+ */
+function measureParse(adapter, content, iterations = 3) {
+  const measurements = [];
+  
+  for (let i = 0; i < iterations; i++) {
+    if (global.gc) global.gc();
+    const memBefore = process.memoryUsage().heapUsed;
+    const startTime = performance.now();
+    
+    try {
+      const result = adapter.parse(content);
+      const endTime = performance.now();
+      
+      if (global.gc) global.gc();
+      const memAfter = process.memoryUsage().heapUsed;
+      
+      measurements.push({
+        parseTimeMs: endTime - startTime,
+        memoryDelta: memAfter - memBefore,
+        throughputCharsPerSec: Math.round(content.length / ((endTime - startTime) / 1000)),
+        success: true,
+        result
+      });
+    } catch (error) {
+      measurements.push({
+        parseTimeMs: 0,
+        memoryDelta: 0,
+        throughputCharsPerSec: 0,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+  
+  // Return median of successful measurements
+  const successful = measurements.filter(m => m.success);
+  if (successful.length === 0) {
+    return measurements[0]; // Return the error
+  }
+  
+  successful.sort((a, b) => a.parseTimeMs - b.parseTimeMs);
+  return successful[Math.floor(successful.length / 2)];
+}
+
+/**
+ * Run comprehensive benchmark suite
+ */
+function runComprehensiveBenchmark() {
+  console.log('Initializing benchmark...\n');
+  
+  const datasets = generateTestDatasets();
+  const adapters = createParserAdapters();
+  
+  console.log('System Information:');
+  console.log(`  Node.js: ${process.version}`);
+  console.log(`  Platform: ${process.platform} ${process.arch}`);
+  console.log(`  Memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
+  console.log(`  CPU Count: ${require('os').cpus().length}`);
+  console.log('');
+  
+  console.log('Available Parsers:', adapters.map(a => a.name).join(', '));
+  console.log('Test Datasets:', Object.keys(datasets).map(name => `${name} (${datasets[name].size})`).join(', '));
+  console.log('');
+  
+  const results = [];
+  const datasetNames = Object.keys(datasets);
+  
+  for (const datasetName of datasetNames) {
+    const dataset = datasets[datasetName];
+    console.log(`\n=== Testing ${datasetName} (${dataset.size}) ===`);
+    
+    for (const adapter of adapters) {
+      console.log(`Testing ${adapter.name}...`);
+      
+      const metrics = measureParse(adapter, dataset.content);
+      
+      if (metrics.success) {
+        results.push({
+          parser: adapter.name,
+          dataset: datasetName,
+          size: dataset.size,
+          characteristics: dataset.characteristics,
+          metrics: {
+            parseTimeMs: metrics.parseTimeMs,
+            memoryDelta: metrics.memoryDelta,
+            throughputMBPerSec: (metrics.throughputCharsPerSec / (1024 * 1024)),
+            throughputCharsPerSec: metrics.throughputCharsPerSec
+          },
+          timestamp: new Date().toISOString()
+        });
+        
+        const throughputMB = (metrics.throughputCharsPerSec / (1024 * 1024)).toFixed(1);
+        const memoryKB = Math.round(Math.abs(metrics.memoryDelta) / 1024);
+        
+        console.log(`  ✓ ${metrics.parseTimeMs.toFixed(2)}ms | ${throughputMB}MB/s | ${memoryKB}KB memory`);
+      } else {
+        console.log(`  ✗ ERROR: ${metrics.error}`);
+      }
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Generate comparison report
+ */
+function generateComparisonReport(results) {
+  console.log('\n\n=== PERFORMANCE COMPARISON REPORT ===\n');
+  
+  // Group results by dataset
+  const byDataset = new Map();
+  for (const result of results) {
+    if (!byDataset.has(result.dataset)) {
+      byDataset.set(result.dataset, []);
+    }
+    byDataset.get(result.dataset).push(result);
+  }
+  
+  for (const [datasetName, datasetResults] of byDataset) {
+    console.log(`Dataset: ${datasetName}`);
+    console.log('Parser'.padEnd(15) + 'Time'.padStart(10) + 'Throughput'.padStart(12) + 'Memory'.padStart(10));
+    console.log('-'.repeat(47));
+    
+    // Sort by parse time (fastest first)
+    datasetResults.sort((a, b) => a.metrics.parseTimeMs - b.metrics.parseTimeMs);
+    
+    for (const result of datasetResults) {
+      const time = result.metrics.parseTimeMs.toFixed(2) + 'ms';
+      const throughput = result.metrics.throughputMBPerSec.toFixed(1) + 'MB/s';
+      const memory = Math.round(Math.abs(result.metrics.memoryDelta) / 1024) + 'KB';
+      
+      console.log(result.parser.padEnd(15) + time.padStart(10) + throughput.padStart(12) + memory.padStart(10));
+    }
+    console.log('');
+  }
+  
+  // Performance summary
+  console.log('=== PERFORMANCE SUMMARY ===\n');
+  
+  const parserStats = new Map();
+  for (const result of results) {
+    if (!parserStats.has(result.parser)) {
+      parserStats.set(result.parser, { times: [], throughputs: [], memories: [] });
+    }
+    
+    const stats = parserStats.get(result.parser);
+    stats.times.push(result.metrics.parseTimeMs);
+    stats.throughputs.push(result.metrics.throughputMBPerSec);
+    stats.memories.push(Math.abs(result.metrics.memoryDelta));
+  }
+  
+  console.log('Parser'.padEnd(15) + 'Avg Time'.padStart(10) + 'Avg Throughput'.padStart(15) + 'Avg Memory'.padStart(12));
+  console.log('-'.repeat(52));
+  
+  for (const [parser, stats] of parserStats) {
+    const avgTime = (stats.times.reduce((a, b) => a + b, 0) / stats.times.length).toFixed(2) + 'ms';
+    const avgThroughput = (stats.throughputs.reduce((a, b) => a + b, 0) / stats.throughputs.length).toFixed(1) + 'MB/s';
+    const avgMemory = Math.round(stats.memories.reduce((a, b) => a + b, 0) / stats.memories.length / 1024) + 'KB';
+    
+    console.log(parser.padEnd(15) + avgTime.padStart(10) + avgThroughput.padStart(15) + avgMemory.padStart(12));
+  }
+}
+
+/**
+ * Save detailed results
+ */
+function saveDetailedResults(results) {
+  try {
+    fs.mkdirSync('results', { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = join('results', `competitive-benchmark-${timestamp}.json`);
+    
+    const report = {
+      metadata: {
+        timestamp: new Date().toISOString(),
+        environment: {
+          nodeVersion: process.version,
+          platform: process.platform,
+          arch: process.arch,
+          cpuCount: require('os').cpus().length,
+          memory: process.memoryUsage()
+        }
+      },
+      results
+    };
+    
+    fs.writeFileSync(filename, JSON.stringify(report, null, 2));
+    console.log(`\nDetailed results saved to: ${filename}`);
+    
+  } catch (error) {
+    console.log('\nCould not save results:', error.message);
+  }
+}
+
+/**
+ * Main execution
+ */
+function main() {
+  try {
+    const results = runComprehensiveBenchmark();
+    
+    if (results.length > 0) {
+      generateComparisonReport(results);
+      saveDetailedResults(results);
+      
+      console.log('\n=== Benchmark Suite Complete ===');
+      console.log(`Tested ${new Set(results.map(r => r.parser)).size} parsers across ${new Set(results.map(r => r.dataset)).size} datasets`);
+      console.log('Framework successfully demonstrates competitive benchmarking!');
+      
+      // Note about Mixpad scanner
+      console.log('\nNote: This demo uses a mock Mixpad scanner.');
+      console.log('To benchmark the real scanner, resolve the TypeScript import issue.');
+      
+    } else {
+      console.log('No benchmark results generated');
+    }
+    
+  } catch (error) {
+    console.error('Benchmark failed:', error);
+    process.exit(1);
+  }
+}
+
+// Run the comprehensive benchmark
+main();

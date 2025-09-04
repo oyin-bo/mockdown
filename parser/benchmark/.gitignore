@@ -1,0 +1,6 @@
+node_modules/
+*.log
+*.tmp
+results/*.json
+.DS_Store
+*.tsbuildinfo

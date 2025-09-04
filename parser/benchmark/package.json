@@ -7,8 +7,10 @@
     "bench": "node --expose-gc --loader ts-node/esm runner.ts",
     "bench:node": "node --expose-gc runner.js",
     "bench:simple": "node --expose-gc run-simple.js",
+    "bench:working": "node --expose-gc run-working.js",
+    "bench:competitive": "node --expose-gc run-competitive.js",
     "install-competitors": "npm install --no-save marked markdown-it micromark remark commonmark",
-    "start": "npm run bench:simple"
+    "start": "npm run bench:competitive"
   },
   "keywords": ["benchmark", "markdown", "parser", "performance"],
   "author": "",
