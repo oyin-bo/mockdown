@@ -153,6 +153,8 @@ function runBenchmarks() {
   console.log('1. Fix TypeScript/ES module imports for scanner');
   console.log('2. Install competitive parsers with: npm run install-competitors'); 
   console.log('3. Run full benchmark with: npm run bench');
+  
+  return results;
 }
 
 // Zero-allocation verification placeholder
@@ -162,7 +164,61 @@ function verifyZeroAllocation() {
   console.log('✓ Framework ready for zero-allocation testing');
 }
 
+/**
+ * Update README.md with benchmark results (simplified version)
+ */
+function updateReadmeWithResults(results) {
+  const readmePath = './README.md';
+  
+  try {
+    const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+    const startMarker = '<!-- BENCHMARK_RESULTS_START -->';
+    const endMarker = '<!-- BENCHMARK_RESULTS_END -->';
+    
+    const startIndex = readmeContent.indexOf(startMarker);
+    const endIndex = readmeContent.indexOf(endMarker);
+    
+    if (startIndex === -1 || endIndex === -1) {
+      console.log('⚠ README.md does not contain benchmark results markers');
+      return;
+    }
+    
+    const beforeMarker = readmeContent.substring(0, startIndex + startMarker.length);
+    const afterMarker = readmeContent.substring(endIndex);
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    let markdown = `\n**Generated:** ${timestamp} (Mock Results)  \n`;
+    markdown += `**System:** ${process.platform} ${process.arch}, Node ${process.version}  \n`;
+    markdown += `**Parsers:** mixpad (mock implementation)  \n\n`;
+    
+    markdown += '### Mock Benchmark Results\n\n';
+    markdown += '| Dataset | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |\n';
+    markdown += '|---------|--------|-----------|-------------------|-------------|\n';
+    
+    for (const result of results) {
+      const throughputMB = result.throughputCharsPerSec ? (result.throughputCharsPerSec / (1024 * 1024)).toFixed(1) : 'N/A';
+      const memoryKB = Math.round(Math.abs(result.memoryDelta) / 1024);
+      markdown += `| ${result.dataset} | ${result.parser} | ${result.parseTimeMs} | ${throughputMB} | ${memoryKB} |\n`;
+    }
+    markdown += '\n*Note: These are mock results for demonstration. Run with actual scanner for real benchmarks.*\n';
+    
+    const newContent = beforeMarker + markdown + '\n' + afterMarker;
+    
+    fs.writeFileSync(readmePath, newContent);
+    console.log('\n✓ README.md updated with mock benchmark results');
+    
+  } catch (error) {
+    console.error('Failed to update README.md:', error.message);
+  }
+}
+
 // Main execution
 console.log('Running benchmark smoke test...\n');
-runBenchmarks();
+const results = runBenchmarks();
 verifyZeroAllocation();
+
+// Check for --update-readme flag
+const args = process.argv.slice(2);
+if (args.includes('--update-readme')) {
+  updateReadmeWithResults(results);
+}

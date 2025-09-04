@@ -357,6 +357,66 @@ function saveResults(results) {
 }
 
 /**
+ * Update README.md with benchmark results
+ */
+function updateReadmeWithResults(results) {
+  const readmePath = './README.md';
+  
+  try {
+    const readmeContent = fs.readFileSync(readmePath, 'utf-8');
+    const startMarker = '<!-- BENCHMARK_RESULTS_START -->';
+    const endMarker = '<!-- BENCHMARK_RESULTS_END -->';
+    
+    const startIndex = readmeContent.indexOf(startMarker);
+    const endIndex = readmeContent.indexOf(endMarker);
+    
+    if (startIndex === -1 || endIndex === -1) {
+      console.log('⚠ README.md does not contain benchmark results markers');
+      return;
+    }
+    
+    const beforeMarker = readmeContent.substring(0, startIndex + startMarker.length);
+    const afterMarker = readmeContent.substring(endIndex);
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    let markdown = `\n**Generated:** ${timestamp}  \n`;
+    markdown += `**System:** ${process.platform} ${process.arch}, Node ${process.version}  \n`;
+    markdown += `**Parsers:** ${[...new Set(results.map(r => r.parser))].join(', ')}  \n\n`;
+    
+    // Group by dataset
+    const datasets = [...new Set(results.map(r => r.dataset))];
+    
+    for (const dataset of datasets) {
+      const datasetResults = results.filter(r => r.dataset === dataset);
+      markdown += `### ${dataset}\n\n`;
+      markdown += '| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |\n';
+      markdown += '|--------|-----------|-------------------|-------------|\n';
+      
+      datasetResults.sort((a, b) => a.parseTimeMs - b.parseTimeMs);
+      
+      for (const result of datasetResults) {
+        const parseTime = result.metrics?.parseTimeMs || result.parseTimeMs || 0;
+        const throughputCharsPerSec = result.metrics?.throughputCharsPerSec || result.throughputCharsPerSec || 0;
+        const throughputMB = (throughputCharsPerSec / (1024 * 1024)).toFixed(1);
+        const memoryBytes = result.metrics?.memoryDelta || result.memoryDelta || 0;
+        const memoryKB = Math.round(Math.abs(memoryBytes) / 1024);
+        
+        markdown += `| ${result.parser} | ${parseTime.toFixed(2)} | ${throughputMB} | ${memoryKB} |\n`;
+      }
+      markdown += '\n';
+    }
+    
+    const newContent = beforeMarker + markdown + '\n' + afterMarker;
+    
+    fs.writeFileSync(readmePath, newContent);
+    console.log('\n✓ README.md updated with benchmark results');
+    
+  } catch (error) {
+    console.error('Failed to update README.md:', error.message);
+  }
+}
+
+/**
  * Main execution
  */
 function main() {
@@ -365,6 +425,12 @@ function main() {
     
     if (results.length > 0) {
       saveResults(results);
+      
+      // Check for --update-readme flag
+      const args = process.argv.slice(2);
+      if (args.includes('--update-readme')) {
+        updateReadmeWithResults(results);
+      }
       
       // Run zero-allocation test with largest dataset
       const adapter = createScannerAdapter();

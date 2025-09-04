@@ -81,6 +81,23 @@ npm start
 npm run bench
 ```
 
+### Run with README Update
+
+```bash
+# Simple benchmark with README update
+npm run bench:simple:readme
+
+# Working benchmark with README update
+npm run bench:working:readme
+
+# Full TypeScript benchmark with README update  
+npm run bench:readme
+
+# Or with any benchmark runner
+npm run bench:simple -- --update-readme
+npm run bench:working -- --update-readme
+```
+
 ### Run with Garbage Collection (Recommended)
 
 ```bash
@@ -145,7 +162,57 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 ]
 ```
 
+## Latest Benchmark Results
+
+<!-- BENCHMARK_RESULTS_START -->
+**Generated:** 2025-09-04  
+**System:** linux x64, Node v20.19.4  
+**Parsers:** mixpad-mock  
+
+### small-simple
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
+|--------|-----------|-------------------|-------------|
+| mixpad-mock | 0.26 | 3.8 | 0 |
+
+### medium-mixed
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
+|--------|-----------|-------------------|-------------|
+| mixpad-mock | 2.75 | 17.7 | 0 |
+
+### large-text-heavy
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
+|--------|-----------|-------------------|-------------|
+| mixpad-mock | 24.78 | 19.7 | 0 |
+
+### complex-formatting
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
+|--------|-----------|-------------------|-------------|
+| mixpad-mock | 4.96 | 19.7 | 0 |
+
+
+<!-- BENCHMARK_RESULTS_END -->
+
 ## Features
+
+### Automatic README Updates
+
+The benchmark tool can automatically inject results into this README file for easy sharing and documentation:
+
+```bash
+# Run benchmark and update README with results
+npm run bench:simple:readme
+npm run bench:working:readme
+
+# Or with any benchmark command
+npm run bench:simple -- --update-readme
+npm run bench:working -- --update-readme
+```
+
+Results are injected between the `<!-- BENCHMARK_RESULTS_START -->` and `<!-- BENCHMARK_RESULTS_END -->` markers, replacing any previous results.
 
 ### Zero-Allocation Verification
 

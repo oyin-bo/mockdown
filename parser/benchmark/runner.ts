@@ -6,7 +6,7 @@
 
 import { datasets } from './datasets.js';
 import { adapters } from './adapters.js';
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -196,8 +196,84 @@ function generateSummary(results: BenchmarkResult[]): void {
 }
 
 /**
- * Verify zero-allocation behavior for Mixpad
+ * Format benchmark results as markdown for README injection
  */
+function formatResultsAsMarkdown(results: BenchmarkResult[]): string {
+  if (results.length === 0) {
+    return '*No benchmark results available.*';
+  }
+
+  const systemInfo = results[0].environment;
+  const timestamp = new Date(results[0].timestamp).toISOString().split('T')[0];
+  
+  let markdown = `**Generated:** ${timestamp}  \n`;
+  markdown += `**System:** ${systemInfo.platform} ${systemInfo.arch}, Node ${systemInfo.nodeVersion}  \n`;
+  markdown += `**Parsers:** ${[...new Set(results.map(r => r.parser))].join(', ')}  \n\n`;
+
+  // Group results by dataset
+  const byDataset = new Map<string, BenchmarkResult[]>();
+  for (const result of results) {
+    if (!byDataset.has(result.dataset)) {
+      byDataset.set(result.dataset, []);
+    }
+    byDataset.get(result.dataset)!.push(result);
+  }
+
+  for (const [datasetName, datasetResults] of byDataset) {
+    markdown += `### ${datasetName}\n\n`;
+    markdown += '| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |\n';
+    markdown += '|--------|-----------|-------------------|-------------|\n';
+    
+    // Sort by parse time
+    datasetResults.sort((a, b) => a.metrics.parseTimeMs - b.metrics.parseTimeMs);
+    
+    for (const result of datasetResults) {
+      const throughputMB = (result.metrics.throughputCharsPerSecond / (1024 * 1024)).toFixed(1);
+      const memoryKB = Math.round(result.metrics.memoryPeakBytes / 1024);
+      
+      markdown += `| ${result.parser} | ${result.metrics.parseTimeMs.toFixed(2)} | ${throughputMB} | ${memoryKB} |\n`;
+    }
+    markdown += '\n';
+  }
+
+  return markdown;
+}
+
+/**
+ * Update README.md with latest benchmark results
+ */
+function updateReadmeWithResults(results: BenchmarkResult[]): void {
+  const readmePath = join(process.cwd(), 'README.md');
+  
+  try {
+    const readmeContent = readFileSync(readmePath, 'utf-8');
+    const startMarker = '<!-- BENCHMARK_RESULTS_START -->';
+    const endMarker = '<!-- BENCHMARK_RESULTS_END -->';
+    
+    const startIndex = readmeContent.indexOf(startMarker);
+    const endIndex = readmeContent.indexOf(endMarker);
+    
+    if (startIndex === -1 || endIndex === -1) {
+      console.log('⚠ README.md does not contain benchmark results markers');
+      console.log('Add the following markers to your README.md:');
+      console.log('<!-- BENCHMARK_RESULTS_START -->');
+      console.log('<!-- BENCHMARK_RESULTS_END -->');
+      return;
+    }
+    
+    const beforeMarker = readmeContent.substring(0, startIndex + startMarker.length);
+    const afterMarker = readmeContent.substring(endIndex);
+    
+    const resultsMarkdown = formatResultsAsMarkdown(results);
+    const newContent = beforeMarker + '\n' + resultsMarkdown + '\n' + afterMarker;
+    
+    writeFileSync(readmePath, newContent);
+    console.log(`\n✓ README.md updated with latest benchmark results`);
+    
+  } catch (error) {
+    console.error('Failed to update README.md:', error.message);
+  }
+}
 function verifyZeroAllocation(): void {
   console.log('\n=== ZERO-ALLOCATION VERIFICATION ===\n');
   
@@ -250,12 +326,21 @@ function verifyZeroAllocation(): void {
  */
 async function main(): Promise<void> {
   try {
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    const updateReadme = args.includes('--update-readme');
+    
     const results = await runBenchmarkSuite();
     
     if (results.length > 0) {
       generateSummary(results);
       saveResults(results);
       verifyZeroAllocation();
+      
+      // Update README if requested
+      if (updateReadme) {
+        updateReadmeWithResults(results);
+      }
     } else {
       console.log('No benchmark results generated');
     }
