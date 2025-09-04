@@ -112,19 +112,23 @@ function* findAssertions(input: string) {
   let lastPos = 0;
   let pos = 0;
   while (pos < input.length) {
-    let positionLineStart = input.indexOf('\n1', pos);
-    if (positionLineStart < 0) break;
+    const newLine1Regex = /(^|\n)\s*1/g;
+    newLine1Regex.lastIndex = pos;
+    let positionLineStart = newLine1Regex.exec(input)?.index;
+    if (typeof positionLineStart !== 'number' || positionLineStart < 0) {
+      pos = input.length;
+      break;
+    }
     positionLineStart++;
 
     const positionLineEnd = input.indexOf('\n', positionLineStart + 1);
     if (positionLineEnd < 0) {
-      pos = positionLineEnd;
-      continue;
+      pos = input.length;
     }
 
     const positionLine = input.substring(positionLineStart, positionLineEnd);
 
-    let positionMarkerChars = positionLine.split(/\s+/g);
+    let positionMarkerChars = positionLine.trim().split(/\s+/g);
     const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
       i < 10 ? mrk === String(i + 1) :
         mrk.toUpperCase() === String.fromCharCode('A'.charCodeAt(0) + i - 10));

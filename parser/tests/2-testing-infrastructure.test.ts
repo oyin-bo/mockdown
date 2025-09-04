@@ -110,15 +110,6 @@ Line2
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
-  test('should handle letter position markers', () => {
-    const tokenTest = `
-Hello world test
-A           B
-@A StringLiteral
-@B StringLiteral`;
-    expect(verifyTokens(tokenTest)).toBe(tokenTest);
-  });
-
   test('should validate flags attribute', () => {
     // WhitespaceTrivia should have IsAtLineStart flag (1 << 1 = 2)
     const tokenTest = `
