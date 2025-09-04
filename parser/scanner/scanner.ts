@@ -8,7 +8,10 @@ import {
   CharacterCodes,
   isLineBreak,
   isWhiteSpaceSingleLine,
-  isWhiteSpace
+  isWhiteSpace,
+  isLetter,
+  isDigit,
+  isHexDigit
 } from './character-codes';
 
 export interface Scanner {
@@ -334,6 +337,14 @@ export function createScanner(): Scanner {
         break;
       }
       
+      // Stage 4: Check for HTML and entity characters
+      if (ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.lessThan ||
+          ch === CharacterCodes.greaterThan ||
+          ch === CharacterCodes.slash) {
+        break;
+      }
+      
       // Special handling for underscores - only break if they can be emphasis delimiters
       if (ch === CharacterCodes.underscore) {
         if (canUnderscoreBeDelimiter(textEnd)) {
@@ -576,6 +587,16 @@ export function createScanner(): Scanner {
         scanBacktick(start);
       } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
         scanTilde(start);
+      }
+      // Stage 4: Handle HTML and entity tokens
+      else if (ch === CharacterCodes.ampersand) {
+        scanAmpersand(start);
+      } else if (ch === CharacterCodes.lessThan) {
+        scanLessThan(start);
+      } else if (ch === CharacterCodes.greaterThan) {
+        scanGreaterThan(start);
+      } else if (ch === CharacterCodes.slash) {
+        scanSlash(start);
       } else {
         // Regular text content - scan until next special character
         emitTextRun(start);
@@ -591,6 +612,7 @@ export function createScanner(): Scanner {
     while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
       const ch = source.charCodeAt(pos);
       
+      // Stage 3: Check for inline formatting characters
       if (ch === CharacterCodes.asterisk ||
           ch === CharacterCodes.backtick) {
         return true;
@@ -606,6 +628,14 @@ export function createScanner(): Scanner {
         return true;
       }
       
+      // Stage 4: Check for HTML and entity characters
+      if (ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.lessThan ||
+          ch === CharacterCodes.greaterThan ||
+          ch === CharacterCodes.slash) {
+        return true;
+      }
+      
       pos++;
     }
     return false;
@@ -613,6 +643,136 @@ export function createScanner(): Scanner {
   
   function isDoubleTilde(pos: number): boolean {
     return pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.tilde;
+  }
+  
+  /**
+   * Stage 4: HTML and entity scanning functions
+   */
+  
+  function scanAmpersand(start: number): void {
+    // Check if this looks like a character entity
+    let entityEnd = start + 1; // Skip the initial &
+    
+    // Check for named entity pattern: &name;
+    if (entityEnd < end && isLetter(source.charCodeAt(entityEnd))) {
+      // Scan entity name
+      while (entityEnd < end && isAlphaNumeric(source.charCodeAt(entityEnd))) {
+        entityEnd++;
+      }
+      
+      // Check for closing semicolon
+      if (entityEnd < end && source.charCodeAt(entityEnd) === CharacterCodes.semicolon) {
+        entityEnd++; // Include the semicolon
+        emitToken(SyntaxKind.EntityToken, start, entityEnd);
+        updatePosition(entityEnd);
+        return;
+      }
+    }
+    
+    // Check for numeric entity pattern: &#123; or &#x41;
+    if (entityEnd < end && source.charCodeAt(entityEnd) === CharacterCodes.hash) {
+      entityEnd++; // Skip the #
+      
+      let isHex = false;
+      // Check for hex prefix
+      if (entityEnd < end && 
+          (source.charCodeAt(entityEnd) === CharacterCodes.x || 
+           source.charCodeAt(entityEnd) === CharacterCodes.X)) {
+        isHex = true;
+        entityEnd++; // Skip the x
+      }
+      
+      // Scan numeric characters
+      let hasDigits = false;
+      while (entityEnd < end) {
+        const ch = source.charCodeAt(entityEnd);
+        if (isHex ? isHexDigit(ch) : isDigit(ch)) {
+          hasDigits = true;
+          entityEnd++;
+        } else {
+          break;
+        }
+      }
+      
+      // Check for closing semicolon
+      if (hasDigits && entityEnd < end && source.charCodeAt(entityEnd) === CharacterCodes.semicolon) {
+        entityEnd++; // Include the semicolon
+        emitToken(SyntaxKind.EntityToken, start, entityEnd);
+        updatePosition(entityEnd);
+        return;
+      }
+    }
+    
+    // Not a valid entity - treat as text
+    emitTextRun(start);
+  }
+  
+  function scanLessThan(start: number): void {
+    const pos = start + 1; // Look at character after <
+    
+    if (pos >= end) {
+      // End of input - treat as text
+      emitTextRun(start);
+      return;
+    }
+    
+    const nextChar = source.charCodeAt(pos);
+    
+    // Check for closing tag: </
+    if (nextChar === CharacterCodes.slash) {
+      emitToken(SyntaxKind.LessThanSlashToken, start, start + 2);
+      updatePosition(start + 2);
+      return;
+    }
+    
+    // Check if this looks like the start of an HTML tag
+    if (isLetter(nextChar)) {
+      // This appears to be an HTML tag
+      emitToken(SyntaxKind.LessThanToken, start, start + 1);
+      updatePosition(start + 1);
+      return;
+    }
+    
+    // Check for HTML comments, DOCTYPE, etc. (simplified for now)
+    if (nextChar === CharacterCodes.exclamation) {
+      // Could be comment <!--, DOCTYPE <!DOCTYPE, or CDATA <![CDATA[
+      // For now, treat as simple less-than
+      emitToken(SyntaxKind.LessThanToken, start, start + 1);
+      updatePosition(start + 1);
+      return;
+    }
+    
+    // Check for processing instruction: <?
+    if (nextChar === CharacterCodes.question) {
+      emitToken(SyntaxKind.LessThanToken, start, start + 1);
+      updatePosition(start + 1);
+      return;
+    }
+    
+    // Not an HTML construct - treat as text
+    emitTextRun(start);
+  }
+  
+  function scanGreaterThan(start: number): void {
+    // Check if this is part of a self-closing tag: />
+    if (start > 0 && source.charCodeAt(start - 1) === CharacterCodes.slash) {
+      // This is handled when we encounter the slash
+      emitToken(SyntaxKind.GreaterThanToken, start, start + 1);
+    } else {
+      emitToken(SyntaxKind.GreaterThanToken, start, start + 1);
+    }
+    updatePosition(start + 1);
+  }
+  
+  function scanSlash(start: number): void {
+    // Check if this is part of a self-closing tag: />
+    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.greaterThan) {
+      emitToken(SyntaxKind.SlashGreaterThanToken, start, start + 2);
+      updatePosition(start + 2);
+    } else {
+      // Just a regular slash - treat as text
+      emitTextRun(start);
+    }
   }
   
   /**

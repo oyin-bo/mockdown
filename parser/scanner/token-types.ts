@@ -26,8 +26,15 @@ export const enum SyntaxKind {
   BacktickToken,            // `
   TildeTilde,               // ~~
   
-  // Future stages will add more tokens as needed:
   // Stage 4: HTML and entities
+  LessThanToken,            // <
+  GreaterThanToken,         // >
+  LessThanSlashToken,       // </
+  SlashGreaterThanToken,    // />
+  HtmlText,                 // HTML text content
+  EntityToken,              // Character entities (&amp;, &#123;, etc.)
+  
+  // Future stages will add more tokens as needed:
   // Later stages: Progressive Markdown construct addition
 }
 
