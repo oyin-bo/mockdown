@@ -109,4 +109,24 @@ single~tilde
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
+
+  describe('Whitespace handling in StringLiteral tokens', () => {
+    test('line-start text with excessive whitespace gets normalized after leading whitespace', () => {
+      const tokenTest = `
+  Text\twith\t\tmultiple   spaces  
+1 2
+@1 WhitespaceTrivia "  "
+@2 StringLiteral "Text with multiple spaces"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('line-start after whitespace trivia gets normalized', () => {
+      const tokenTest = `
+    Text\twith\t\tmultiple   spaces
+1   2
+@1 WhitespaceTrivia "    "
+@2 StringLiteral "Text with multiple spaces"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+  });
 });
