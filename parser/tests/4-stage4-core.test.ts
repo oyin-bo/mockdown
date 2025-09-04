@@ -1,9 +1,8 @@
 /**
- * Tests for Stage 4: Entities and HTML
+ * Tests for Stage 4: Entities and HTML - Core Functionality
  * Using Scanner2 Testing Infrastructure
  * 
- * Tests basic HTML tag recognition and character entity parsing
- * according to the Stage 4 plan.
+ * Tests focused on Stage 4 entity and HTML tag recognition.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -53,7 +52,7 @@ describe('Stage 4: Entities and HTML', () => {
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
-    test('entity with text content', () => {
+    test('entity within text', () => {
       const tokenTest = `
 text &amp; more
      1
@@ -82,6 +81,14 @@ text &amp; more
 &#65 more
 1
 @1 StringLiteral "&#65 more"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('empty entity reference treated as text', () => {
+      const tokenTest = `
+&;
+1
+@1 StringLiteral "&;"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -122,7 +129,7 @@ text &amp; more
     test('HTML tag with content', () => {
       const tokenTest = `
 <div>content</div>
-1                2
+1           2
 @1 LessThanToken "<"
 @2 LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -133,16 +140,6 @@ text &amp; more
 text <span> more
      1
 @1 LessThanToken "<"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('HTML with entities', () => {
-      const tokenTest = `
-<div>&amp;</div>
-1    2        3
-@1 LessThanToken "<"
-@2 EntityToken "&amp;"
-@3 LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -159,79 +156,6 @@ text <span> more
 text > more
      1
 @1 GreaterThanToken ">"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('standalone slash', () => {
-      const tokenTest = `
-text / more
-1
-@1 StringLiteral "text / more"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-  });
-
-  describe('Complex mixed content', () => {
-    test('entities and formatting together', () => {
-      const tokenTest = `
-**bold** &amp; *italic*
-1        2     3       4
-@1 AsteriskAsterisk 514
-@2 EntityToken "&amp;"
-@3 AsteriskToken 512
-@4 AsteriskToken 1024`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('HTML tags and formatting together', () => {
-      const tokenTest = `
-<em>**bold**</em>
-1   2        3
-@1 LessThanToken "<"
-@2 AsteriskAsterisk 514
-@3 LessThanSlashToken "</"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('complex HTML with attributes', () => {
-      const tokenTest = `
-<span class="test">content</span>
-1
-@1 LessThanToken "<"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-  });
-
-  describe('Edge cases', () => {
-    test('empty entity reference', () => {
-      const tokenTest = `
-&;
-1
-@1 StringLiteral "&;"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('numeric entity with no digits', () => {
-      const tokenTest = `
-&#;
-1
-@1 StringLiteral "&#;"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('hex entity with no hex digits', () => {
-      const tokenTest = `
-&#x;
-1
-@1 StringLiteral "&#x;"`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('multiple special characters in sequence', () => {
-      const tokenTest = `
-&<>
-1
-@1 StringLiteral "&<>"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });

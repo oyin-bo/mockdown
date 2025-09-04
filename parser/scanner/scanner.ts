@@ -320,7 +320,7 @@ export function createScanner(): Scanner {
     }
   }
   
-  function emitTextRun(start: number): void {
+  function emitTextRun(start: number, treatSpecialAsText: boolean = false): void {
     let textEnd = start;
     
     // Scan until we hit a special character or line break
@@ -337,11 +337,12 @@ export function createScanner(): Scanner {
         break;
       }
       
-      // Stage 4: Check for HTML and entity characters
-      if (ch === CharacterCodes.ampersand ||
-          ch === CharacterCodes.lessThan ||
-          ch === CharacterCodes.greaterThan ||
-          ch === CharacterCodes.slash) {
+      // Stage 4: Check for HTML and entity characters (unless we're treating them as text)
+      if (!treatSpecialAsText && 
+          (ch === CharacterCodes.ampersand ||
+           ch === CharacterCodes.lessThan ||
+           ch === CharacterCodes.greaterThan ||
+           ch === CharacterCodes.slash)) {
         break;
       }
       
@@ -379,6 +380,12 @@ export function createScanner(): Scanner {
       updatePosition(textEnd);
       
       // Reset line start flag after emitting text
+      contextFlags &= ~ContextFlags.AtLineStart;
+    } else {
+      // No text to emit - this means we started on a special character
+      // Emit a single character as text to avoid infinite loops
+      emitToken(SyntaxKind.StringLiteral, start, start + 1);
+      updatePosition(start + 1);
       contextFlags &= ~ContextFlags.AtLineStart;
     }
   }
@@ -704,7 +711,7 @@ export function createScanner(): Scanner {
     }
     
     // Not a valid entity - treat as text
-    emitTextRun(start);
+    emitTextRun(start, true);
   }
   
   function scanLessThan(start: number): void {
@@ -712,7 +719,7 @@ export function createScanner(): Scanner {
     
     if (pos >= end) {
       // End of input - treat as text
-      emitTextRun(start);
+      emitTextRun(start, true);
       return;
     }
     
@@ -750,7 +757,7 @@ export function createScanner(): Scanner {
     }
     
     // Not an HTML construct - treat as text
-    emitTextRun(start);
+    emitTextRun(start, true);
   }
   
   function scanGreaterThan(start: number): void {
