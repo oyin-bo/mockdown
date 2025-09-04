@@ -116,7 +116,6 @@ function* findAssertions(input: string) {
     newLine1Regex.lastIndex = pos;
     let positionLineStart = newLine1Regex.exec(input)?.index;
     if (typeof positionLineStart !== 'number' || positionLineStart < 0) {
-      pos = input.length;
       break;
     }
     positionLineStart++;
@@ -176,7 +175,7 @@ function* findAssertions(input: string) {
     yield { assertions: positionMarkerAsserts, chunk };
   }
 
-  if (pos < input.length) {
+  if (pos <= input.length) {
     yield {
       assertions: [],
       chunk: input.slice(lastPos)
