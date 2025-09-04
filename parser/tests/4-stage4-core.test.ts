@@ -184,7 +184,7 @@ text > more
     test('HTML tags in middle of text', () => {
       const tokenTest = `
 Some text <em>emphasized</em> more text.
-          1            2
+          1             2
 @1 LessThanToken "<"
 @2 LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -212,7 +212,7 @@ Some text <em>emphasized</em> more text.
     test('HTML with entities inside', () => {
       const tokenTest = `
 <p>Text &amp; more &lt;text&gt;</p>
-        1            2      3
+        1          2       3
 @1 EntityToken "&"
 @2 EntityToken "<"
 @3 EntityToken ">"`;
@@ -225,11 +225,11 @@ Some text <em>emphasized</em> more text.
 1
 @1 LessThanToken "<"
   <h1>Title &amp; Subtitle</h1>
-  1           2
+  1         2
   @1 LessThanToken "<"
   @2 EntityToken "&"
   <p>Some text with <em>emphasis &lt;strong&gt;</em> and more.</p>
-                    1             2        3    4
+                    1            2         3   4
   @1 LessThanToken "<"
   @2 EntityToken "<"
   @3 EntityToken ">"
@@ -241,7 +241,7 @@ Some text <em>emphasized</em> more text.
   1
   @1 LessThanToken "<"
     <li>Item 1 &gt; special</li>
-    1           2
+    1          2
     @1 LessThanToken "<"
     @2 EntityToken ">"
     <li>Item 2</li>
