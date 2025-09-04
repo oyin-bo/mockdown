@@ -522,6 +522,12 @@ export function createScanner(): Scanner {
       textEnd++;
     }
     
+    // Safety check: ensure we make at least some progress
+    if (textEnd <= start && start < end) {
+      // Force advance by one character to prevent infinite loop
+      textEnd = start + 1;
+    }
+    
     if (textEnd > start) {
       // Check if we scanned to end of line
       const scannedToLineEnd = textEnd >= end || isLineBreak(source.charCodeAt(textEnd));
@@ -706,10 +712,79 @@ export function createScanner(): Scanner {
       // Regular text content - scan until next special character
       emitTextRun(start);
     }
+    
+    // Infinite loop protection: ensure position always advances
+    if (pos <= start) {
+      handleInfiniteLoopDetection(start);
+    }
   }
   
   function isDoubleTilde(pos: number): boolean {
     return pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.tilde;
+  }
+  
+  /**
+   * Handles infinite loop detection and recovery.
+   * Called when scanner position fails to advance, indicating a potential infinite loop.
+   * This function ensures the scanner can continue by:
+   * 1. Emitting an error token at the problematic character
+   * 2. Forcing position advancement to break the loop
+   * 
+   * This is a generalized utility that can be used throughout the scanner
+   * whenever position advancement stalls.
+   */
+  function handleInfiniteLoopDetection(stuckPosition: number): void {
+    // Emit an error token at the character that caused the infinite loop
+    const problemChar = stuckPosition < end ? source.charCodeAt(stuckPosition) : 0;
+    const errorText = stuckPosition < end ? String.fromCharCode(problemChar) : '';
+    
+    // Set token fields directly to emit error token
+    token = SyntaxKind.Unknown; // Using Unknown as error token type
+    tokenText = errorText;
+    tokenFlags = TokenFlags.HasScanError; // Mark as error
+    
+    // Force advance position by 1 to break the infinite loop
+    pos = Math.min(stuckPosition + 1, end);
+    offsetNext = pos;
+    
+    // Update position tracking for the single character we're skipping
+    if (stuckPosition < end) {
+      const ch = source.charCodeAt(stuckPosition);
+      if (isLineBreak(ch)) {
+        if (ch === CharacterCodes.carriageReturn && 
+            stuckPosition + 1 < end && 
+            source.charCodeAt(stuckPosition + 1) === CharacterCodes.lineFeed) {
+          pos++; // Skip CR in CRLF
+          offsetNext = pos;
+        }
+        line++;
+        column = 1;
+        lastLineStart = pos;
+        contextFlags |= ContextFlags.AtLineStart;
+        contextFlags |= ContextFlags.PrecedingLineBreak;
+      } else {
+        column++;
+        contextFlags &= ~ContextFlags.AtLineStart;
+      }
+    }
+  }
+  
+  /**
+   * Generalizable utility to ensure scanning operations make progress.
+   * Executes a scanning function and verifies that the position advances.
+   * If not, handles the infinite loop condition.
+   * 
+   * @param scanFunction - Function that performs the scanning operation
+   * @param expectedMinAdvance - Minimum expected position advancement (default 1)
+   */
+  function ensureProgress(scanFunction: () => void, expectedMinAdvance: number = 1): void {
+    const startPos = pos;
+    scanFunction();
+    
+    // Check if position advanced sufficiently
+    if (pos < startPos + expectedMinAdvance) {
+      handleInfiniteLoopDetection(startPos);
+    }
   }
   
   /**

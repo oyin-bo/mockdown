@@ -56,6 +56,9 @@ export const enum TokenFlags {
   // Stage 3: Emphasis delimiter flags
   CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
   CanClose = 1 << 10,            // Delimiter can close emphasis/strong
+  
+  // Error handling flags
+  HasScanError = 1 << 11,        // Token represents a scanning error
 }
 
 /**
