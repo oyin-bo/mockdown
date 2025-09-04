@@ -744,48 +744,12 @@ export function createScanner(): Scanner {
     tokenFlags = TokenFlags.HasScanError; // Mark as error
     
     // Force advance position by 1 to break the infinite loop
-    pos = Math.min(stuckPosition + 1, end);
+    const targetPos = Math.min(stuckPosition + 1, end);
+    updatePosition(targetPos);
     offsetNext = pos;
-    
-    // Update position tracking for the single character we're skipping
-    if (stuckPosition < end) {
-      const ch = source.charCodeAt(stuckPosition);
-      if (isLineBreak(ch)) {
-        if (ch === CharacterCodes.carriageReturn && 
-            stuckPosition + 1 < end && 
-            source.charCodeAt(stuckPosition + 1) === CharacterCodes.lineFeed) {
-          pos++; // Skip CR in CRLF
-          offsetNext = pos;
-        }
-        line++;
-        column = 1;
-        lastLineStart = pos;
-        contextFlags |= ContextFlags.AtLineStart;
-        contextFlags |= ContextFlags.PrecedingLineBreak;
-      } else {
-        column++;
-        contextFlags &= ~ContextFlags.AtLineStart;
-      }
-    }
   }
   
-  /**
-   * Generalizable utility to ensure scanning operations make progress.
-   * Executes a scanning function and verifies that the position advances.
-   * If not, handles the infinite loop condition.
-   * 
-   * @param scanFunction - Function that performs the scanning operation
-   * @param expectedMinAdvance - Minimum expected position advancement (default 1)
-   */
-  function ensureProgress(scanFunction: () => void, expectedMinAdvance: number = 1): void {
-    const startPos = pos;
-    scanFunction();
-    
-    // Check if position advanced sufficiently
-    if (pos < startPos + expectedMinAdvance) {
-      handleInfiniteLoopDetection(startPos);
-    }
-  }
+
   
   /**
    * Public interface implementation
