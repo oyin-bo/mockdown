@@ -14,7 +14,7 @@ describe('Scanner2 Testing Infrastructure - Examples', () => {
     const tokenTest = `
 Hello world from Scanner2
 1
-@1 StringLiteral text: "Hello world from Scanner2"`;
+@1 StringLiteral "Hello world from Scanner2"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -23,7 +23,7 @@ Hello world from Scanner2
 First line of content
 Second line of content
 1
-@1 StringLiteral text: "Second line of content"`;
+@1 StringLiteral "Second line of content"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -32,7 +32,7 @@ Second line of content
     Indented content here
 1   2
 @1 WhitespaceTrivia
-@2 StringLiteral text: "Indented content here"`;
+@2 StringLiteral "Indented content here"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -40,8 +40,8 @@ Second line of content
     const tokenTest = `
   Content with spacing
 1 2
-@1 WhitespaceTrivia flags: 2
-@2 StringLiteral flags: 10`;
+@1 WhitespaceTrivia 2
+@2 StringLiteral 10`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -50,7 +50,7 @@ Second line of content
 
 Content with blank lines around
 1
-@1 StringLiteral text: "Content with blank lines around"
+@1 StringLiteral "Content with blank lines around"
 
 `;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -74,7 +74,7 @@ Actual content
   Simple indented content
 1 2
 @1 WhitespaceTrivia
-@2 StringLiteral text: "Simple indented content"`;
+@2 StringLiteral "Simple indented content"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 });

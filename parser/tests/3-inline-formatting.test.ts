@@ -15,8 +15,8 @@ describe('Stage 3: Inline Formatting', () => {
       const tokenTest = `
 **bold**
 1     2
-@1 AsteriskAsterisk flags: 514
-@2 AsteriskAsterisk flags: 1024`;
+@1 AsteriskAsterisk 514
+@2 AsteriskAsterisk 1024`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -24,13 +24,13 @@ describe('Stage 3: Inline Formatting', () => {
       const tokenTest = `
 **bold**
 1      2
-@1 AsteriskAsterisk flags: 514
-@2 AsteriskAsterisk flags: 1024`;
+@1 AsteriskAsterisk 514
+@2 AsteriskAsterisk 1024`;
       expect(verifyTokens(tokenTest)).toBe(`
 **bold**
 1     2
-@1 AsteriskAsterisk flags: 514
-@2 AsteriskAsterisk flags: 1024
+@1 AsteriskAsterisk 514
+@2 AsteriskAsterisk 1024
 `);
     });
 
@@ -38,8 +38,8 @@ describe('Stage 3: Inline Formatting', () => {
       const tokenTest = `
 *italic*
 1      2
-@1 AsteriskToken flags: 514
-@2 AsteriskToken flags: 1024`;
+@1 AsteriskToken 514
+@2 AsteriskToken 1024`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -47,8 +47,8 @@ describe('Stage 3: Inline Formatting', () => {
       const tokenTest = `
 _text_
 1    2
-@1 UnderscoreToken flags: 514
-@2 UnderscoreToken flags: 1024`;
+@1 UnderscoreToken 514
+@2 UnderscoreToken 1024`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -76,7 +76,7 @@ _text_
       const tokenTest = `
 snake_case_variable
 1
-@1 StringLiteral text: "snake_case_variable"`;
+@1 StringLiteral "snake_case_variable"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -84,9 +84,9 @@ snake_case_variable
       const tokenTest = `
 **bold text**
 1 2        3
-@1 AsteriskAsterisk flags: 514
-@2 StringLiteral text: "bold text"
-@3 AsteriskAsterisk flags: 1024`;
+@1 AsteriskAsterisk 514
+@2 StringLiteral "bold text"
+@3 AsteriskAsterisk 1024`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -94,8 +94,8 @@ snake_case_variable
       const tokenTest = `
 text *italic* more
      1      2
-@1 AsteriskToken flags: 512
-@2 AsteriskToken flags: 1024`;
+@1 AsteriskToken 512
+@2 AsteriskToken 1024`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -105,7 +105,7 @@ text *italic* more
       const tokenTest = `
 single~tilde
 1
-@1 StringLiteral text: "single~tilde"`;
+@1 StringLiteral "single~tilde"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });

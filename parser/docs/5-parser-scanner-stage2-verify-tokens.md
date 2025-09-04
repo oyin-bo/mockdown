@@ -20,7 +20,7 @@ import { verifyTokens } from './scanner2-testing-infrastructure';
 const tokenTest = `
 Hello * World
 1     2
-@1 StringLiteral text: "Hello "
+@1 StringLiteral "Hello "
 @2 Asterisk
 `;
 
@@ -47,8 +47,8 @@ It helps putting annotating markers alongside the Markdown and see the positions
 
 ### Token Expectations 
 - `@1 TokenKind` - Assert token kind at position 1
-- `@1 TokenKind text: "expected text"` - Assert token text
-- `@1 TokenKind flags: 2` - Assert token flags; flags can be either numerical, or a pipe-separated list of flag enum string literals (unquoted)
+- `@1 TokenKind "expected text"` - Assert token text
+- `@1 TokenKind 2` - Assert token flags; flags can be either numerical, or a pipe-separated list of flag enum string literals (unquoted)
 
 ### Error Injection
 If expectations don't match, those that are mismatched are injected instead.

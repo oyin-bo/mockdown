@@ -52,7 +52,7 @@ Hello world
     const tokenTest = `
 Hello world
 1
-@1 StringLiteral text: "Hello world"`;
+@1 StringLiteral "Hello world"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -60,7 +60,7 @@ Hello world
     const tokenTest = `
 Hello world
 1
-@1 StringLiteral text: "Wrong text"`;
+@1 StringLiteral "Wrong text"`;
     const result = verifyTokens(tokenTest);
     expect(result).toBe(`
 Hello world
@@ -73,13 +73,13 @@ Hello world
     const tokenTest = `
 Hello World
 1    2    3
-@1 StringLiteral text: "Hello World"
-@2 StringLiteral text: "Hello World"  
-@3 StringLiteral text: "Hello World"`;
+@1 StringLiteral "Hello World"
+@2 StringLiteral "Hello World"  
+@3 StringLiteral "Hello World"`;
     expect(verifyTokens(tokenTest)).toBe(`
 Hello World
 1
-@1 StringLiteral text: "Hello World"
+@1 StringLiteral "Hello World"
 `);
   });
 
@@ -88,7 +88,7 @@ Hello World
 Line1
 Line2
 1
-@1 StringLiteral text: "Line2"`;
+@1 StringLiteral "Line2"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -106,7 +106,7 @@ Line2
   Hello World
 1 2
 @1 WhitespaceTrivia
-@2 StringLiteral text: "Hello World"`;
+@2 StringLiteral "Hello World"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -124,7 +124,7 @@ A           B
     const tokenTest = `
   Hello world
 1
-@1 WhitespaceTrivia flags: 2`;
+@1 WhitespaceTrivia 2`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -148,7 +148,7 @@ A           B
     const tokenTest = `
 Hello world
 1
-@1 StringLiteral text: "Wrong content"`;
+@1 StringLiteral "Wrong content"`;
     const result = verifyTokens(tokenTest);
     expect(result).toBe(`
 Hello world

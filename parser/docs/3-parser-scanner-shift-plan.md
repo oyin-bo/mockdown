@@ -14,11 +14,11 @@ Testing will be based on annotated text format where Markdown and test expectati
 const tokenTest = ˋ
 # Heading1
 1 2
-@1 HeadingMarker ...optionally attributes to expect...
+@1 HeadingMarker
 @2 Text
 * List1
 1 2
-@1 ListMarker ...optionally attributes to expect...
+@1 ListMarker
 ˋ;
 
 expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -33,7 +33,8 @@ Lines immediately following position-reference lines and starting
 with @ then digit or letter are for asserting tokens at corresponding position.
 The first word after that @1, @2 is token kind.
 After that separated with a space can optionally go attribute assertions.
-We should support syntax like propertyName: <JSON-serialized value>.
+For text content, provide the expected text in quotes: "expected text".
+For flags, provide the numerical flag value or pipe-separated flag names.
 
 As of the Stage 1 we may only support only 2 token types,
 so the testing infrastructure will not be that useful yet.
