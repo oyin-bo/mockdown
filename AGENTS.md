@@ -32,8 +32,8 @@ expect(verifyTokens(`
 
 2. **Token Expectations**: Lines starting with `@` followed by a position marker specify the expected token at that position:
    - `@1 TokenKind` - Assert token type at position 1
-   - `@1 TokenKind text: "expected"` - Assert token text content
-   - `@1 TokenKind flags: 512` - Assert token flags value
+   - `@1 TokenKind "expected"` - Assert token text content
+   - `@1 TokenKind CanClose` - Assert token flags value (use TokenFlags enum names separated by pipe `|` for multiple flags)
 
 3. **Error Injection**: When expectations don't match reality, errors are injected directly into the annotated format, making debugging immediate and contextual.
 
