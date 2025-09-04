@@ -222,34 +222,37 @@ Some text <em>emphasized</em> more text.
     test('complex nested HTML with multiple scenarios', () => {
       const tokenTest = `
 <div class="main">
-  <h1>Title &amp; Subtitle</h1>
-  <p>Some text with <em>emphasis &lt;strong&gt;</em> and more.</p>
-  <img src="image.jpg" alt="description" />
-  <ul>
-    <li>Item 1 &gt; special</li>
-    <li>Item 2</li>
-  </ul>
-</div>
-123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
+1
 @1 LessThanToken "<"
-@2 LessThanToken "<"
-@3 EntityToken "&"
-@4 LessThanSlashToken "</"
-@5 LessThanToken "<"
-@6 LessThanToken "<"
-@7 EntityToken "<"
-@8 EntityToken ">"
-@9 LessThanSlashToken "</"
-@A LessThanToken "<"
-@B SlashGreaterThanToken "/>"
-@C LessThanToken "<"
-@D LessThanToken "<"
-@E EntityToken ">"
-@F LessThanSlashToken "</"
-@G LessThanToken "<"
-@H LessThanSlashToken "</"
-@I LessThanSlashToken "</"
-@J LessThanSlashToken "</"`;
+  <h1>Title &amp; Subtitle</h1>
+  2           3
+  @2 LessThanToken "<"
+  @3 EntityToken "&"
+  <p>Some text with <em>emphasis &lt;strong&gt;</em> and more.</p>
+                    4             5        6    7
+  @4 LessThanToken "<"
+  @5 EntityToken "<"
+  @6 EntityToken ">"
+  @7 LessThanSlashToken "</"
+  <img src="image.jpg" alt="description" />
+                                         8
+  @8 SlashGreaterThanToken "/>"
+  <ul>
+  9
+  @9 LessThanToken "<"
+    <li>Item 1 &gt; special</li>
+    A           B
+    @A LessThanToken "<"
+    @B EntityToken ">"
+    <li>Item 2</li>
+    C
+    @C LessThanToken "<"
+  </ul>
+  D
+  @D LessThanSlashToken "</"
+</div>
+E
+@E LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
