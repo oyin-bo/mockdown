@@ -26,8 +26,29 @@ export const enum SyntaxKind {
   BacktickToken,            // `
   TildeTilde,               // ~~
   
-  // Future stages will add more tokens as needed:
   // Stage 4: HTML and entities
+  // HTML Structural Delimiters
+  LessThanToken,            // <
+  LessThanSlashToken,       // </
+  GreaterThanToken,         // >
+  SlashGreaterThanToken,    // /> (recognized as a single token after a tag/attribute sequence)
+  EqualsToken,              // = (only meaningful inside tag attribute context)
+  AmpersandToken,           // & (when not forming a valid entity)
+
+  // HTML Name / Value Tokens
+  HtmlTagName,              // Tag name (case-preserving slice). Examples: div, script, textarea
+  HtmlAttributeName,        // Attribute name (data-id, aria-label, xml:lang, etc.)
+  HtmlAttributeValue,       // Quoted or unquoted attribute value (raw slice, quotes included for quoted)
+  HtmlEntity,               // Complete named or numeric entity WITH terminating ';'
+
+  // HTML Aggregate / Content Tokens
+  HtmlComment,              // <!-- ... --> (full span)
+  HtmlCdata,                // <![CDATA[ ... ]]> (full span)
+  HtmlProcessingInstruction,// <? ... ?> (full span)
+  HtmlRawText,              // Content inside <script>/<style> (no entity scanning)
+  HtmlRCDataText,           // Content inside <textarea>/<title> (entity scanning active)
+  
+  // Future stages will add more tokens as needed:
   // Later stages: Progressive Markdown construct addition
 }
 
@@ -52,6 +73,9 @@ export const enum TokenFlags {
   RollbackRawText = 2 << 4,           // Within raw text content
   RollbackCodeBlock = 3 << 4,         // Within code block content
   RollbackHtmlInner = 4 << 4,         // Within HTML element content
+  RollbackHtmlTagBoundary = 5 << 4,   // Immediately after completing '>' or '/>' of a tag
+  RollbackHtmlEntityComplete = 6 << 4,// Immediately after emitting a HtmlEntity token
+  RollbackContentModeBoundary = 7 << 4,// Right after switching into or out of RawText / RCData
   
   // Stage 3: Emphasis delimiter flags
   CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
@@ -67,6 +91,9 @@ export const enum RollbackType {
   RawTextContent = 2,       // Within <script>/<style> - any position safe
   CodeBlockContent = 3,     // Within fenced code - line boundaries safe
   HtmlElementInner = 4,     // Within HTML element content (non-raw)
+  HtmlTagBoundary = 5,      // Immediately after completing '>' or '/>' of a tag
+  HtmlEntityComplete = 6,   // Immediately after emitting a HtmlEntity token
+  ContentModeBoundary = 7,  // Right after switching into or out of RawText / RCData
 }
 
 /**
