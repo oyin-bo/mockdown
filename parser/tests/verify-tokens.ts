@@ -273,7 +273,24 @@ enum SyntaxKindShadow {
   UnderscoreToken = SyntaxKind.UnderscoreToken,
   UnderscoreUnderscore = SyntaxKind.UnderscoreUnderscore,
   BacktickToken = SyntaxKind.BacktickToken,
-  TildeTilde = SyntaxKind.TildeTilde
+  TildeTilde = SyntaxKind.TildeTilde,
+
+  // Stage 4: HTML tokens
+  LessThanToken = SyntaxKind.LessThanToken,
+  LessThanSlashToken = SyntaxKind.LessThanSlashToken,
+  GreaterThanToken = SyntaxKind.GreaterThanToken,
+  SlashGreaterThanToken = SyntaxKind.SlashGreaterThanToken,
+  EqualsToken = SyntaxKind.EqualsToken,
+  AmpersandToken = SyntaxKind.AmpersandToken,
+  HtmlTagName = SyntaxKind.HtmlTagName,
+  HtmlAttributeName = SyntaxKind.HtmlAttributeName,
+  HtmlAttributeValue = SyntaxKind.HtmlAttributeValue,
+  HtmlEntity = SyntaxKind.HtmlEntity,
+  HtmlComment = SyntaxKind.HtmlComment,
+  HtmlCdata = SyntaxKind.HtmlCdata,
+  HtmlProcessingInstruction = SyntaxKind.HtmlProcessingInstruction,
+  HtmlRawText = SyntaxKind.HtmlRawText,
+  HtmlRCDataText = SyntaxKind.HtmlRCDataText
 }
 
 function tokenFlagsToString(kind: TokenFlags): string {

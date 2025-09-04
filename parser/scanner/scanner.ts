@@ -76,6 +76,13 @@ const TokenTextCache = {
   TAB: '\t',
   NEWLINE_LF: '\n',
   NEWLINE_CRLF: '\r\n',
+  // Stage 4: HTML structural tokens
+  LESS_THAN: '<',
+  LESS_THAN_SLASH: '</',
+  GREATER_THAN: '>',
+  SLASH_GREATER_THAN: '/>',
+  EQUALS: '=',
+  AMPERSAND: '&',
 } as const;
 
 /**
@@ -324,6 +331,18 @@ export function createScanner(): Scanner {
         case CharacterCodes.lineFeed:
           tokenText = TokenTextCache.NEWLINE_LF;
           break;
+        case CharacterCodes.lessThan:
+          tokenText = TokenTextCache.LESS_THAN;
+          break;
+        case CharacterCodes.greaterThan:
+          tokenText = TokenTextCache.GREATER_THAN;
+          break;
+        case CharacterCodes.ampersand:
+          tokenText = TokenTextCache.AMPERSAND;
+          break;
+        case CharacterCodes.equals:
+          tokenText = TokenTextCache.EQUALS;
+          break;
         default:
           tokenText = source.substring(start, endPos);
           break;
@@ -336,6 +355,10 @@ export function createScanner(): Scanner {
         tokenText = TokenTextCache.ASTERISK_ASTERISK;
       } else if (kind === SyntaxKind.UnderscoreUnderscore) {
         tokenText = TokenTextCache.UNDERSCORE_UNDERSCORE;
+      } else if (kind === SyntaxKind.LessThanSlashToken) {
+        tokenText = TokenTextCache.LESS_THAN_SLASH;
+      } else if (kind === SyntaxKind.SlashGreaterThanToken) {
+        tokenText = TokenTextCache.SLASH_GREATER_THAN;
       } else if (start + 1 < source.length && 
                  source.charCodeAt(start) === CharacterCodes.carriageReturn &&
                  source.charCodeAt(start + 1) === CharacterCodes.lineFeed) {
@@ -486,6 +509,263 @@ export function createScanner(): Scanner {
     }
   }
   
+  /**
+   * Stage 4: HTML scanning functions
+   */
+  
+  function scanLessThan(start: number): void {
+    // Minimal lookahead via direct charCode reads (no substring allocation)
+    const c1 = pos + 1 < end ? source.charCodeAt(pos + 1) : -1;
+    
+    if (c1 === CharacterCodes.slash) {
+      // This is </ - emit LessThanSlashToken
+      emitToken(SyntaxKind.LessThanSlashToken, start, start + 2);
+      return;
+    }
+    
+    // Detect comment start <!--
+    if (c1 === CharacterCodes.exclamation && matchSequence(pos, '<!--')) {
+      scanHtmlComment(start);
+      return;
+    }
+    
+    // Detect CDATA <![CDATA[
+    if (c1 === CharacterCodes.exclamation && matchSequence(pos, '<![CDATA[')) {
+      scanHtmlCdata(start);
+      return;
+    }
+    
+    // Detect processing instruction <? ... ?>
+    if (c1 === CharacterCodes.question) {
+      scanHtmlProcessingInstruction(start);
+      return;
+    }
+    
+    // Check if this could be a tag name after <
+    if (c1 >= 0 && isLetter(c1)) {
+      // Regular < token, but let the next scan call handle the tag name
+      emitToken(SyntaxKind.LessThanToken, start, start + 1);
+      return;
+    }
+    
+    // Regular < token
+    emitToken(SyntaxKind.LessThanToken, start, start + 1);
+  }
+  
+  function scanGreaterThan(start: number): void {
+    // Check if this might be part of />
+    if (start > 0 && source.charCodeAt(start - 1) === CharacterCodes.slash) {
+      // This is part of /> which should be handled as SlashGreaterThanToken
+      // But we need to be in the right context - for now, just emit regular >
+      emitToken(SyntaxKind.GreaterThanToken, start, start + 1);
+    } else {
+      emitToken(SyntaxKind.GreaterThanToken, start, start + 1);
+    }
+  }
+  
+  function scanAmpersand(start: number): void {
+    // Named or numeric entities MUST terminate with ';' to be recognized.
+    // Strategy: probe character-by-character without substring allocation.
+    const after = start + 1;
+    if (after < end && source.charCodeAt(after) === CharacterCodes.hash) {
+      if (scanNumericEntity(start)) return; // Emits HtmlEntity or falls through
+    } else if (scanNamedEntity(start)) {
+      return; // Emits HtmlEntity
+    }
+    emitToken(SyntaxKind.AmpersandToken, start, start + 1); // Bare '&'
+  }
+  
+  function scanEquals(start: number): void {
+    emitToken(SyntaxKind.EqualsToken, start, start + 1);
+  }
+  
+  function scanHtmlTagName(start: number): boolean {
+    let nameEnd = start;
+    
+    // Tag name start: [A-Za-z]
+    if (nameEnd >= end) return false;
+    const firstChar = source.charCodeAt(nameEnd);
+    if (!isLetter(firstChar)) return false;
+    
+    nameEnd++;
+    
+    // Continue: [A-Za-z0-9-]*
+    while (nameEnd < end) {
+      const ch = source.charCodeAt(nameEnd);
+      if (isLetter(ch) || isDigit(ch) || ch === CharacterCodes.minus) {
+        nameEnd++;
+      } else {
+        break;
+      }
+    }
+    
+    if (nameEnd > start) {
+      emitToken(SyntaxKind.HtmlTagName, start, nameEnd);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  function scanNumericEntity(start: number): boolean {
+    // Expect patterns: "&#<digits>;" or "&#x<hex>;"
+    if (!matchSequence(start, '&#')) return false;
+    
+    let pos = start + 2;
+    if (pos >= end) return false;
+    
+    let isHex = false;
+    if (source.charCodeAt(pos) === CharacterCodes.x || source.charCodeAt(pos) === CharacterCodes.X) {
+      isHex = true;
+      pos++;
+    }
+    
+    const digitStart = pos;
+    
+    // Scan digits
+    while (pos < end) {
+      const ch = source.charCodeAt(pos);
+      if (isHex ? isHexDigit(ch) : isDigit(ch)) {
+        pos++;
+      } else {
+        break;
+      }
+    }
+    
+    // Must have at least one digit and end with semicolon
+    if (pos === digitStart || pos >= end || source.charCodeAt(pos) !== CharacterCodes.semicolon) {
+      return false;
+    }
+    
+    // Digit length cap: 8
+    if (pos - digitStart > 8) {
+      return false;
+    }
+    
+    emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
+    return true;
+  }
+  
+  function scanNamedEntity(start: number): boolean {
+    // Scan for named entity pattern: &name;
+    if (source.charCodeAt(start) !== CharacterCodes.ampersand) return false;
+    
+    let pos = start + 1;
+    const nameStart = pos;
+    
+    // Scan entity name (letters only for now)
+    while (pos < end && pos - nameStart < 32) { // Max length 32
+      const ch = source.charCodeAt(pos);
+      if (isLetter(ch)) {
+        pos++;
+      } else {
+        break;
+      }
+    }
+    
+    // Must have name and end with semicolon
+    if (pos === nameStart || pos >= end || source.charCodeAt(pos) !== CharacterCodes.semicolon) {
+      return false;
+    }
+    
+    // Check if it's a known entity
+    const entityName = source.substring(nameStart, pos);
+    if (isValidEntityName(entityName)) {
+      emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  function scanHtmlComment(start: number): void {
+    // Scan HTML comment: <!-- ... -->
+    let pos = start + 4; // Skip <!--
+    
+    while (pos < end - 2) {
+      if (source.charCodeAt(pos) === CharacterCodes.minus &&
+          source.charCodeAt(pos + 1) === CharacterCodes.minus &&
+          source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
+        // Found end -->
+        emitToken(SyntaxKind.HtmlComment, start, pos + 3);
+        return;
+      }
+      pos++;
+    }
+    
+    // Unterminated comment
+    emitToken(SyntaxKind.HtmlComment, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+  }
+  
+  function scanHtmlCdata(start: number): void {
+    // Scan CDATA: <![CDATA[ ... ]]>
+    let pos = start + 9; // Skip <![CDATA[
+    
+    while (pos < end - 2) {
+      if (source.charCodeAt(pos) === CharacterCodes.closeBracket &&
+          source.charCodeAt(pos + 1) === CharacterCodes.closeBracket &&
+          source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
+        // Found end ]]>
+        emitToken(SyntaxKind.HtmlCdata, start, pos + 3);
+        return;
+      }
+      pos++;
+    }
+    
+    // Unterminated CDATA
+    emitToken(SyntaxKind.HtmlCdata, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+  }
+  
+  function scanHtmlProcessingInstruction(start: number): void {
+    // Scan PI: <? ... ?>
+    let pos = start + 2; // Skip <?
+    
+    while (pos < end - 1) {
+      if (source.charCodeAt(pos) === CharacterCodes.question &&
+          source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
+        // Found end ?>
+        emitToken(SyntaxKind.HtmlProcessingInstruction, start, pos + 2);
+        return;
+      }
+      pos++;
+    }
+    
+    // Unterminated PI
+    emitToken(SyntaxKind.HtmlProcessingInstruction, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+  }
+  
+  // Helper functions
+  function matchSequence(pos: number, sequence: string): boolean {
+    if (pos + sequence.length > end) return false;
+    for (let i = 0; i < sequence.length; i++) {
+      if (source.charCodeAt(pos + i) !== sequence.charCodeAt(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  function isValidEntityName(name: string): boolean {
+    // Stage 4 curated set
+    const NAMED_ENTITIES = new Set(['amp', 'lt', 'gt', 'quot', 'apos', 'nbsp']);
+    return NAMED_ENTITIES.has(name);
+  }
+  
+  function isLetter(ch: number): boolean {
+    return (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
+           (ch >= CharacterCodes.a && ch <= CharacterCodes.z);
+  }
+  
+  function isDigit(ch: number): boolean {
+    return ch >= CharacterCodes._0 && ch <= CharacterCodes._9;
+  }
+  
+  function isHexDigit(ch: number): boolean {
+    return (ch >= CharacterCodes._0 && ch <= CharacterCodes._9) ||
+           (ch >= CharacterCodes.A && ch <= CharacterCodes.F) ||
+           (ch >= CharacterCodes.a && ch <= CharacterCodes.f);
+  }
+
   function emitTextRun(start: number): void {
     let textEnd = start;
     
@@ -499,7 +779,11 @@ export function createScanner(): Scanner {
       
       // Check for special characters, but handle intraword underscores specially
       if (ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.backtick) {
+          ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.lessThan ||
+          ch === CharacterCodes.greaterThan ||
+          ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.equals) {
         break;
       }
       
@@ -693,8 +977,30 @@ export function createScanner(): Scanner {
       return;
     }
     
+    // Stage 4: HTML character scanning
+    if (ch === CharacterCodes.lessThan) {
+      scanLessThan(start);
+    } else if (ch === CharacterCodes.greaterThan) {
+      scanGreaterThan(start);
+    } else if (ch === CharacterCodes.ampersand) {
+      scanAmpersand(start);
+    } else if (ch === CharacterCodes.equals) {
+      scanEquals(start);
+    } else if (ch === CharacterCodes.slash && pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
+      // This is /> - check if this could be a self-closing tag
+      emitToken(SyntaxKind.SlashGreaterThanToken, start, start + 2);
+    } else if (isLetter(ch)) {
+      // Check if this could be an HTML tag name (only at appropriate positions)
+      if (pos > 0 && (source.charCodeAt(pos - 1) === CharacterCodes.lessThan || 
+                      (pos > 1 && source.charCodeAt(pos - 2) === CharacterCodes.lessThan && source.charCodeAt(pos - 1) === CharacterCodes.slash))) {
+        scanHtmlTagName(start);
+      } else {
+        // Regular text content - scan until next special character
+        emitTextRun(start);
+      }
+    }
     // Direct character-based scanning - no line look-ahead needed
-    if (ch === CharacterCodes.asterisk) {
+    else if (ch === CharacterCodes.asterisk) {
       scanAsterisk(start);
     } else if (ch === CharacterCodes.underscore && canUnderscoreBeDelimiter(pos)) {
       scanUnderscore(start);
