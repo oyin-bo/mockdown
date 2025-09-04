@@ -134,7 +134,7 @@ single~tilde
 **bold** text\twith\t\tmultiple   spaces
 1       2
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
-@2 StringLiteral "text with multiple spaces"`;
+@2 StringLiteral " text with multiple spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -143,7 +143,7 @@ single~tilde
 *italic* and\tthen\t\tmore   text
 1       2
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
-@2 StringLiteral "and then more text"`;
+@2 StringLiteral " and then more text"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -153,6 +153,14 @@ single~tilde
 1 2
 @1 WhitespaceTrivia "  "
 @2 StringLiteral "Leading spaces first"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('text with only trailing whitespace gets trimmed', () => {
+      const tokenTest = `
+Text\t\twith\t\ttrailing   
+1
+@1 StringLiteral "Text with trailing" PrecedingLineBreak|IsAtLineStart`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
