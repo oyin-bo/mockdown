@@ -164,4 +164,122 @@ Text\t\twith\t\ttrailing
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
+
+  describe('Consecutive emphasis with whitespace separation', () => {
+    test('**bold** text produces correct tokens with preserved leading space', () => {
+      const tokenTest = `
+**bold** text
+1      23   4
+@1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "bold"
+@3 AsteriskAsterisk "**" CanClose
+@4 StringLiteral " text"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('text **bold** produces correct tokens with preserved trailing space', () => {
+      const tokenTest = `
+text **bold**
+1   23     4
+@1 StringLiteral "text " PrecedingLineBreak|IsAtLineStart
+@2 AsteriskAsterisk "**" CanOpen
+@3 StringLiteral "bold"
+@4 AsteriskAsterisk "**" CanClose`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('start **bold** end produces correct tokens with both spaces preserved', () => {
+      const tokenTest = `
+start **bold** end
+1    23     4 5
+@1 StringLiteral "start " PrecedingLineBreak|IsAtLineStart
+@2 AsteriskAsterisk "**" CanOpen
+@3 StringLiteral "bold"
+@4 AsteriskAsterisk "**" CanClose
+@5 StringLiteral " end"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('*italic* start **bold** text *italic* produces correct complex tokenization', () => {
+      const tokenTest = `
+*italic* start **bold** text *italic*
+1      23    45     6 7   8
+@1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "italic"
+@3 AsteriskToken "*" CanClose
+@4 StringLiteral " start "
+@5 AsteriskAsterisk "**" CanOpen
+@6 StringLiteral "bold"
+@7 AsteriskAsterisk "**" CanClose
+@8 StringLiteral " text "`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('multiple consecutive emphasis with various whitespace patterns', () => {
+      const tokenTest = `
+**bold**  *italic*   ~~strike~~
+1      2 34      5  67       8
+@1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "bold"
+@3 AsteriskAsterisk "**" CanClose
+@4 StringLiteral "  "
+@5 AsteriskToken "*" CanOpen
+@6 StringLiteral "italic"
+@7 AsteriskToken "*" CanClose
+@8 StringLiteral "   "`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('emphasis with tab and multiple space separation', () => {
+      // First, let's create a simpler test to see what tokens are actually produced
+      const debugTest = `
+*first*
+12    3
+@1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "first"
+@3 AsteriskToken "*" CanClose`;
+      expect(verifyTokens(debugTest)).toBe(debugTest);
+
+      // Now let's build up to the more complex test step by step
+      const tokenTest = `
+*first*\t\t**second**   third
+12    3   45      6   7
+@1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "first"
+@3 AsteriskToken "*" CanClose
+@4 StringLiteral "    "
+@5 AsteriskAsterisk "**" CanOpen
+@6 StringLiteral "second"
+@7 AsteriskAsterisk "**" CanClose`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('nested and adjacent emphasis patterns', () => {
+      const tokenTest = `
+text **bold *nested* bold** more
+1   23     4      5 6    7 8
+@1 StringLiteral "text " PrecedingLineBreak|IsAtLineStart
+@2 AsteriskAsterisk "**" CanOpen
+@3 StringLiteral "bold "
+@4 AsteriskToken "*" CanOpen
+@5 StringLiteral "nested"
+@6 AsteriskToken "*" CanClose
+@7 StringLiteral " bold"
+@8 AsteriskAsterisk "**" CanClose`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('emphasis at line boundaries preserves logical separation', () => {
+      const tokenTest = `
+**start** and **end**
+1     2 3  45   6
+@1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
+@2 StringLiteral "start"
+@3 AsteriskAsterisk "**" CanClose
+@4 StringLiteral " and "
+@5 AsteriskAsterisk "**" CanOpen
+@6 StringLiteral "end"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+  });
 });
