@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { verifyTokens } from './verify-tokens.js';
+import { verifyTokens } from './3-testing-infrastructure.js';
 import { createScanner } from '../scanner/scanner.js';
 
 describe('Scanner2 Testing Infrastructure', () => {

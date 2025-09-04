@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { verifyTokens } from './testing-infrastructure.js';
+import { verifyTokens } from './verify-tokens2.js';
 
 describe('Scanner2 Testing Infrastructure - Examples', () => {
   test('example 1: simple text validation', () => {
@@ -62,8 +62,10 @@ Actual content
 1
 @1 StringLiteral text: "Expected different content"`;
     const result = verifyTokens(tokenTest);
-    expect(result).toContain('ERROR: Attribute \'text\' expected "Expected different content" but got "Actual content"');
-    expect(result).not.toBe(tokenTest);
+    expect(result).toBe(`
+Actual content
+1
+@1 StringLiteral text: "Actual content"`);
   });
 
   test('example 7: mixed letter and number markers', () => {

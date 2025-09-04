@@ -1,1 +1,1 @@
-export { createScanner as createScanner2 } from './scanner.js';
+export { createScanner } from './scanner/scanner.js';

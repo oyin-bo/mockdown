@@ -4,8 +4,8 @@
  */
 
 import { describe, test, expect, beforeEach } from 'vitest';
-import { createScanner, type Scanner, type ScannerDebugState } from '../scanner.js';
-import { SyntaxKind, TokenFlags, RollbackType } from '../scanner-token-types.js';
+import { createScanner, type Scanner, type ScannerDebugState } from '../scanner/scanner.js';
+import { SyntaxKind, TokenFlags, RollbackType } from '../scanner/token-types.js';
 
 describe('Scanner2 Stage 1: Edge Cases', () => {
   let scanner: Scanner;

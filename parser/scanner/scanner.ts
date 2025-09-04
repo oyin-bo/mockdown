@@ -3,7 +3,7 @@ import {
   TokenFlags,
   RollbackType,
   ScannerErrorCode
-} from './scanner-token-types';
+} from './token-types';
 import {
   CharacterCodes,
   isLineBreak,
