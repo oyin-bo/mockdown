@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 
 import { createScanner } from '../../scanner.js';
-import { SyntaxKind, TokenFlags, ScannerErrorCode } from '../../../token-types.js';
+import { SyntaxKind, TokenFlags, ScannerErrorCode } from '../../token-types.js';
 
 describe('Scanner Error Handling', () => {
   let scanner: ReturnType<typeof createScanner>;
