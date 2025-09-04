@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { createScanner } from '../scanner';
-import { ScannerErrorCode, SyntaxKind, TokenFlags } from '../../token-types.js';
+import { ScannerErrorCode, SyntaxKind, TokenFlags } from '../token-types.js';
 
 export function scanTokensWithErrors(input: string, scanner = createScanner()) {
   let errors: undefined | (string | undefined)[];
