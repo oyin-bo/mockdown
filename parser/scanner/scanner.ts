@@ -656,6 +656,44 @@ export function createScanner(): Scanner {
    * Stage 4: HTML and entity scanning functions
    */
   
+  function decodeEntity(entityText: string): string {
+    // Remove the & and ; from the entity text
+    const inner = entityText.slice(1, -1);
+    
+    // Named entities
+    switch (inner) {
+      case 'amp': return '&';
+      case 'lt': return '<';
+      case 'gt': return '>';
+      case 'quot': return '"';
+      case 'apos': return "'";
+      case 'nbsp': return '\u00A0';
+      // Add more named entities as needed
+      default:
+        // Numeric entities
+        if (inner.startsWith('#')) {
+          const numPart = inner.slice(1);
+          if (numPart.startsWith('x') || numPart.startsWith('X')) {
+            // Hex entity
+            const hexValue = parseInt(numPart.slice(1), 16);
+            if (!isNaN(hexValue) && hexValue >= 0 && hexValue <= 0x10FFFF) {
+              return String.fromCharCode(hexValue);
+            }
+          } else {
+            // Decimal entity
+            const decValue = parseInt(numPart, 10);
+            if (!isNaN(decValue) && decValue >= 0 && decValue <= 0x10FFFF) {
+              return String.fromCharCode(decValue);
+            }
+          }
+        }
+        break;
+    }
+    
+    // If we can't decode it, return the original text
+    return entityText;
+  }
+  
   function scanAmpersand(start: number): void {
     // Check if this looks like a character entity
     let entityEnd = start + 1; // Skip the initial &
@@ -670,8 +708,27 @@ export function createScanner(): Scanner {
       // Check for closing semicolon
       if (entityEnd < end && source.charCodeAt(entityEnd) === CharacterCodes.semicolon) {
         entityEnd++; // Include the semicolon
-        emitToken(SyntaxKind.EntityToken, start, entityEnd);
+        const entityText = source.substring(start, entityEnd);
+        const decodedText = decodeEntity(entityText);
+        
+        // Manually set token fields to use decoded text
+        token = SyntaxKind.EntityToken;
+        tokenText = decodedText;
+        tokenFlags = TokenFlags.None;
+        offsetNext = entityEnd;
+        
+        // Add context flags
+        if (contextFlags & ContextFlags.PrecedingLineBreak) {
+          tokenFlags |= TokenFlags.PrecedingLineBreak;
+        }
+        if (contextFlags & ContextFlags.AtLineStart) {
+          tokenFlags |= TokenFlags.IsAtLineStart;
+        }
+        
         updatePosition(entityEnd);
+        
+        // Reset line start flag
+        contextFlags &= ~ContextFlags.AtLineStart;
         return;
       }
     }
@@ -704,8 +761,27 @@ export function createScanner(): Scanner {
       // Check for closing semicolon
       if (hasDigits && entityEnd < end && source.charCodeAt(entityEnd) === CharacterCodes.semicolon) {
         entityEnd++; // Include the semicolon
-        emitToken(SyntaxKind.EntityToken, start, entityEnd);
+        const entityText = source.substring(start, entityEnd);
+        const decodedText = decodeEntity(entityText);
+        
+        // Manually set token fields to use decoded text
+        token = SyntaxKind.EntityToken;
+        tokenText = decodedText;
+        tokenFlags = TokenFlags.None;
+        offsetNext = entityEnd;
+        
+        // Add context flags
+        if (contextFlags & ContextFlags.PrecedingLineBreak) {
+          tokenFlags |= TokenFlags.PrecedingLineBreak;
+        }
+        if (contextFlags & ContextFlags.AtLineStart) {
+          tokenFlags |= TokenFlags.IsAtLineStart;
+        }
+        
         updatePosition(entityEnd);
+        
+        // Reset line start flag
+        contextFlags &= ~ContextFlags.AtLineStart;
         return;
       }
     }

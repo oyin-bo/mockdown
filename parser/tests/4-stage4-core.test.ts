@@ -14,7 +14,7 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 &amp;
 1
-@1 EntityToken "&amp;"`;
+@1 EntityToken "&"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -22,9 +22,9 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 &lt;&gt;&amp;
 1   2   3
-@1 EntityToken "&lt;"
-@2 EntityToken "&gt;"
-@3 EntityToken "&amp;"`;
+@1 EntityToken "<"
+@2 EntityToken ">"
+@3 EntityToken "&"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -32,7 +32,7 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 &#65;
 1
-@1 EntityToken "&#65;"`;
+@1 EntityToken "A"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -40,7 +40,7 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 &#x41;
 1
-@1 EntityToken "&#x41;"`;
+@1 EntityToken "A"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -48,7 +48,7 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 &#X41;
 1
-@1 EntityToken "&#X41;"`;
+@1 EntityToken "A"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -56,7 +56,7 @@ describe('Stage 4: Entities and HTML', () => {
       const tokenTest = `
 text &amp; more
      1
-@1 EntityToken "&amp;"`;
+@1 EntityToken "&"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -156,6 +156,100 @@ text <span> more
 text > more
      1
 @1 GreaterThanToken ">"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+  });
+
+  describe('Comprehensive HTML Tests', () => {
+    test('tag names are handled as StringLiteral tokens', () => {
+      const tokenTest = `
+<div>
+1234
+@1 LessThanToken "<"
+@2 StringLiteral "div"
+@3 GreaterThanToken ">"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('HTML tags at start of line', () => {
+      const tokenTest = `
+<span>text</span>
+1     2   3
+@1 LessThanToken "<"
+@2 StringLiteral "text"
+@3 LessThanSlashToken "</"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('HTML tags in middle of text', () => {
+      const tokenTest = `
+Some text <em>emphasized</em> more text.
+          1            2
+@1 LessThanToken "<"
+@2 LessThanSlashToken "</"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('nested HTML tags', () => {
+      const tokenTest = `
+<div><span>content</span></div>
+1    2     3        4
+@1 LessThanToken "<"
+@2 LessThanToken "<"
+@3 StringLiteral "content"
+@4 StringLiteral "span"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('self-closing tags with attributes', () => {
+      const tokenTest = `
+<img src="test.jpg" alt="test" />
+                               1
+@1 SlashGreaterThanToken "/>"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('HTML with entities inside', () => {
+      const tokenTest = `
+<p>Text &amp; more &lt;text&gt;</p>
+        1            2      3
+@1 EntityToken "&"
+@2 EntityToken "<"
+@3 EntityToken ">"`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('complex nested HTML with multiple scenarios', () => {
+      const tokenTest = `
+<div class="main">
+  <h1>Title &amp; Subtitle</h1>
+  <p>Some text with <em>emphasis &lt;strong&gt;</em> and more.</p>
+  <img src="image.jpg" alt="description" />
+  <ul>
+    <li>Item 1 &gt; special</li>
+    <li>Item 2</li>
+  </ul>
+</div>
+123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012
+@1 LessThanToken "<"
+@2 LessThanToken "<"
+@3 EntityToken "&"
+@4 LessThanSlashToken "</"
+@5 LessThanToken "<"
+@6 LessThanToken "<"
+@7 EntityToken "<"
+@8 EntityToken ">"
+@9 LessThanSlashToken "</"
+@A LessThanToken "<"
+@B SlashGreaterThanToken "/>"
+@C LessThanToken "<"
+@D LessThanToken "<"
+@E EntityToken ">"
+@F LessThanSlashToken "</"
+@G LessThanToken "<"
+@H LessThanSlashToken "</"
+@I LessThanSlashToken "</"
+@J LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
