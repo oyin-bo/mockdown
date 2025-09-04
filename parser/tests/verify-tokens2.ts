@@ -1,10 +1,32 @@
-import { assert } from 'vitest';
 import { createScanner } from '../index';
 import { SyntaxKind, TokenFlags } from '../scanner/token-types';
 
 export function verifyTokens(input: string): string {
+  let markdownOnly = '';
+  const assertionList = [];
+  for (const { assertions, chunk } of findAssertions(input)) {
+    markdownOnly += chunk;
+    if (assertions.length > 0) {
+      const assertLineEnd = markdownOnly.length - 1;
+      const assertLineStart = markdownOnly.lastIndexOf('\n', assertLineEnd - 1) + 1;
+      assertionList.push({
+        assertions,
+        chunk,
+        lineStart: assertLineStart,
+        lineEnd: assertLineEnd
+      });
+    } else {
+      assertionList.push({
+        assertions,
+        chunk,
+        lineStart: -1,
+        lineEnd: -1
+      });
+    }
+  }
+
   const scanner = createScanner();
-  scanner.initText(input);
+  scanner.initText(markdownOnly);
   const tokens: {
     token: SyntaxKind,
     text: string,
@@ -12,7 +34,7 @@ export function verifyTokens(input: string): string {
     end: number,
     flags: TokenFlags
   }[] = [];
-  while (scanner.offsetNext < input.length) {
+  while (scanner.offsetNext < markdownOnly.length) {
     const start = scanner.offsetNext;
     scanner.scan();
     tokens.push({
@@ -24,13 +46,11 @@ export function verifyTokens(input: string): string {
     });
   }
 
-  let output = input;
-  for (const { assertions, chunk } of findAssertions(input)) {
-    output += chunk;
+  let output = '';
+  for (const { assertions, chunk, lineStart, lineEnd } of assertionList) {
 
-    const assertLineEnd = output.length;
-    const assertLineStart = output.lastIndexOf('\n', assertLineEnd - 1) + 1;
-    const lineTokens = tokens.filter(tk => tk.start >= assertLineStart && tk.end <= assertLineEnd);
+    output += chunk;
+    const lineTokens = tokens.filter(tk => tk.start >= lineStart && tk.end <= lineEnd);
 
     let positionLine = '';
     let assertionLines = [];
@@ -38,17 +58,17 @@ export function verifyTokens(input: string): string {
       const assertion = assertions[i];
 
       const token = lineTokens.find(tk =>
-        tk.start <= assertion.lineOffset &&
-        tk.end >= assertion.lineOffset
+        tk.start <= lineStart + assertion.lineOffset &&
+        tk.end >= lineStart + assertion.lineOffset + 1
       );
       if (!token) continue;
 
       const positionMarker = (i + 1) < 10 ? String(i + 1) :
         String.fromCharCode('A'.charCodeAt(0) + i - 10);
 
-      const positionMarkerOffset = token.start - assertLineStart;
-      if (positionLine.length >= positionMarkerOffset) continue;
-      while (positionLine.length < positionMarkerOffset - 1)
+      const positionMarkerOffset = token.start - lineStart;
+      if (positionLine.length > positionMarkerOffset) continue;
+      while (positionLine.length < positionMarkerOffset)
         positionLine += ' ';
       positionLine += positionMarker;
 
@@ -63,15 +83,15 @@ export function verifyTokens(input: string): string {
           '@' + positionMarker +
           (
             assertion.token < 0 ? '' :
-              syntaxKindToString(assertion.token)
+              ' ' + syntaxKindToString(token.token)
           ) +
           (
             assertion.text == null ? '' :
-              ' text:' + JSON.stringify(assertion.text)
+              ' ' + JSON.stringify(token.text)
           ) +
           (
             assertion.flags < 0 ? '' :
-              ' flags:' + tokenFlagsToString(assertion.flags)
+              ' ' + tokenFlagsToString(token.flags)
           )
         );
       }
@@ -82,6 +102,9 @@ export function verifyTokens(input: string): string {
       assertionLines.map(ln => ln + '\n').join('');
   }
 
+  if (input.trimEnd() === output.trimEnd())
+    return input;
+
   return output;
 }
 
@@ -89,16 +112,17 @@ function* findAssertions(input: string) {
   let lastPos = 0;
   let pos = 0;
   while (pos < input.length) {
-    const positionLineStart = input.indexOf('\n1', pos);
+    let positionLineStart = input.indexOf('\n1', pos);
     if (positionLineStart < 0) break;
+    positionLineStart++;
 
-    const positionLineEnd = input.indexOf('\n', positionLineStart + 2);
+    const positionLineEnd = input.indexOf('\n', positionLineStart + 1);
     if (positionLineEnd < 0) {
       pos = positionLineEnd;
       continue;
     }
 
-    const positionLine = input.substring(positionLineStart + 1, positionLineEnd);
+    const positionLine = input.substring(positionLineStart, positionLineEnd);
 
     let positionMarkerChars = positionLine.split(/\s+/g);
     const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
@@ -126,43 +150,13 @@ function* findAssertions(input: string) {
       let nextAssertLineEnd = input.indexOf('\n', nextAssertLineStart);
       if (nextAssertLineEnd < 0) nextAssertLineEnd = input.length;
 
-      const assertLineParts: string[] = splitAssertLineParts(input.slice(nextAssertLineStart + 2, nextAssertLineEnd));
+      const assertLineParsed = parseAssertLine(
+        input.slice(nextAssertLineStart + 2, nextAssertLineEnd).trim()
+      );
 
-      let assertLineInvalid = false;
-      let assertToken = -1;
-      let assertText = null as null | string;
-      let assertFlags = -1;
+      if (!assertLineParsed) break;
+      const { assertToken, assertText, assertFlags } = assertLineParsed;
       let assertionText = input.slice(nextAssertLineStart, nextAssertLineEnd);
-      for (const kv of assertLineParts) {
-        const posColon = kv.indexOf(':'); 
-        if (posColon < 0) {
-          const token = convertSyntaxKind(assertLineParts[0]);
-          if (token < 0) {
-            assertLineInvalid = true;
-            break;
-          }
-          assertToken = token;
-          continue;
-        }
-        const [key, value] = kv;
-        if (key === 'text') {
-          try {
-            assertText = JSON.parse(value);
-          } catch {
-            assertLineInvalid = true;
-            break;
-          }
-        } else if (key === 'flags') {
-          const flags = convertTokenFlags(value);
-          if (flags < 0) {
-            assertLineInvalid = true;
-            break;
-          }
-          assertFlags = flags;
-        }
-      }
-
-      if (assertLineInvalid) break;
 
       positionMarkerAsserts[i].token = assertToken;
       positionMarkerAsserts[i].text = assertText;
@@ -181,33 +175,74 @@ function* findAssertions(input: string) {
   if (pos < input.length) {
     yield {
       assertions: [],
-      chunk: input.slice(pos)
+      chunk: input.slice(lastPos)
     };
   }
 }
 
-// TODO: actually we only allow text in quote and flags, so no need for text: or flags: prefixes
-function splitAssertLineParts(assertLine: string) {
+function parseAssertLine(assertLine: string) {
   let pos = 0;
-  const parts: string[] = [];
+  let assertToken: SyntaxKind = -1 as number;
+  let assertText: string | null = null;
+  let assertFlags: TokenFlags = -1 as number;
+
   while (pos < assertLine.length) {
-    const nextSpace = assertLine.indexOf(' ', pos);
-    if (nextSpace < 0) {
-      parts.push(assertLine.slice(pos));
-      break;
+    // Skip known prefixes for older syntax
+    if (assertLine.slice(pos).startsWith('text:')) {
+      pos += 'text:'.length;
+      if (assertLine[pos] === ' ') pos++;
     }
-    const posColon = assertLine.indexOf(':', pos);
-    if (posColon < 0 || posColon > nextSpace) {
-      parts.push(assertLine.slice(pos, nextSpace));
+    else if (assertLine.slice(pos).startsWith('flags:')) {
+      pos += 'flags:'.length;
+      if (assertLine[pos] === ' ') pos++;
+    }
+
+    if (assertLine[pos] === '"') {
+      let endQuote = pos + 1;
+      while (true) {
+        endQuote = assertLine.indexOf('"', endQuote);
+        if (endQuote < 0) {
+          endQuote = -1;
+          break;
+        }
+
+        if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
+      }
+
+      if (endQuote < 0)
+        return;
+
+      try {
+        assertText = JSON.parse(assertLine.slice(pos, endQuote + 1));
+        pos = endQuote + 1;
+        continue;
+      } catch {
+        return;
+      }
+    }
+
+    let nextSpace = assertLine.indexOf(' ', pos);
+    if (nextSpace < 0) nextSpace = assertLine.length;
+
+    const p = assertLine.slice(pos, nextSpace);
+    if (assertToken < 0) {
+      const token = convertSyntaxKind(p);
+      if (token < 0) return;
+      assertToken = token;
       pos = nextSpace + 1;
-      while (pos < assertLine.length && assertLine[pos] === ' ') pos++;
-      continue;
+    } else {
+      const flags = convertTokenFlags(p);
+      if (flags < 0) return;
+      assertFlags = flags;
+      pos = nextSpace + 1;
     }
-
-    if ()
-
-    pos = nextSpace + 1;
   }
+
+  return {
+    assertToken,
+    assertText,
+    assertFlags
+  };
 }
 
 function syntaxKindToString(kind: SyntaxKind): string {
