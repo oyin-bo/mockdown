@@ -5,22 +5,22 @@ describe('HTML Entities - Stage 4', () => {
   test('named entities', () => {
     expect(verifyTokens(`
 &amp; &lt; &gt; &quot; &apos; &nbsp;
-1    2    3    4      5      6
+1     7    13   20      28      35
 @1 HtmlEntity "&amp;"
-@2 HtmlEntity "&lt;"
-@3 HtmlEntity "&gt;"
-@4 HtmlEntity "&quot;"
-@5 HtmlEntity "&apos;"
-@6 HtmlEntity "&nbsp;"
+@7 HtmlEntity "&lt;"
+@A HtmlEntity "&gt;"
+@B HtmlEntity "&quot;"
+@C HtmlEntity "&apos;"
+@D HtmlEntity "&nbsp;"
 `)).toBe(`
 &amp; &lt; &gt; &quot; &apos; &nbsp;
-1    2    3    4      5      6
+1     7    13   20      28      35
 @1 HtmlEntity "&amp;"
-@2 HtmlEntity "&lt;"
-@3 HtmlEntity "&gt;"
-@4 HtmlEntity "&quot;"
-@5 HtmlEntity "&apos;"
-@6 HtmlEntity "&nbsp;"
+@7 HtmlEntity "&lt;"
+@A HtmlEntity "&gt;"
+@B HtmlEntity "&quot;"
+@C HtmlEntity "&apos;"
+@D HtmlEntity "&nbsp;"
 `);
   });
 
@@ -41,20 +41,20 @@ describe('HTML Entities - Stage 4', () => {
   test('invalid entities fallback to ampersand', () => {
     expect(verifyTokens(`
 &invalid &amp &#; &#x; &#x1G;
-1        2   3  4   5
+1        A   C   F   H
 @1 AmpersandToken "&"
-@2 AmpersandToken "&"
-@3 AmpersandToken "&"
-@4 AmpersandToken "&"
-@5 AmpersandToken "&"
+@A AmpersandToken "&"
+@C AmpersandToken "&"
+@F AmpersandToken "&"
+@H AmpersandToken "&"
 `)).toBe(`
 &invalid &amp &#; &#x; &#x1G;
-1        2   3  4   5
+1        A   C   F   H
 @1 AmpersandToken "&"
-@2 AmpersandToken "&"
-@3 AmpersandToken "&"
-@4 AmpersandToken "&"
-@5 AmpersandToken "&"
+@A AmpersandToken "&"
+@C AmpersandToken "&"
+@F AmpersandToken "&"
+@H AmpersandToken "&"
 `);
   });
 

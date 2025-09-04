@@ -5,78 +5,80 @@ describe('HTML Tags - Stage 4', () => {
   test('basic opening tags', () => {
     expect(verifyTokens(`
 <div>
-1 2 3
+1234
 @1 LessThanToken
 @2 HtmlTagName "div"  
-@3 GreaterThanToken
+@4 GreaterThanToken
 `)).toBe(`
 <div>
-1 2 3
+1234
 @1 LessThanToken
 @2 HtmlTagName "div"  
-@3 GreaterThanToken
+@4 GreaterThanToken
 `);
   });
 
   test('basic closing tags', () => {
     expect(verifyTokens(`
 </span>
-1  2   3
+12    6
 @1 LessThanSlashToken
 @2 HtmlTagName "span"
-@3 GreaterThanToken
+@6 GreaterThanToken
 `)).toBe(`
 </span>
-1  2   3
+12    6
 @1 LessThanSlashToken
 @2 HtmlTagName "span"
-@3 GreaterThanToken
+@6 GreaterThanToken
 `);
   });
 
   test('self-closing tags', () => {
     expect(verifyTokens(`
 <br/>
-1 2 3
+12 4
 @1 LessThanToken
 @2 HtmlTagName "br"
-@3 SlashGreaterThanToken
+@4 SlashGreaterThanToken
 `)).toBe(`
 <br/>
-1 2 3
+12 4
 @1 LessThanToken
 @2 HtmlTagName "br"
-@3 SlashGreaterThanToken
+@4 SlashGreaterThanToken
 `);
   });
 
   test('custom element tags', () => {
     expect(verifyTokens(`
 <x-custom-el>
-1 2 3
+12          A
 @1 LessThanToken
 @2 HtmlTagName "x-custom-el"
-@3 GreaterThanToken
+@A GreaterThanToken
 `)).toBe(`
 <x-custom-el>
-1 2 3
+12          A
 @1 LessThanToken
 @2 HtmlTagName "x-custom-el"
-@3 GreaterThanToken
+@A GreaterThanToken
 `);
   });
 
   test('malformed tags fallback to text', () => {
     expect(verifyTokens(`
 <1bad>
-1 2
+12   6
 @1 LessThanToken
-@2 StringLiteral "1bad>"
+@2 StringLiteral "1bad"
+@6 GreaterThanToken
 `)).toBe(`
 <1bad>
-1 2
+12   6
 @1 LessThanToken
-@2 StringLiteral "1bad>"
+@2 StringLiteral "1bad"
+@6 GreaterThanToken
 `);
   });
 
