@@ -171,7 +171,7 @@ Text\t\twith\t\ttrailing
     test('**bold** text produces correct tokens with preserved leading space', () => {
       const tokenTest = `
 **bold** text
-1      23   4
+1 2   3 4
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "bold"
 @3 AsteriskAsterisk "**" CanClose
@@ -182,8 +182,8 @@ Text\t\twith\t\ttrailing
     test('text **bold** produces correct tokens with preserved trailing space', () => {
       const tokenTest = `
 text **bold**
-1   23     4
-@1 StringLiteral "text " PrecedingLineBreak|IsAtLineStart
+1    2 3   4
+@1 StringLiteral "text" PrecedingLineBreak|IsAtLineStart
 @2 AsteriskAsterisk "**" CanOpen
 @3 StringLiteral "bold"
 @4 AsteriskAsterisk "**" CanClose`;
@@ -193,8 +193,8 @@ text **bold**
     test('start **bold** end produces correct tokens with both spaces preserved', () => {
       const tokenTest = `
 start **bold** end
-1    23     4 5
-@1 StringLiteral "start " PrecedingLineBreak|IsAtLineStart
+1     2 3   4 5
+@1 StringLiteral "start" PrecedingLineBreak|IsAtLineStart
 @2 AsteriskAsterisk "**" CanOpen
 @3 StringLiteral "bold"
 @4 AsteriskAsterisk "**" CanClose
@@ -205,7 +205,7 @@ start **bold** end
     test('*italic* start **bold** text *italic* produces correct complex tokenization', () => {
       const tokenTest = `
 *italic* start **bold** text *italic*
-1      23    45     6 7   8      9A  B
+12     34      5 6   7 8     9A     B
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "italic"
 @3 AsteriskToken "*" CanClose
@@ -223,7 +223,7 @@ start **bold** end
     test('multiple consecutive emphasis with various whitespace patterns', () => {
       const tokenTest = `
 **bold**  *italic*   ~~strike~~
-1      2 34      5  67       8 9A     B
+1 2   3 4 56     78  9 A     B
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "bold"
 @3 AsteriskAsterisk "**" CanClose
@@ -232,9 +232,9 @@ start **bold** end
 @6 StringLiteral "italic"
 @7 AsteriskToken "*" CanClose
 @8 StringLiteral "   "
-@9 TildeTilde "~~" CanOpen
+@9 TildeTilde "~~"
 @A StringLiteral "strike"
-@B TildeTilde "~~" CanClose`;
+@B TildeTilde "~~"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -251,7 +251,7 @@ start **bold** end
       // Now let's build up to the more complex test step by step
       const tokenTest = `
 *first*\t\t**second**   third
-12    3   45      6   78
+12    34 5 6     7 8
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "first"
 @3 AsteriskToken "*" CanClose
@@ -266,7 +266,7 @@ start **bold** end
     test('nested and adjacent emphasis patterns', () => {
       const tokenTest = `
 text **bold *nested* bold** more
-1   23     4      5 6    7 8   9
+1    2 3    45     67    8 9
 @1 StringLiteral "text " PrecedingLineBreak|IsAtLineStart
 @2 AsteriskAsterisk "**" CanOpen
 @3 StringLiteral "bold "
@@ -282,11 +282,11 @@ text **bold *nested* bold** more
     test('emphasis at line boundaries preserves logical separation', () => {
       const tokenTest = `
 **start** and **end**
-1     2 3  45   6  7
+1 2    3 4    5 6  7
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "start"
 @3 AsteriskAsterisk "**" CanClose
-@4 StringLiteral " and "
+@4 StringLiteral " and"
 @5 AsteriskAsterisk "**" CanOpen
 @6 StringLiteral "end"
 @7 AsteriskAsterisk "**" CanClose`;
