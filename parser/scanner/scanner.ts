@@ -354,9 +354,7 @@ export function createScanner(): Scanner {
     }
     
     if (textEnd > start) {
-      const rawText = source.substring(start, textEnd);
-      
-      // Check if we scanned to end of line - if so, apply normalization for compatibility
+      // Check if we scanned to end of line
       const scannedToLineEnd = textEnd >= end || isLineBreak(source.charCodeAt(textEnd));
       
       let flags = TokenFlags.None;
@@ -367,17 +365,21 @@ export function createScanner(): Scanner {
       if (contextFlags & ContextFlags.AtLineStart) {
         flags |= TokenFlags.IsAtLineStart;
         
-        // Add rollback flags for safe restart points when at line start and no special chars encountered
+        // Add rollback flags for safe restart points when at line start and scanning to line end
         if (scannedToLineEnd) {
           flags |= TokenFlags.CanRollbackHere;
         }
       }
       
-      if (scannedToLineEnd) {
-        // Full line processing - normalize whitespace like emitTextContent
+      // Only do normalization for full-line spans when at line start (original emitTextContent behavior)
+      // This preserves zero-allocation scanning for partial text runs and individual tokens
+      if (scannedToLineEnd && (contextFlags & ContextFlags.AtLineStart)) {
+        // Full line processing - extract and normalize for compatibility with original behavior
+        // This matches the original emitTextContent() path for lines without special characters
+        const rawText = source.substring(start, textEnd);
         const normalizedText = normalizeLineWhitespace(rawText);
         
-        // Manually set token fields like emitTextContent does
+        // Manually set token fields like original emitTextContent
         token = SyntaxKind.StringLiteral;
         tokenText = normalizedText;
         tokenFlags = flags;
@@ -394,7 +396,8 @@ export function createScanner(): Scanner {
           contextFlags |= ContextFlags.InParagraph;
         }
       } else {
-        // Partial line processing - keep raw text
+        // Partial line or mid-line processing - use standard token emission
+        // This preserves zero-allocation scanning principles by avoiding unnecessary string operations
         emitToken(SyntaxKind.StringLiteral, start, textEnd, flags);
         updatePosition(textEnd);
       }
