@@ -64,6 +64,20 @@ const enum ContextFlags {
   PrecedingLineBreak = 1 << 2,
 }
 
+/** Cached token text for common fixed tokens to avoid substring allocation. */
+const TokenTextCache = {
+  TILDE_TILDE: '~~',
+  ASTERISK_ASTERISK: '**',
+  UNDERSCORE_UNDERSCORE: '__',
+  SINGLE_ASTERISK: '*',
+  SINGLE_UNDERSCORE: '_',
+  SINGLE_BACKTICK: '`',
+  SPACE: ' ',
+  TAB: '\t',
+  NEWLINE_LF: '\n',
+  NEWLINE_CRLF: '\r\n',
+} as const;
+
 /**
  * Debug state interface for zero-allocation diagnostics
  */
@@ -192,12 +206,92 @@ export function createScanner(): Scanner {
     return true;
   }
   
-  function normalizeLineWhitespace(text: string): string {
-    // Normalize whitespace within a line according to CommonMark:
-    // - Convert tabs to spaces (4-space tabs)
-    // - Collapse multiple consecutive spaces to single space
-    // - Trim only trailing whitespace (preserve leading whitespace for token separation)
-    return text.replace(/\t/g, '    ').replace(/ +/g, ' ').replace(/ +$/, '');
+  /**
+   * Single-pass string processing that returns either a clean substring or normalized string
+   * Optimized for the common case where no normalization is needed
+   */
+  function processStringToken(start: number, endPos: number): string {
+    // Fast path for very short strings
+    const length = endPos - start;
+    if (length <= 2) {
+      return source.substring(start, endPos);
+    }
+    
+    // First pass - check if normalization is needed at all
+    let needsNormalization = false;
+    let hasTrailingSpace = false;
+    
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+      if (ch === CharacterCodes.tab) {
+        needsNormalization = true;
+        break;
+      }
+      if (ch === CharacterCodes.space) {
+        // Check for multiple consecutive spaces
+        if (i + 1 < endPos && source.charCodeAt(i + 1) === CharacterCodes.space) {
+          needsNormalization = true;
+          break;
+        }
+        // Check for trailing space
+        if (i === endPos - 1) {
+          hasTrailingSpace = true;
+        }
+      }
+    }
+    
+    // If no normalization needed and no trailing space, return clean substring
+    if (!needsNormalization && !hasTrailingSpace) {
+      return source.substring(start, endPos);
+    }
+    
+    // If only trailing space needs to be removed, do it efficiently
+    if (!needsNormalization && hasTrailingSpace) {
+      return source.substring(start, endPos - 1);
+    }
+    
+    // Need normalization - build result with array
+    let result: string[] = [];
+    let lastCleanStart = start;
+    let inSpaceRun = false;
+    
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+      
+      if (ch === CharacterCodes.tab || (ch === CharacterCodes.space && inSpaceRun)) {
+        // Need to normalize - flush clean content up to this point
+        if (i > lastCleanStart) {
+          result.push(source.substring(lastCleanStart, i));
+        }
+        
+        // Add single space if not already in a space run
+        if (!inSpaceRun) {
+          result.push(' ');
+          inSpaceRun = true;
+        }
+        
+        // Mark next clean start after this character
+        lastCleanStart = i + 1;
+      } else if (ch === CharacterCodes.space) {
+        // Single space - mark that we're in a space run but don't process yet
+        inSpaceRun = true;
+      } else {
+        // Regular character - if we were in a space run, it's over
+        if (inSpaceRun) {
+          // Include the space(s) in the clean span
+          inSpaceRun = false;
+        }
+      }
+    }
+    
+    // Add any remaining clean content
+    if (lastCleanStart < endPos) {
+      result.push(source.substring(lastCleanStart, endPos));
+    }
+    
+    // Join result and trim trailing spaces
+    let finalResult = result.join('');
+    return finalResult.replace(/\s+$/, '');
   }
   
   /**
@@ -206,7 +300,53 @@ export function createScanner(): Scanner {
   
   function emitToken(kind: SyntaxKind, start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = kind;
-    tokenText = source.substring(start, endPos);
+    
+    // Use cached text for common fixed tokens to avoid substring allocation
+    const length = endPos - start;
+    if (length === 1) {
+      const ch = source.charCodeAt(start);
+      switch (ch) {
+        case CharacterCodes.asterisk:
+          tokenText = TokenTextCache.SINGLE_ASTERISK;
+          break;
+        case CharacterCodes.underscore:
+          tokenText = TokenTextCache.SINGLE_UNDERSCORE;
+          break;
+        case CharacterCodes.backtick:
+          tokenText = TokenTextCache.SINGLE_BACKTICK;
+          break;
+        case CharacterCodes.space:
+          tokenText = TokenTextCache.SPACE;
+          break;
+        case CharacterCodes.tab:
+          tokenText = TokenTextCache.TAB;
+          break;
+        case CharacterCodes.lineFeed:
+          tokenText = TokenTextCache.NEWLINE_LF;
+          break;
+        default:
+          tokenText = source.substring(start, endPos);
+          break;
+      }
+    } else if (length === 2) {
+      // Check for common 2-character tokens
+      if (kind === SyntaxKind.TildeTilde) {
+        tokenText = TokenTextCache.TILDE_TILDE;
+      } else if (kind === SyntaxKind.AsteriskAsterisk) {
+        tokenText = TokenTextCache.ASTERISK_ASTERISK;
+      } else if (kind === SyntaxKind.UnderscoreUnderscore) {
+        tokenText = TokenTextCache.UNDERSCORE_UNDERSCORE;
+      } else if (start + 1 < source.length && 
+                 source.charCodeAt(start) === CharacterCodes.carriageReturn &&
+                 source.charCodeAt(start + 1) === CharacterCodes.lineFeed) {
+        tokenText = TokenTextCache.NEWLINE_CRLF;
+      } else {
+        tokenText = source.substring(start, endPos);
+      }
+    } else {
+      tokenText = source.substring(start, endPos);
+    }
+    
     tokenFlags = flags;
     offsetNext = endPos;
     
@@ -227,9 +367,10 @@ export function createScanner(): Scanner {
 
   function emitStringLiteralToken(start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = SyntaxKind.StringLiteral;
-    // Always normalize text for StringLiteral tokens for consistent behavior
-    const rawText = source.substring(start, endPos);
-    tokenText = normalizeLineWhitespace(rawText);
+    
+    // Single-pass string processing - eliminates double scanning
+    tokenText = processStringToken(start, endPos);
+    
     tokenFlags = flags;
     offsetNext = endPos;
     
