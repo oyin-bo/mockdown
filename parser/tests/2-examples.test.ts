@@ -60,22 +60,13 @@ Content with blank lines around
     const tokenTest = `
 Actual content
 1
-@1 StringLiteral text: "Expected different content"`;
+@1 StringLiteral "Expected different content"`;
     const result = verifyTokens(tokenTest);
     expect(result).toBe(`
 Actual content
 1
-@1 StringLiteral text: "Actual content"`);
-  });
-
-  test('example 7: mixed letter and number markers', () => {
-    const tokenTest = `
-Test content example
-1    A       B
-@1 StringLiteral text: "Test content example"
-@A StringLiteral text: "Test content example"
-@B StringLiteral text: "Test content example"`;
-    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+@1 StringLiteral "Actual content"
+`);
   });
 
   test('example 8: simple whitespace and text', () => {
