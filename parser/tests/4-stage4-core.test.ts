@@ -225,34 +225,34 @@ Some text <em>emphasized</em> more text.
 1
 @1 LessThanToken "<"
   <h1>Title &amp; Subtitle</h1>
-  2           3
-  @2 LessThanToken "<"
-  @3 EntityToken "&"
+  1           2
+  @1 LessThanToken "<"
+  @2 EntityToken "&"
   <p>Some text with <em>emphasis &lt;strong&gt;</em> and more.</p>
-                    4             5        6    7
-  @4 LessThanToken "<"
-  @5 EntityToken "<"
-  @6 EntityToken ">"
-  @7 LessThanSlashToken "</"
+                    1             2        3    4
+  @1 LessThanToken "<"
+  @2 EntityToken "<"
+  @3 EntityToken ">"
+  @4 LessThanSlashToken "</"
   <img src="image.jpg" alt="description" />
-                                         8
-  @8 SlashGreaterThanToken "/>"
+                                         1
+  @1 SlashGreaterThanToken "/>"
   <ul>
-  9
-  @9 LessThanToken "<"
+  1
+  @1 LessThanToken "<"
     <li>Item 1 &gt; special</li>
-    A           B
-    @A LessThanToken "<"
-    @B EntityToken ">"
+    1           2
+    @1 LessThanToken "<"
+    @2 EntityToken ">"
     <li>Item 2</li>
-    C
-    @C LessThanToken "<"
+    1
+    @1 LessThanToken "<"
   </ul>
-  D
-  @D LessThanSlashToken "</"
+  1
+  @1 LessThanSlashToken "</"
 </div>
-E
-@E LessThanSlashToken "</"`;
+1
+@1 LessThanSlashToken "</"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
