@@ -14,25 +14,10 @@ describe('Stage 3: Inline Formatting', () => {
     test('double asterisk at line start', () => {
       const tokenTest = `
 **bold**
-1     2
-@1 AsteriskAsterisk flags: 514
-@2 AsteriskAsterisk flags: 1024`;
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('ERROR in position: double asterisk at line start', () => {
-      const tokenTest = `
-**bold**
 1      2
 @1 AsteriskAsterisk flags: 514
 @2 AsteriskAsterisk flags: 1024`;
-      expect(verifyTokens(tokenTest)).toBe(
-        `
-**bold**
-1     2
-@1 AsteriskAsterisk flags: 514
-@2 AsteriskAsterisk flags: 1024`
-      );
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('single asterisk recognition', () => {

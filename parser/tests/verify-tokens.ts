@@ -5,8 +5,8 @@
  * This allows writing tests with position markers and token expectations.
  */
 
-import { createScanner } from '../scanner.js';
-import { SyntaxKind, TokenFlags } from '../scanner-token-types.js';
+import { createScanner } from '../scanner/scanner.js';
+import { SyntaxKind, TokenFlags } from '../scanner/token-types.js';
 
 /**
  * Position marker in annotated test format
