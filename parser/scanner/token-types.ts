@@ -45,6 +45,7 @@ export const enum SyntaxKind {
   HtmlComment,              // <!-- ... --> (full span)
   HtmlCdata,                // <![CDATA[ ... ]]> (full span)
   HtmlProcessingInstruction,// <? ... ?> (full span)
+  HtmlDoctype,              // <!DOCTYPE html> (full span)
   HtmlRawText,              // Content inside <script>/<style> (no entity scanning)
   HtmlRCDataText,           // Content inside <textarea>/<title> (entity scanning active)
   
@@ -80,6 +81,9 @@ export const enum TokenFlags {
   // Stage 3: Emphasis delimiter flags
   CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
   CanClose = 1 << 10,            // Delimiter can close emphasis/strong
+  
+  // Stage 4: HTML construct flags
+  Unterminated = 1 << 11,        // Token was not properly terminated (missing closing delimiter)
 }
 
 /**

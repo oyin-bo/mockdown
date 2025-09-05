@@ -535,6 +535,12 @@ export function createScanner(): Scanner {
       return;
     }
 
+    // Detect DOCTYPE <!DOCTYPE (case insensitive)
+    if (c1 === CharacterCodes.exclamation && matchSequenceCaseInsensitive(start, '<!DOCTYPE')) {
+      scanHtmlDoctype(start);
+      return;
+    }
+
     // Detect processing instruction <? ... ?>
     if (c1 === CharacterCodes.question) {
       scanHtmlProcessingInstruction(start);
@@ -694,7 +700,7 @@ export function createScanner(): Scanner {
     }
 
     // Unterminated comment
-    emitToken(SyntaxKind.HtmlComment, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+    emitToken(SyntaxKind.HtmlComment, start, end, TokenFlags.Unterminated);
   }
 
   function scanHtmlCdata(start: number): void {
@@ -713,7 +719,7 @@ export function createScanner(): Scanner {
     }
 
     // Unterminated CDATA
-    emitToken(SyntaxKind.HtmlCdata, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+    emitToken(SyntaxKind.HtmlCdata, start, end, TokenFlags.Unterminated);
   }
 
   function scanHtmlProcessingInstruction(start: number): void {
@@ -731,7 +737,51 @@ export function createScanner(): Scanner {
     }
 
     // Unterminated PI
-    emitToken(SyntaxKind.HtmlProcessingInstruction, start, end, TokenFlags.None); // TODO: Add Unterminated flag
+    emitToken(SyntaxKind.HtmlProcessingInstruction, start, end, TokenFlags.Unterminated);
+  }
+
+  function scanHtmlDoctype(start: number): void {
+    // Scan DOCTYPE: <!DOCTYPE ... >
+    let doctypePos = start + 9; // Skip <!DOCTYPE
+    let inQuote: string | null = null;
+
+    while (doctypePos < end) {
+      const ch = source.charCodeAt(doctypePos);
+      
+      if (inQuote) {
+        // Inside quoted string - only exit on matching quote
+        if ((inQuote === '"' && ch === CharacterCodes.doubleQuote) ||
+            (inQuote === "'" && ch === CharacterCodes.singleQuote)) {
+          inQuote = null;
+        }
+        doctypePos++;
+        continue;
+      }
+      
+      // Not in quote - check for quote start or end
+      if (ch === CharacterCodes.doubleQuote) {
+        inQuote = '"';
+        doctypePos++;
+        continue;
+      }
+      
+      if (ch === CharacterCodes.singleQuote) {
+        inQuote = "'";
+        doctypePos++;
+        continue;
+      }
+      
+      if (ch === CharacterCodes.greaterThan) {
+        // Found closing > outside quotes
+        emitToken(SyntaxKind.HtmlDoctype, start, doctypePos + 1);
+        return;
+      }
+      
+      doctypePos++;
+    }
+
+    // EOF reached without closing '>'
+    emitToken(SyntaxKind.HtmlDoctype, start, end, TokenFlags.Unterminated);
   }
 
   // Helper functions
@@ -739,6 +789,23 @@ export function createScanner(): Scanner {
     if (pos + sequence.length > end) return false;
     for (let i = 0; i < sequence.length; i++) {
       if (source.charCodeAt(pos + i) !== sequence.charCodeAt(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function matchSequenceCaseInsensitive(pos: number, sequence: string): boolean {
+    if (pos + sequence.length > end) return false;
+    for (let i = 0; i < sequence.length; i++) {
+      const sourceChar = source.charCodeAt(pos + i);
+      const expectedChar = sequence.charCodeAt(i);
+      
+      // ASCII case-insensitive comparison
+      const sourceLower = (sourceChar >= 65 && sourceChar <= 90) ? sourceChar + 32 : sourceChar;
+      const expectedLower = (expectedChar >= 65 && expectedChar <= 90) ? expectedChar + 32 : expectedChar;
+      
+      if (sourceLower !== expectedLower) {
         return false;
       }
     }
