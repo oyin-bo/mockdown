@@ -54,6 +54,21 @@ function generateTestDatasets(): Record<string, Dataset> {
       size: '500KB',
       content: generateTextHeavyDoc(500),
       characteristics: ['long-paragraphs', 'minimal-formatting']
+    },
+    'pathological': {
+      size: '100KB',
+      content: generatePathologicalDoc(100),
+      characteristics: ['edge-cases', 'stress-testing', 'complex-nesting']
+    },
+    'super-heavy': {
+      size: '15MB',
+      content: generateSuperHeavyDoc(15 * 1024),
+      characteristics: ['massive-document', 'realistic-content', 'performance-test']
+    },
+    'docs-collection': {
+      size: 'Variable',
+      content: generateDocsCollectionDoc(),
+      characteristics: ['real-documents', 'mixed-content', 'actual-usage']
     }
   };
 }
@@ -110,6 +125,246 @@ function generateTextHeavyDoc(sizeKB: number): string {
   }
   
   return content.substring(0, targetBytes);
+}
+
+function generatePathologicalDoc(sizeKB: number): string {
+  const pathologicalPatterns = [
+    // Deeply nested emphasis
+    '***This is ****very**** deeply nested emphasis*** with more text.\n\n',
+    // Complex link structures
+    '[Link with [nested [deeply [nested] link] structure] here](https://example.com)\n\n',
+    // Mixed list structures
+    '1. Ordered item\n   - Nested unordered\n     1. Nested ordered\n       - More nesting\n         * Even more\n\n',
+    // Edge case markdown
+    '**Bold _italic **bold** italic_ bold**\n\n',
+    '`Code with **bold** inside` and **bold with `code` inside**\n\n',
+    // Table with complex content
+    '| **Bold** | *Italic* | `Code` | [Link](url) |\n|----------|----------|--------|-------------|\n| **B** | *I* | `C` | [L](u) |\n\n',
+    // Complex blockquotes
+    '> This is a quote\n> > With nested quote\n> > > And deeper nesting\n> Back to level 1\n\n',
+    // Problematic characters and escapes
+    'Text with \\*escaped\\* chars and \\[brackets\\] and \\`backticks\\`.\n\n',
+    // HTML mixed with markdown
+    '<div>HTML with **markdown** inside</div>\n\n**Markdown with <em>HTML</em> inside**\n\n',
+    // Edge case headers
+    '### Header with *italic* and **bold** and `code`\n\n'
+  ];
+  
+  let content = '# Pathological Test Document\n\nThis document tests edge cases and stress scenarios.\n\n';
+  const targetBytes = sizeKB * 1024;
+  
+  while (content.length < targetBytes) {
+    content += pathologicalPatterns[content.length % pathologicalPatterns.length];
+  }
+  
+  return content.substring(0, targetBytes);
+}
+
+function generateSuperHeavyDoc(sizeKB: number): string {
+  // Use a simple Linear Congruential Generator for reproducible pseudo-random content
+  class SimpleRandom {
+    private seed: number;
+    
+    constructor(seed: number = 12345) {
+      this.seed = seed;
+    }
+    
+    next(): number {
+      this.seed = (this.seed * 1664525 + 1013904223) % 4294967296;
+      return this.seed / 4294967296;
+    }
+    
+    choice<T>(array: T[]): T {
+      return array[Math.floor(this.next() * array.length)];
+    }
+    
+    int(min: number, max: number): number {
+      return Math.floor(this.next() * (max - min + 1)) + min;
+    }
+  }
+  
+  const rng = new SimpleRandom(42); // Fixed seed for reproducibility
+  
+  const headingWords = ['Introduction', 'Overview', 'Analysis', 'Implementation', 'Results', 'Discussion', 'Conclusion', 'Background', 'Methodology', 'Findings', 'Summary', 'Details', 'Process', 'Framework', 'Architecture', 'Design', 'Performance', 'Optimization', 'Strategy', 'Approach'];
+  
+  const topics = ['system', 'data', 'algorithm', 'network', 'security', 'performance', 'scalability', 'architecture', 'design', 'implementation', 'analysis', 'research', 'development', 'testing', 'optimization', 'framework', 'methodology', 'strategy', 'solution', 'technology'];
+  
+  const adjectives = ['advanced', 'comprehensive', 'detailed', 'efficient', 'robust', 'scalable', 'innovative', 'complex', 'sophisticated', 'reliable', 'flexible', 'powerful', 'modern', 'integrated', 'optimized', 'enhanced', 'streamlined', 'effective', 'practical', 'strategic'];
+  
+  const sentences = [
+    'This approach provides significant improvements in overall system performance and reliability.',
+    'The implementation demonstrates excellent scalability characteristics under various load conditions.',
+    'Our analysis reveals important insights into the underlying mechanisms and their interactions.',
+    'The proposed methodology offers a comprehensive framework for addressing complex challenges.',
+    'Experimental results validate the effectiveness of the developed solution across multiple scenarios.',
+    'The architecture supports flexible configuration and extensible functionality for future enhancements.',
+    'Performance metrics indicate substantial gains in throughput and response time optimization.',
+    'The framework enables seamless integration with existing systems and legacy infrastructure.',
+    'Detailed analysis shows consistent behavior patterns across diverse operational environments.',
+    'The solution addresses critical requirements while maintaining backward compatibility and stability.'
+  ];
+  
+  let content = '# Super Heavy Performance Test Document\n\n';
+  content += 'This document contains a large amount of realistic markdown content for performance testing.\n\n';
+  content += '**Document Size:** Approximately 15MB of varied markdown content\n\n';
+  content += '**Purpose:** Stress testing parser performance with realistic document structures\n\n';
+  content += '---\n\n';
+  
+  const targetBytes = sizeKB * 1024;
+  
+  while (content.length < targetBytes) {
+    // Generate a section
+    const headingLevel = rng.int(1, 3);
+    const heading = rng.choice(headingWords);
+    const topic = rng.choice(topics);
+    const adjective = rng.choice(adjectives);
+    
+    content += '#'.repeat(headingLevel) + ` ${heading}: ${adjective} ${topic}\n\n`;
+    
+    // Add some paragraphs
+    const paragraphCount = rng.int(2, 5);
+    for (let p = 0; p < paragraphCount; p++) {
+      const sentenceCount = rng.int(3, 7);
+      let paragraph = '';
+      
+      for (let s = 0; s < sentenceCount; s++) {
+        let sentence = rng.choice(sentences);
+        
+        // Add some formatting randomly
+        if (rng.next() < 0.3) {
+          const words = sentence.split(' ');
+          const wordIndex = rng.int(0, words.length - 1);
+          const formatType = rng.int(1, 3);
+          
+          if (formatType === 1) {
+            words[wordIndex] = `**${words[wordIndex]}**`;
+          } else if (formatType === 2) {
+            words[wordIndex] = `*${words[wordIndex]}*`;
+          } else {
+            words[wordIndex] = `\`${words[wordIndex]}\``;
+          }
+          
+          sentence = words.join(' ');
+        }
+        
+        paragraph += sentence + ' ';
+      }
+      
+      content += paragraph.trim() + '\n\n';
+    }
+    
+    // Add some structured content occasionally
+    if (rng.next() < 0.2) {
+      // Add a list
+      const listType = rng.next() < 0.5 ? '-' : '1.';
+      const itemCount = rng.int(3, 8);
+      
+      content += 'Key points:\n\n';
+      for (let i = 0; i < itemCount; i++) {
+        const item = rng.choice(sentences);
+        const listMarker = listType === '-' ? '-' : `${i + 1}.`;
+        content += `${listMarker} ${item}\n`;
+      }
+      content += '\n';
+    }
+    
+    if (rng.next() < 0.15) {
+      // Add a code block
+      content += 'Example implementation:\n\n';
+      content += '```javascript\n';
+      content += `function ${rng.choice(topics)}${rng.choice(['Process', 'Handler', 'Manager', 'Controller'])}() {\n`;
+      content += '  // Implementation details\n';
+      content += `  const ${rng.choice(['config', 'options', 'settings'])} = {\n`;
+      content += `    ${rng.choice(['enabled', 'active', 'ready'])}: true,\n`;
+      content += `    ${rng.choice(['timeout', 'delay', 'interval'])}: ${rng.int(100, 5000)},\n`;
+      content += `    ${rng.choice(['mode', 'type', 'strategy'])}: '${rng.choice(['auto', 'manual', 'hybrid'])}'\n`;
+      content += '  };\n';
+      content += '  return processData(config);\n';
+      content += '}\n';
+      content += '```\n\n';
+    }
+    
+    if (rng.next() < 0.1) {
+      // Add a table
+      content += 'Performance comparison:\n\n';
+      content += '| Metric | Before | After | Improvement |\n';
+      content += '|--------|---------|-------|-------------|\n';
+      
+      const metrics = ['Throughput', 'Latency', 'Memory Usage', 'CPU Usage', 'Response Time'];
+      for (let i = 0; i < rng.int(3, 5); i++) {
+        const metric = rng.choice(metrics);
+        const before = rng.int(10, 100);
+        const after = rng.int(5, before);
+        const improvement = Math.round(((before - after) / before) * 100);
+        content += `| ${metric} | ${before} | ${after} | ${improvement}% |\n`;
+      }
+      content += '\n';
+    }
+    
+    if (rng.next() < 0.1) {
+      // Add a blockquote
+      content += '> ' + rng.choice(sentences) + '\n';
+      content += '> \n';
+      content += '> ' + rng.choice(sentences) + '\n\n';
+    }
+    
+    // Add some spacing
+    if (rng.next() < 0.3) {
+      content += '---\n\n';
+    }
+  }
+  
+  return content.substring(0, targetBytes);
+}
+
+function generateDocsCollectionDoc(): string {
+  let content = '# Mixpad Documentation Collection\n\n';
+  content += 'This dataset combines all documentation files from the repository for realistic testing.\n\n';
+  content += '---\n\n';
+  
+  // List of all documentation files in the repository
+  const docPaths = [
+    '../../README.md',
+    '../../AGENTS.md',
+    '../docs/1-scanner-interface.md',
+    '../docs/2-parser-scanner-shift.md',
+    '../docs/3-parser-scanner-shift-plan.md',
+    '../docs/4-scanner-1-basic.md',
+    '../docs/5-scanner-2-verify-tokens.md',
+    '../docs/6-scanner-leaner.md',
+    '../docs/7-benchmarking.md',
+    '../docs/8-html-entities.md',
+    '../prev/docs/0-prior-art.md',
+    '../prev/docs/1-plan.md',
+    '../prev/docs/2-scanner.md',
+    '../prev/docs/3-scanner-followup.md',
+    '../prev/docs/4-scanner-followup-strictness-and-breadth.md',
+    '../prev/docs/5-scanner-followup-markdown-in-html.md',
+    '../prev/docs/6-scanner-followup-post-mdhtml-shift.md',
+    '../prev/docs/7-parser.md',
+    '../prev/docs/8-parser-1-core.md',
+    '../prev/docs/9-parser-2-engine.md',
+    '../prev/docs/10-side-quest-identifier-tokens.md'
+  ];
+  
+  for (const docPath of docPaths) {
+    try {
+      if (fs.existsSync(docPath)) {
+        const docContent = fs.readFileSync(docPath, 'utf-8');
+        const fileName = docPath.split('/').pop() || 'unknown';
+        
+        content += `## ${fileName}\n\n`;
+        content += `*Source: ${docPath}*\n\n`;
+        content += docContent;
+        content += '\n\n---\n\n';
+      }
+    } catch (error) {
+      // Skip files that can't be read
+      console.log(`Warning: Could not read ${docPath}`);
+    }
+  }
+  
+  return content;
 }
 
 /**
@@ -231,6 +486,18 @@ function createParserAdapters(): ParserAdapter[] {
           name: 'micromark',
           version: 'unknown',
           parse: (content: string) => micromark(content)
+        };
+      }
+    },
+    {
+      name: 'remark',
+      load: () => {
+        const { remark } = require('remark');
+        const processor = remark();
+        return {
+          name: 'remark',
+          version: 'unknown',
+          parse: (content: string) => processor.parse(content)
         };
       }
     },

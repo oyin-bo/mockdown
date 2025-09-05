@@ -190,37 +190,71 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 <!-- BENCHMARK_RESULTS_START -->
 **Generated:** 2025-09-05 (JavaScript Implementation)  
 **System:** win32 x64, Node v22.17.1  
-**Parsers:** mixpad, marked, markdown-it, micromark, commonmark  
+**Parsers:** mixpad, marked, markdown-it, micromark, commonmark, remark  
 
 ### small-simple
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 1.51 | 0.6 | 0 | 205 |
-| marked | 3.96 | 0.2 | 28 | N/A |
-| commonmark | 4.18 | 0.2 | 59 | N/A |
-| markdown-it | 4.89 | 0.2 | 96 | N/A |
-| micromark | 15.43 | 0.1 | 28 | N/A |
+| mixpad | 1.65 | 0.6 | 0 | 146 |
+| commonmark | 4.05 | 0.2 | 59 | N/A |
+| marked | 4.38 | 0.2 | 28 | N/A |
+| markdown-it | 5.45 | 0.2 | 96 | N/A |
+| remark | 15.14 | 0.1 | 39 | N/A |
+| micromark | 16.28 | 0.1 | 28 | N/A |
 
 ### medium-mixed
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 10.16 | 4.8 | 1 | 10240 |
-| commonmark | 15.14 | 3.2 | 1601 | N/A |
-| marked | 30.52 | 1.6 | 444 | N/A |
-| markdown-it | 31.04 | 1.6 | 1975 | N/A |
-| micromark | 166.37 | 0.3 | 131 | N/A |
+| mixpad | 16.02 | 3.0 | 9 | 7558 |
+| commonmark | 16.93 | 2.9 | 1593 | N/A |
+| markdown-it | 29.19 | 1.7 | 1968 | N/A |
+| marked | 31.29 | 1.6 | 433 | N/A |
+| remark | 186.74 | 0.3 | 1413 | N/A |
+| micromark | 187.16 | 0.3 | 98 | N/A |
 
 ### large-text-heavy
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 4.73 | 103.1 | 1326 | N/A |
-| marked | 23.91 | 20.4 | 107 | N/A |
-| mixpad | 24.86 | 19.6 | 0 | 102400 |
-| markdown-it | 26.34 | 18.5 | 1496 | N/A |
-| micromark | 155.87 | 3.1 | 664 | N/A |
+| commonmark | 8.24 | 59.2 | 1323 | N/A |
+| mixpad | 22.82 | 21.4 | 43 | 3439 |
+| marked | 26.06 | 18.7 | 43 | N/A |
+| markdown-it | 26.84 | 18.2 | 1492 | N/A |
+| remark | 158.89 | 3.1 | 766 | N/A |
+| micromark | 164.08 | 3.0 | 624 | N/A |
+
+### pathological
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| mixpad | 23.25 | 4.2 | 2 | 16264 |
+| commonmark | 23.66 | 4.1 | 6557 | N/A |
+| marked | 82.52 | 1.2 | 1302 | N/A |
+| micromark | 413.71 | 0.2 | 148 | N/A |
+| remark | 457.96 | 0.2 | 5070 | N/A |
+
+### super-heavy
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| commonmark | 184.76 | 81.2 | 89980 | N/A |
+| mixpad | 466.55 | 32.2 | 0 | 370439 |
+| markdown-it | 601.03 | 25.0 | 100979 | N/A |
+| marked | 995.09 | 15.1 | 17598 | N/A |
+| micromark | 6067.82 | 2.5 | 16180 | N/A |
+| remark | 8918.06 | 1.7 | 69947 | N/A |
+
+### docs-collection
+
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| commonmark | 37.73 | 11.1 | 6562 | N/A |
+| mixpad | 79.77 | 5.3 | 2 | 35199 |
+| marked | 149.63 | 2.8 | 1813 | N/A |
+| remark | 545.71 | 0.8 | 5624 | N/A |
+| micromark | 728.17 | 0.6 | 1057 | N/A |
 
 
 <!-- BENCHMARK_RESULTS_END -->
