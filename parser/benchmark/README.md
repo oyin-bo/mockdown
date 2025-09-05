@@ -188,39 +188,39 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 ## Latest Benchmark Results
 
 <!-- BENCHMARK_RESULTS_START -->
-**Generated:** 2025-09-05 (TypeScript Implementation)  
-**System:** linux x64, Node v20.19.4  
+**Generated:** 2025-09-05 (JavaScript Implementation)  
+**System:** win32 x64, Node v22.17.1  
 **Parsers:** mixpad, marked, markdown-it, micromark, commonmark  
 
 ### small-simple
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 0.47 | 2.1 | 0 | 146 |
-| commonmark | 0.95 | 1.0 | 91 | N/A |
-| markdown-it | 1.23 | 0.8 | 110 | N/A |
-| marked | 1.32 | 0.7 | 40 | N/A |
-| micromark | 10.13 | 0.1 | 8 | N/A |
+| mixpad | 1.51 | 0.6 | 0 | 205 |
+| marked | 3.96 | 0.2 | 28 | N/A |
+| commonmark | 4.18 | 0.2 | 59 | N/A |
+| markdown-it | 4.89 | 0.2 | 96 | N/A |
+| micromark | 15.43 | 0.1 | 28 | N/A |
 
 ### medium-mixed
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 7.59 | 6.4 | 797 | N/A |
-| marked | 9.10 | 5.4 | 108 | N/A |
-| mixpad | 12.59 | 3.9 | 44 | 6365 |
-| markdown-it | 16.04 | 3.0 | 1732 | N/A |
-| micromark | 121.91 | 0.4 | 50 | N/A |
+| mixpad | 10.16 | 4.8 | 1 | 10240 |
+| commonmark | 15.14 | 3.2 | 1601 | N/A |
+| marked | 30.52 | 1.6 | 444 | N/A |
+| markdown-it | 31.04 | 1.6 | 1975 | N/A |
+| micromark | 166.37 | 0.3 | 131 | N/A |
 
 ### large-text-heavy
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 4.17 | 117.1 | 1326 | N/A |
-| marked | 17.04 | 28.6 | 153 | N/A |
-| mixpad | 20.04 | 24.4 | 30 | 3439 |
-| markdown-it | 20.38 | 24.0 | 1446 | N/A |
-| micromark | 130.64 | 3.7 | 823 | N/A |
+| commonmark | 4.73 | 103.1 | 1326 | N/A |
+| marked | 23.91 | 20.4 | 107 | N/A |
+| mixpad | 24.86 | 19.6 | 0 | 102400 |
+| markdown-it | 26.34 | 18.5 | 1496 | N/A |
+| micromark | 155.87 | 3.1 | 664 | N/A |
 
 
 <!-- BENCHMARK_RESULTS_END -->
