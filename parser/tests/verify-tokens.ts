@@ -209,7 +209,11 @@ function parseAssertLine(assertLine: string) {
           break;
         }
 
-        if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
+  // If this quote is not escaped (previous char is not a backslash), we've found the end.
+  if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
+  // Otherwise the quote is escaped (e.g. \"), so advance past it to continue the search
+  // to avoid getting stuck at the same index and causing an infinite loop.
+  endQuote++;
       }
 
       if (endQuote < 0)

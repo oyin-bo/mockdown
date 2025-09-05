@@ -73,4 +73,14 @@ describe('XML-like Constructs - Stage 4', () => {
 1
 @1 HtmlCdata "<![CDATA[if (x < 5) return;]]>"`);
   });
+
+  test('assertion line with escaped quotes does not hang', () => {
+    // This reproduces the original failing pattern where an assertion contains escaped quotes
+    // inside a JSON string, e.g. \"<test>\". The verifier must parse the assertion and
+    // not enter an infinite loop.
+    const input = `<![CDATA[ var x = \"<test>\"; ]]>
+1
+@1 HtmlCdata "<![CDATA[ var x = \\\"<test>\\\"; ]]>"`;
+    expect(verifyTokens(input)).toBe(input);
+  });
 });
