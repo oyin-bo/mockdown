@@ -4,7 +4,7 @@ import { SyntaxKind, TokenFlags } from '../scanner/token-types';
 export function verifyTokens(input: string): string {
   let markdownOnly = '';
   const assertionList = [];
-  for (const { assertions, chunk, originalMarkers, canonicalMarkers, isStrict } of findAssertions(input)) {
+  for (const { assertions, chunk } of findAssertions(input)) {
     markdownOnly += chunk;
     if (assertions.length > 0) {
       const assertLineEnd = markdownOnly.length - 1;
@@ -13,20 +13,14 @@ export function verifyTokens(input: string): string {
         assertions,
         chunk,
         lineStart: assertLineStart,
-        lineEnd: assertLineEnd,
-        originalMarkers,
-        canonicalMarkers,
-        isStrict
+        lineEnd: assertLineEnd
       });
     } else {
       assertionList.push({
         assertions,
         chunk,
         lineStart: -1,
-        lineEnd: -1,
-        originalMarkers: undefined,
-        canonicalMarkers: undefined,
-        isStrict: false
+        lineEnd: -1
       });
     }
   }
@@ -53,159 +47,59 @@ export function verifyTokens(input: string): string {
   }
 
   let output = '';
-  for (const { assertions, chunk, lineStart, lineEnd, originalMarkers, canonicalMarkers, isStrict } of assertionList) {
+  for (const { assertions, chunk, lineStart, lineEnd } of assertionList) {
 
     output += chunk;
-    
-    // Skip if no assertions
-    if (assertions.length === 0) {
-      continue;
-    }
-    
     const lineTokens = tokens.filter(tk => tk.start >= lineStart && tk.end <= lineEnd);
 
-    if (isStrict && canonicalMarkers) {
-      // Use strict mode with normalization
-      let positionLine = '';
-      let assertionLines = [];
-      
-      // Track which markers have successful assertions
-      const hasValidAssertion = new Array(assertions.length).fill(false);
-      
-      for (let i = 0; i < assertions.length; i++) {
-        const assertion = assertions[i];
+    let positionLine = '';
+    let assertionLines = [];
+    for (let i = 0; i < assertions.length; i++) {
+      const assertion = assertions[i];
 
-        const token = lineTokens.find(tk =>
-          tk.start <= lineStart + assertion.lineOffset &&
-          tk.end >= lineStart + assertion.lineOffset + 1
+      const token = lineTokens.find(tk =>
+        tk.start <= lineStart + assertion.lineOffset &&
+        tk.end >= lineStart + assertion.lineOffset + 1
+      );
+      if (!token) continue;
+
+      const positionMarker = (i + 1) < 10 ? String(i + 1) :
+        String.fromCharCode('A'.charCodeAt(0) + i - 10);
+
+      const positionMarkerOffset = token.start - lineStart;
+      if (positionLine.length > positionMarkerOffset) continue;
+      while (positionLine.length < positionMarkerOffset)
+        positionLine += ' ';
+      positionLine += positionMarker;
+
+      const tokenMatch = assertion.token < 0 || assertion.token === token.token;
+      const textMatch = assertion.text == null || assertion.text === token.text;
+      const flagsMatch = assertion.flags < 0 || (assertion.flags & token.flags) === assertion.flags;
+
+      if (tokenMatch && textMatch && flagsMatch && assertion.assertionText) {
+        assertionLines.push(assertion.assertionText);
+      } else {
+        assertionLines.push(
+          '@' + positionMarker +
+          (
+            assertion.token < 0 ? '' :
+              ' ' + syntaxKindToString(token.token)
+          ) +
+          (
+            assertion.text == null ? '' :
+              ' ' + JSON.stringify(token.text)
+          ) +
+          (
+            assertion.flags < 0 ? '' :
+              ' ' + tokenFlagsToString(token.flags)
+          )
         );
-        if (!token) continue;
-
-        const positionMarker = canonicalMarkers[i];
-
-        const positionMarkerOffset = token.start - lineStart;
-        // Extend position line to include this marker
-        while (positionLine.length < positionMarkerOffset)
-          positionLine += ' ';
-        if (positionLine.length === positionMarkerOffset) {
-          positionLine += positionMarker;
-        }
-
-        const tokenMatch = assertion.token < 0 || assertion.token === token.token;
-        const textMatch = assertion.text == null || assertion.text === token.text;
-        const flagsMatch = assertion.flags < 0 || (assertion.flags & token.flags) === assertion.flags;
-
-        if (tokenMatch && textMatch && flagsMatch && assertion.assertionText) {
-          // Convert original assertion to use canonical markers
-          const canonicalAssertion = assertion.assertionText.replace(
-            /^(\s*)@([1-9A-Za-z])/,
-            (match, whitespace, originalMarker) => `@${positionMarker}`
-          );
-          assertionLines.push(canonicalAssertion);
-          hasValidAssertion[i] = true;
-        } else {
-          // Generate corrected assertion
-          assertionLines.push(
-            '@' + positionMarker +
-            (
-              assertion.token < 0 ? '' :
-                ' ' + syntaxKindToString(token.token)
-            ) +
-            (
-              assertion.text == null ? '' :
-                ' ' + JSON.stringify(token.text)
-            ) +
-            (
-              assertion.flags < 0 ? '' :
-                ' ' + tokenFlagsToString(token.flags)
-            )
-          );
-          hasValidAssertion[i] = true;
-        }
       }
-      
-      // Generate synthetic token-only assertions for markers with no parsed assertions
-      for (let i = 0; i < assertions.length; i++) {
-        if (!hasValidAssertion[i]) {
-          const assertion = assertions[i];
-          // Find token at this position
-          const token = lineTokens.find(tk =>
-            tk.start <= lineStart + assertion.lineOffset &&
-            tk.end >= lineStart + assertion.lineOffset + 1
-          );
-          
-          if (token) {
-            const positionMarker = canonicalMarkers[i];
-            const positionMarkerOffset = token.start - lineStart;
-            
-            // Extend position line if needed
-            while (positionLine.length < positionMarkerOffset)
-              positionLine += ' ';
-            if (positionLine.length === positionMarkerOffset) {
-              positionLine += positionMarker;
-            }
-            
-            // Add synthetic token-only assertion
-            assertionLines.push('@' + positionMarker + ' ' + syntaxKindToString(token.token));
-          }
-        }
-      }
-
-      output +=
-        positionLine + '\n' +
-        assertionLines.map(ln => ln + '\n').join('');
-    } else {
-      // Use old mode (preserve existing behavior)
-      let positionLine = '';
-      let assertionLines = [];
-      for (let i = 0; i < assertions.length; i++) {
-        const assertion = assertions[i];
-
-        const token = lineTokens.find(tk =>
-          tk.start <= lineStart + assertion.lineOffset &&
-          tk.end >= lineStart + assertion.lineOffset + 1
-        );
-        if (!token) continue;
-
-        const positionMarker = originalMarkers ? originalMarkers[i] :
-          (i + 1) < 10 ? String(i + 1) :
-            String.fromCharCode('A'.charCodeAt(0) + i - 9);
-
-        const positionMarkerOffset = token.start - lineStart;
-        if (positionLine.length > positionMarkerOffset) continue;
-        while (positionLine.length < positionMarkerOffset)
-          positionLine += ' ';
-        positionLine += positionMarker;
-
-        const tokenMatch = assertion.token < 0 || assertion.token === token.token;
-        const textMatch = assertion.text == null || assertion.text === token.text;
-        const flagsMatch = assertion.flags < 0 || (assertion.flags & token.flags) === assertion.flags;
-
-        if (tokenMatch && textMatch && flagsMatch && assertion.assertionText) {
-          assertionLines.push(assertion.assertionText);
-        } else {
-          assertionLines.push(
-            '@' + positionMarker +
-            (
-              assertion.token < 0 ? '' :
-                ' ' + syntaxKindToString(token.token)
-            ) +
-            (
-              assertion.text == null ? '' :
-                ' ' + JSON.stringify(token.text)
-            ) +
-            (
-              assertion.flags < 0 ? '' :
-                ' ' + tokenFlagsToString(token.flags)
-            )
-          );
-        }
-      }
-
-      output +=
-        positionLine + '\n' +
-        assertionLines.map(ln => ln + '\n').join('');
     }
+
+    output +=
+      positionLine + '\n' +
+      assertionLines.map(ln => ln + '\n').join('');
   }
 
   if (input.trimEnd() === output.trimEnd())
@@ -218,80 +112,78 @@ function* findAssertions(input: string) {
   let lastPos = 0;
   let pos = 0;
   while (pos < input.length) {
-    // Find potential marker line starting with whitespace + '1'
-    const newLine1Regex = /(^|\n)(\s*)1/g;
+    const newLine1Regex = /(^|\n)\s*1/g;
     newLine1Regex.lastIndex = pos;
-    const match = newLine1Regex.exec(input);
-    if (!match) {
+    let positionLineStart = newLine1Regex.exec(input)?.index;
+    if (typeof positionLineStart !== 'number' || positionLineStart < 0) {
       break;
     }
-    
-    let positionLineStart = match.index + (match[1] === '\n' ? 1 : 0);
-    let positionLineEnd = input.indexOf('\n', positionLineStart);
+    positionLineStart++;
+
+    const positionLineEnd = input.indexOf('\n', positionLineStart + 1);
     if (positionLineEnd < 0) {
-      positionLineEnd = input.length;
+      pos = input.length;
     }
 
     const positionLine = input.substring(positionLineStart, positionLineEnd);
-    
-    // Try strict marker detection first
-    const strictDetection = detectStrictMarkers(positionLine);
-    
-    if (strictDetection.valid) {
-      // Check if next line starts with '@' (immediate assertion requirement for strict mode)
-      if (positionLineEnd < input.length) {
-        const nextLineStart = positionLineEnd + 1;
-        const nextLineMatch = input.substring(nextLineStart).match(/^(\s*)@/);
-        if (nextLineMatch) {
-          // Use strict mode
-          const { markers, offsets } = strictDetection;
-          const assertions = collectAssertions(input, nextLineStart, markers, offsets);
-          
-          const chunk = input.slice(lastPos, positionLineStart);
-          pos = lastPos = assertions.nextPosition;
 
-          // Only normalize if the original format is different from canonical
-          const canonicalMarkers = generateCanonicalMarkers(markers.length);
-          const needsNormalization = needsNormalizationCheck(markers, canonicalMarkers, positionLine);
+    let positionMarkerChars = positionLine.trim().split(/\s+/g);
+    const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
+      i < 10 ? mrk === String(i + 1) :
+        mrk.toUpperCase() === String.fromCharCode('A'.charCodeAt(0) + i - 10));
 
-          yield { 
-            assertions: assertions.markerAssertions,
-            chunk,
-            originalMarkers: markers,
-            canonicalMarkers: needsNormalization ? canonicalMarkers : undefined,
-            isStrict: true
-          };
-          continue;
-        }
+    if (!positionMarkersCorrect) {
+      pos = positionLineEnd;
+      continue;
+    }
+
+    // Check if next line starts with '@' (stricter requirement)
+    if (positionLineEnd < input.length) {
+      const nextLineStart = positionLineEnd + 1;
+      const nextLineMatch = input.substring(nextLineStart).match(/^(\s*)@/);
+      if (!nextLineMatch) {
+        // No immediate '@' line, treat as ordinary markdown
+        pos = positionLineEnd + 1;
+        continue;
       }
     }
-    
-    // Fall back to old permissive detection
-    const oldDetection = detectOldMarkers(positionLine);
-    if (oldDetection.valid) {
-      // Check for assertions in old format
-      if (positionLineEnd < input.length) {
-        const nextLineStart = positionLineEnd + 1;
-        const assertions = collectOldAssertions(input, nextLineStart, oldDetection.markers, oldDetection.offsets);
-        
-        if (assertions.markerAssertions.some(a => a.assertionText !== null)) {
-          const chunk = input.slice(lastPos, positionLineStart);
-          pos = lastPos = assertions.nextPosition;
 
-          yield { 
-            assertions: assertions.markerAssertions,
-            chunk,
-            originalMarkers: oldDetection.markers,
-            canonicalMarkers: undefined,
-            isStrict: false
-          };
-          continue;
-        }
-      }
+    const positionMarkerLineOffsets = positionMarkerChars.map(mrk => positionLine.indexOf(mrk));
+
+    const positionMarkerAsserts = positionMarkerLineOffsets.map(lineOffset => ({
+      lineOffset,
+      token: -1,
+      text: null as null | string,
+      flags: -1,
+      assertionText: null as null | string
+    }));
+
+    let nextAssertLineStart = positionLineEnd + 1;
+    for (let i = 0; i < positionMarkerChars.length; i++) {
+      if (input.slice(nextAssertLineStart, nextAssertLineStart + 2) !== '@' + positionMarkerChars[i]) break;
+      let nextAssertLineEnd = input.indexOf('\n', nextAssertLineStart);
+      if (nextAssertLineEnd < 0) nextAssertLineEnd = input.length;
+
+      const assertLineParsed = parseAssertLine(
+        input.slice(nextAssertLineStart + 2, nextAssertLineEnd).trim()
+      );
+
+      if (!assertLineParsed) break;
+      const { assertToken, assertText, assertFlags } = assertLineParsed;
+      let assertionText = input.slice(nextAssertLineStart, nextAssertLineEnd);
+
+      positionMarkerAsserts[i].token = assertToken;
+      positionMarkerAsserts[i].text = assertText;
+      positionMarkerAsserts[i].flags = assertFlags;
+      positionMarkerAsserts[i].assertionText = assertionText;
+
+      nextAssertLineStart = nextAssertLineEnd + 1;
     }
-    
-    // No valid annotation detected, continue searching
-    pos = positionLineEnd + 1;
+
+    const chunk = input.slice(lastPos, positionLineStart);
+    pos = lastPos = nextAssertLineStart;
+
+    yield { assertions: positionMarkerAsserts, chunk };
   }
 
   if (pos <= input.length) {
@@ -300,279 +192,6 @@ function* findAssertions(input: string) {
       chunk: input.slice(lastPos)
     };
   }
-}
-
-// Check if normalization is needed (format is non-canonical)
-function needsNormalizationCheck(originalMarkers: string[], canonicalMarkers: string[], positionLine: string): boolean {
-  // Need normalization if:
-  // 1. Contains lowercase letters
-  // 2. Is in compact format (no spaces)
-  // 3. Markers don't match canonical sequence
-  
-  const hasLowercase = originalMarkers.some(m => m !== m.toUpperCase());
-  if (hasLowercase) return true;
-  
-  // Check if compact format (markers are adjacent)
-  const trimmed = positionLine.trim();
-  const isCompact = trimmed.length === originalMarkers.length;
-  if (isCompact) return true;
-  
-  // Check if marker sequence doesn't match canonical
-  for (let i = 0; i < originalMarkers.length; i++) {
-    if (originalMarkers[i] !== canonicalMarkers[i]) return true;
-  }
-  
-  return false;
-}
-
-// Old permissive marker detection for backwards compatibility
-function detectOldMarkers(positionLine: string): { 
-  valid: boolean, 
-  markers?: string[], 
-  offsets?: number[] 
-} {
-  const positionMarkerChars = positionLine.trim().split(/\s+/g);
-  const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
-    i < 9 ? mrk === String(i + 1) :
-      mrk.toUpperCase() === String.fromCharCode('A'.charCodeAt(0) + i - 9));
-
-  if (!positionMarkersCorrect) {
-    return { valid: false };
-  }
-
-  const positionMarkerLineOffsets = positionMarkerChars.map(mrk => positionLine.indexOf(mrk));
-  
-  return { 
-    valid: true, 
-    markers: positionMarkerChars,
-    offsets: positionMarkerLineOffsets
-  };
-}
-
-// Old assertion collection for backwards compatibility
-function collectOldAssertions(
-  input: string, 
-  startPos: number, 
-  markers: string[], 
-  offsets: number[]
-): {
-  markerAssertions: Array<{
-    lineOffset: number,
-    token: number,
-    text: string | null,
-    flags: number,
-    assertionText: string | null
-  }>,
-  nextPosition: number
-} {
-  const markerAssertions = offsets.map(lineOffset => ({
-    lineOffset,
-    token: -1,
-    text: null as null | string,
-    flags: -1,
-    assertionText: null as null | string
-  }));
-
-  let nextAssertLineStart = startPos;
-  for (let i = 0; i < markers.length; i++) {
-    if (input.slice(nextAssertLineStart, nextAssertLineStart + 2) !== '@' + markers[i]) break;
-    let nextAssertLineEnd = input.indexOf('\n', nextAssertLineStart);
-    if (nextAssertLineEnd < 0) nextAssertLineEnd = input.length;
-
-    const assertLineParsed = parseAssertLine(
-      input.slice(nextAssertLineStart + 2, nextAssertLineEnd).trim()
-    );
-
-    if (!assertLineParsed) break;
-    const { assertToken, assertText, assertFlags } = assertLineParsed;
-    let assertionText = input.slice(nextAssertLineStart, nextAssertLineEnd);
-
-    markerAssertions[i].token = assertToken;
-    markerAssertions[i].text = assertText;
-    markerAssertions[i].flags = assertFlags;
-    markerAssertions[i].assertionText = assertionText;
-
-    nextAssertLineStart = nextAssertLineEnd + 1;
-  }
-
-  return {
-    markerAssertions,
-    nextPosition: nextAssertLineStart
-  };
-}
-
-// Detect strict marker patterns according to requirements
-function detectStrictMarkers(positionLine: string): { 
-  valid: boolean, 
-  markers?: string[], 
-  offsets?: number[] 
-} {
-  // Scan through the line character by character
-  const markers: string[] = [];
-  const offsets: number[] = [];
-  
-  let i = 0;
-  // Skip leading whitespace
-  while (i < positionLine.length && (positionLine[i] === ' ' || positionLine[i] === '\t')) {
-    i++;
-  }
-  
-  // Must start with '1'
-  if (i >= positionLine.length || positionLine[i] !== '1') {
-    return { valid: false };
-  }
-  
-  // Collect markers
-  while (i < positionLine.length) {
-    const ch = positionLine[i];
-    
-    if (ch >= '1' && ch <= '9') {
-      markers.push(ch);
-      offsets.push(i);
-      i++;
-    } else if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
-      markers.push(ch.toUpperCase());
-      offsets.push(i);
-      i++;
-    } else if (ch === ' ' || ch === '\t') {
-      // Skip whitespace
-      i++;
-    } else {
-      // Invalid character found
-      return { valid: false };
-    }
-  }
-  
-  // Check for strictly increasing sequence
-  if (!isStrictlyIncreasing(markers)) {
-    return { valid: false };
-  }
-  
-  // Check for unique characters (no duplicates)
-  const charCounts = new Map<string, number>();
-  for (const marker of markers) {
-    charCounts.set(marker, (charCounts.get(marker) || 0) + 1);
-  }
-  
-  for (const count of charCounts.values()) {
-    if (count > 1) {
-      return { valid: false };
-    }
-  }
-  
-  return { valid: true, markers, offsets };
-}
-
-// Check if marker sequence is strictly increasing (1 < 2 < ... < 9 < A < B < ... < Z)
-function isStrictlyIncreasing(markers: string[]): boolean {
-  for (let i = 1; i < markers.length; i++) {
-    const prev = getMarkerOrder(markers[i - 1]);
-    const curr = getMarkerOrder(markers[i]);
-    if (curr <= prev) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Get numeric order for marker character (1=1, 2=2, ..., 9=9, A=10, B=11, ..., Z=35)
-function getMarkerOrder(marker: string): number {
-  if (marker >= '1' && marker <= '9') {
-    return marker.charCodeAt(0) - '0'.charCodeAt(0);
-  }
-  if (marker >= 'A' && marker <= 'Z') {
-    return 10 + (marker.charCodeAt(0) - 'A'.charCodeAt(0));
-  }
-  return -1;
-}
-
-// Generate canonical marker sequence (1, 2, 3, ..., 9, A, B, C, ...)
-function generateCanonicalMarkers(count: number): string[] {
-  const canonical: string[] = [];
-  for (let i = 0; i < count; i++) {
-    if (i < 9) {
-      canonical.push(String(i + 1));
-    } else {
-      canonical.push(String.fromCharCode('A'.charCodeAt(0) + i - 9));
-    }
-  }
-  return canonical;
-}
-
-// Collect assertion lines starting from nextLineStart
-function collectAssertions(
-  input: string, 
-  startPos: number, 
-  markers: string[], 
-  offsets: number[]
-): {
-  markerAssertions: Array<{
-    lineOffset: number,
-    token: number,
-    text: string | null,
-    flags: number,
-    assertionText: string | null
-  }>,
-  nextPosition: number
-} {
-  const markerAssertions = offsets.map(lineOffset => ({
-    lineOffset,
-    token: -1,
-    text: null as null | string,
-    flags: -1,
-    assertionText: null as null | string
-  }));
-  
-  const markerMap = new Map<string, number>();
-  markers.forEach((marker, index) => {
-    markerMap.set(marker.toUpperCase(), index);
-    // Also map lowercase to the same index
-    markerMap.set(marker.toLowerCase(), index);
-  });
-  
-  let pos = startPos;
-  
-  // Collect assertion lines that follow immediately after the marker line
-  while (pos < input.length) {
-    // Find the end of the current line
-    let lineEnd = input.indexOf('\n', pos);
-    if (lineEnd === -1) lineEnd = input.length;
-    
-    const line = input.substring(pos, lineEnd);
-    
-    // Check if this line is an assertion line: optional whitespace + @ + marker char
-    const assertionMatch = line.match(/^(\s*)@([1-9A-Za-z])(.*?)$/);
-    if (!assertionMatch) {
-      // Not an assertion line, stop collecting
-      break;
-    }
-    
-    const markerChar = assertionMatch[2];
-    const assertionContent = assertionMatch[3].trim();
-    
-    // Map to detected marker (case-insensitive)
-    const markerIndex = markerMap.get(markerChar);
-    if (markerIndex !== undefined) {
-      // Try to parse the assertion
-      const parsed = parseAssertLine(assertionContent);
-      if (parsed) {
-        const { assertToken, assertText, assertFlags } = parsed;
-        markerAssertions[markerIndex].token = assertToken;
-        markerAssertions[markerIndex].text = assertText;
-        markerAssertions[markerIndex].flags = assertFlags;
-        markerAssertions[markerIndex].assertionText = line;
-      }
-      // Skip unparseable assertions but continue processing
-    }
-    
-    // Move to next line
-    pos = lineEnd + 1;
-  }
-  
-  return {
-    markerAssertions,
-    nextPosition: pos
-  };
 }
 
 function parseAssertLine(assertLine: string) {
