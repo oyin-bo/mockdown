@@ -4,3 +4,6 @@ node_modules/
 results/*.json
 .DS_Store
 *.tsbuildinfo
+# Build artifacts
+run-competitive-built.js
+*.js.map

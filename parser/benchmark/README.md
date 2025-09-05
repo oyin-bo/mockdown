@@ -165,33 +165,39 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 ## Latest Benchmark Results
 
 <!-- BENCHMARK_RESULTS_START -->
-**Generated:** 2025-09-05  
+**Generated:** 2025-09-05 (TypeScript Implementation)  
 **System:** linux x64, Node v20.19.4  
-**Parsers:** mixpad-mock  
+**Parsers:** mixpad, marked, markdown-it, micromark, commonmark  
 
 ### small-simple
 
-| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
-|--------|-----------|-------------------|-------------|
-| mixpad-mock | 0.26 | 3.8 | 0 |
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| mixpad | 0.47 | 2.1 | 0 | 146 |
+| commonmark | 0.96 | 1.0 | 91 | N/A |
+| markdown-it | 1.25 | 0.8 | 110 | N/A |
+| marked | 1.39 | 0.7 | 39 | N/A |
+| micromark | 10.44 | 0.1 | 8 | N/A |
 
 ### medium-mixed
 
-| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
-|--------|-----------|-------------------|-------------|
-| mixpad-mock | 2.67 | 18.3 | 0 |
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| commonmark | 8.97 | 5.4 | 848 | N/A |
+| marked | 10.17 | 4.8 | 375 | N/A |
+| mixpad | 10.99 | 4.4 | 36 | 6365 |
+| markdown-it | 15.47 | 3.2 | 1732 | N/A |
+| micromark | 119.70 | 0.4 | 51 | N/A |
 
 ### large-text-heavy
 
-| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
-|--------|-----------|-------------------|-------------|
-| mixpad-mock | 23.27 | 21.0 | 0 |
-
-### complex-formatting
-
-| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
-|--------|-----------|-------------------|-------------|
-| mixpad-mock | 4.84 | 20.2 | 0 |
+| Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
+|--------|-----------|-------------------|-------------|--------|
+| commonmark | 3.41 | 143.1 | 49 | N/A |
+| mixpad | 15.81 | 30.9 | 1 | 3439 |
+| marked | 17.51 | 27.9 | 115 | N/A |
+| markdown-it | 19.08 | 25.6 | 1444 | N/A |
+| micromark | 121.06 | 4.0 | 783 | N/A |
 
 
 <!-- BENCHMARK_RESULTS_END -->

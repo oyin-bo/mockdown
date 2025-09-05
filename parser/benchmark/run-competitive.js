@@ -83,26 +83,133 @@ function generateContent(patterns, targetBytes) {
 }
 
 /**
+ * Try to load the real Mixpad scanner
+ */
+function loadMixpadScanner() {
+  try {
+    // Try different approaches to load the scanner
+    let mparser;
+    
+    // Try require first
+    try {
+      mparser = require('../../mparser.js');
+    } catch (requireError) {
+      // If require fails, try dynamic import
+      console.log('require failed, trying alternative approaches...');
+      return null;
+    }
+    
+    if (mparser && typeof mparser.createScanner === 'function') {
+      console.log('✓ Loaded real Mixpad scanner from mparser.js');
+      return mparser;
+    } else {
+      console.log('⚠ mparser.js loaded but createScanner not found');
+      return null;
+    }
+  } catch (error) {
+    console.log('⚠ Could not load Mixpad scanner:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Create real scanner adapter or fall back to realistic mock
+ */
+function createMixpadAdapter() {
+  const scannerModule = loadMixpadScanner();
+  
+  if (scannerModule && scannerModule.createScanner) {
+    // Real scanner implementation
+    return {
+      name: 'mixpad',
+      version: '0.0.4',
+      isReal: true,
+      parse(content) {
+        const scanner = scannerModule.createScanner();
+        scanner.initText(content);
+        let tokenCount = 0;
+        
+        try {
+          while (scanner.offsetNext < content.length) {
+            scanner.scan();
+            tokenCount++;
+            
+            // Safety check to prevent infinite loops
+            if (tokenCount > content.length * 2) {
+              console.log('Warning: Possible infinite loop in scanner, breaking');
+              break;
+            }
+          }
+        } catch (error) {
+          console.log('Scanner error:', error.message);
+        }
+        
+        return { tokenCount };
+      }
+    };
+  } else {
+    // Improved mock that simulates real tokenization patterns
+    return {
+      name: 'mixpad-mock',
+      version: '0.0.4',
+      isReal: false,
+      parse(content) {
+        // More sophisticated mock that mimics markdown tokenization
+        let tokenCount = 0;
+        let i = 0;
+        
+        while (i < content.length) {
+          const char = content[i];
+          
+          // Skip whitespace (but count significant whitespace)
+          if (char === ' ' || char === '\t') {
+            tokenCount++;
+            i++;
+            while (i < content.length && (content[i] === ' ' || content[i] === '\t')) {
+              i++;
+            }
+          }
+          // Line breaks
+          else if (char === '\n' || char === '\r') {
+            tokenCount++;
+            i++;
+            if (char === '\r' && content[i] === '\n') i++;
+          }
+          // Markdown special characters
+          else if ('*_`#[]()!-+'.includes(char)) {
+            tokenCount++;
+            i++;
+            // Handle multi-character tokens like ** or __
+            if (i < content.length && content[i] === char && (char === '*' || char === '_')) {
+              i++;
+            }
+          }
+          // Regular text - treat words as single tokens
+          else {
+            tokenCount++;
+            while (i < content.length && 
+                   content[i] !== ' ' && content[i] !== '\t' && 
+                   content[i] !== '\n' && content[i] !== '\r' &&
+                   !'*_`#[]()!-+'.includes(content[i])) {
+              i++;
+            }
+          }
+        }
+        
+        return { tokenCount };
+      }
+    };
+  }
+}
+
+/**
  * Create parser adapters for all available parsers
  */
 function createParserAdapters() {
   const adapters = [];
   
-  // Mixpad scanner (mock for now)
-  adapters.push({
-    name: 'mixpad',
-    version: '0.0.4',
-    parse(content) {
-      // Mock implementation - counts non-whitespace characters as tokens
-      let tokenCount = 0;
-      for (let i = 0; i < content.length; i++) {
-        if (content[i] !== ' ' && content[i] !== '\n' && content[i] !== '\t') {
-          tokenCount++;
-        }
-      }
-      return { tokenCount };
-    }
-  });
+  // Mixpad scanner - try real implementation first
+  adapters.push(createMixpadAdapter());
   
   // Marked
   try {
@@ -375,11 +482,18 @@ function main() {
       
       console.log('\n=== Benchmark Suite Complete ===');
       console.log(`Tested ${new Set(results.map(r => r.parser)).size} parsers across ${new Set(results.map(r => r.dataset)).size} datasets`);
-      console.log('Framework successfully demonstrates competitive benchmarking!');
       
-      // Note about Mixpad scanner
-      console.log('\nNote: This demo uses a mock Mixpad scanner.');
-      console.log('To benchmark the real scanner, resolve the TypeScript import issue.');
+      // Check if we're using real or mock scanner
+      const mixpadResults = results.find(r => r.parser.startsWith('mixpad'));
+      if (mixpadResults) {
+        if (mixpadResults.parser === 'mixpad') {
+          console.log('✓ Benchmarked with REAL Mixpad scanner!');
+        } else {
+          console.log('⚠ Benchmarked with mock Mixpad scanner (real scanner could not be loaded).');
+        }
+      }
+      
+      console.log('Framework successfully demonstrates competitive benchmarking!');
       
     } else {
       console.log('No benchmark results generated');
