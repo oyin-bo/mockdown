@@ -1,0 +1,38 @@
+[
+  {
+    "parser": "mixpad",
+    "dataset": "small-simple",
+    "parseTimeMs": 0,
+    "memoryDelta": -416,
+    "throughputCharsPerSec": null,
+    "result": {
+      "lines": 63,
+      "words": 175
+    },
+    "timestamp": "2025-09-04T21:47:46.428Z"
+  },
+  {
+    "parser": "mixpad",
+    "dataset": "medium-text",
+    "parseTimeMs": 0,
+    "memoryDelta": 4600,
+    "throughputCharsPerSec": null,
+    "result": {
+      "lines": 3,
+      "words": 7187
+    },
+    "timestamp": "2025-09-04T21:47:46.439Z"
+  },
+  {
+    "parser": "mixpad",
+    "dataset": "large-text",
+    "parseTimeMs": 8,
+    "memoryDelta": 4632,
+    "throughputCharsPerSec": 64000000,
+    "result": {
+      "lines": 3,
+      "words": 71861
+    },
+    "timestamp": "2025-09-04T21:47:46.474Z"
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "name": "mixpad-benchmark",
+  "version": "1.0.0",
+  "description": "Performance benchmarking for Mixpad scanner vs competitors",
+  "main": "runner.js",
+  "scripts": {
+    "bench": "node --expose-gc run-working.js",
+    "bench:readme": "node --expose-gc run-competitive.js --update-readme",
+    "bench:simple:readme": "node --expose-gc run-simple.js --update-readme",
+    "bench:working:readme": "node --expose-gc run-working.js --update-readme",
+    "bench:simple": "node --expose-gc run-simple.js",
+    "bench:working": "node --expose-gc run-working.js",
+    "bench:competitive": "node --expose-gc run-competitive.js",
+    "build:ts": "cd ../.. && npm run build && cd parser/benchmark && esbuild run-competitive.ts --bundle --outfile=run-competitive-built.js --format=cjs --platform=node --external:marked --external:markdown-it --external:micromark --external:commonmark",
+    "bench:ts": "npm run build:ts && node --expose-gc run-competitive-built.js",
+    "bench:ts:readme": "npm run build:ts && node --expose-gc run-competitive-built.js --update-readme",
+    "install-competitors": "npm install --no-save marked markdown-it micromark remark commonmark",
+    "start": "npm run bench:competitive"
+  },
+  "keywords": ["benchmark", "markdown", "parser", "performance"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {}
+}
