@@ -3,96 +3,67 @@ import { verifyTokens } from './verify-tokens';
 
 describe('HTML Tags - Stage 4', () => {
   test('basic opening tags', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 <div>
 1234
 @1 LessThanToken
 @2 HtmlTagName "div"  
 @4 GreaterThanToken
-`)).toBe(`
-<div>
-1234
-@1 LessThanToken
-@2 HtmlTagName "div"  
-@4 GreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('basic closing tags', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 </span>
 12    6
 @1 LessThanSlashToken
 @2 HtmlTagName "span"
 @6 GreaterThanToken
-`)).toBe(`
-</span>
-12    6
-@1 LessThanSlashToken
-@2 HtmlTagName "span"
-@6 GreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('self-closing tags', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 <br/>
 12 4
 @1 LessThanToken
 @2 HtmlTagName "br"
 @4 SlashGreaterThanToken
-`)).toBe(`
-<br/>
-12 4
-@1 LessThanToken
-@2 HtmlTagName "br"
-@4 SlashGreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('custom element tags', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 <x-custom-el>
 12          A
 @1 LessThanToken
 @2 HtmlTagName "x-custom-el"
 @A GreaterThanToken
-`)).toBe(`
-<x-custom-el>
-12          A
-@1 LessThanToken
-@2 HtmlTagName "x-custom-el"
-@A GreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('malformed tags fallback to text', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 <1bad>
 12   6
 @1 LessThanToken
 @2 StringLiteral "1bad"
 @6 GreaterThanToken
-`)).toBe(`
-<1bad>
-12   6
-@1 LessThanToken
-@2 StringLiteral "1bad"
-@6 GreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('bare less than and greater than', () => {
-    expect(verifyTokens(`
+  const tokenTest = `
 < >
 1 2
 @1 LessThanToken
 @2 GreaterThanToken
-`)).toBe(`
-< >
-1 2
-@1 LessThanToken
-@2 GreaterThanToken
-`);
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 });

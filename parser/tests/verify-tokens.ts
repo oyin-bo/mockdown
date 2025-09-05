@@ -209,10 +209,17 @@ function parseAssertLine(assertLine: string) {
           break;
         }
 
-        // If this quote is not escaped (previous char is not a backslash), we've found the end.
-        if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
-        // Otherwise the quote is escaped (e.g. \"), so advance past it to continue the search
-        // to avoid getting stuck at the same index and causing an infinite loop.
+        // Determine if the found quote is escaped by counting preceding backslashes.
+        // In JSON strings a quote is escaped iff it's preceded by an odd number of backslashes.
+        let backslashCount = 0;
+        let k = endQuote - 1;
+        while (k >= 0 && assertLine[k] === '\\') {
+          backslashCount++;
+          k--;
+        }
+        // If even number of backslashes, the quote is not escaped and marks the end.
+        if ((backslashCount % 2) === 0) break;
+        // Otherwise the quote is escaped (odd backslashes), continue searching after it.
         endQuote++;
       }
 
