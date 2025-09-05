@@ -164,4 +164,26 @@ describe('XML-like Constructs - Stage 4', () => {
 @1 HtmlCdata "<![CDATA[u = \\"\\\\u0022\\\\u003C\\\\u003E\\" ]]>"`;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
+
+  test('unterminated CDATA fast-breaks at end of line and continues scanning', () => {
+    const tokenTest = `
+<![CDATA[ something unterminated
+1
+@1 HtmlCdata Unterminated
+NextLine
+1
+@1 StringLiteral "NextLine"
+`;
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
+
+  test('unterminated processing instruction fast-breaks at next < char', () => {
+  const tokenTest = `
+<?xml missing end but has <
+1                         2
+@1 HtmlProcessingInstruction Unterminated
+@2 "<"
+`;
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
 });
