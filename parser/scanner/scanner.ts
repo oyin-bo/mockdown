@@ -780,8 +780,23 @@ export function createScanner(): Scanner {
       doctypePos++;
     }
 
-    // EOF reached without closing '>'
-    emitToken(SyntaxKind.HtmlDoctype, start, end, TokenFlags.Unterminated);
+    // EOF reached without closing '>' - fast-break to limit reparsing on editor edits.
+    // The token should include only from start to the first of: line break or '<' (exclusive).
+    // Search should begin after the <!DOCTYPE prefix (doctypePos) to avoid zero-length tokens.
+    let fastEnd = end;
+
+  // Find first line break or '<' after the start (skip the initial '<' at `start`)
+  for (let i = start + 1; i < end; i++) {
+      const ch = source.charCodeAt(i);
+      if (isLineBreak(ch) || ch === CharacterCodes.lessThan) {
+        fastEnd = i;
+        break;
+      }
+    }
+
+    // If we found a line break, emit up to that point (exclude the break). If none found,
+    // fastEnd will be end and we emit to EOF as before.
+    emitToken(SyntaxKind.HtmlDoctype, start, fastEnd, TokenFlags.Unterminated);
   }
 
   // Helper functions

@@ -300,6 +300,7 @@ enum SyntaxKindShadow {
   HtmlComment = SyntaxKind.HtmlComment,
   HtmlCdata = SyntaxKind.HtmlCdata,
   HtmlProcessingInstruction = SyntaxKind.HtmlProcessingInstruction,
+  HtmlDoctype = SyntaxKind.HtmlDoctype,
   HtmlRawText = SyntaxKind.HtmlRawText,
   HtmlRCDataText = SyntaxKind.HtmlRCDataText
 }
@@ -357,4 +358,7 @@ enum TokenFlagsShadow {
 
   CanOpen = TokenFlags.CanOpen,
   CanClose = TokenFlags.CanClose
+  ,
+  // Stage 4 HTML construct flags
+  Unterminated = TokenFlags.Unterminated
 }
