@@ -165,7 +165,7 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 ## Latest Benchmark Results
 
 <!-- BENCHMARK_RESULTS_START -->
-**Generated:** 2025-09-04  
+**Generated:** 2025-09-05  
 **System:** linux x64, Node v20.19.4  
 **Parsers:** mixpad-mock  
 
@@ -179,19 +179,19 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
 |--------|-----------|-------------------|-------------|
-| mixpad-mock | 2.75 | 17.7 | 0 |
+| mixpad-mock | 2.67 | 18.3 | 0 |
 
 ### large-text-heavy
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
 |--------|-----------|-------------------|-------------|
-| mixpad-mock | 24.78 | 19.7 | 0 |
+| mixpad-mock | 23.27 | 21.0 | 0 |
 
 ### complex-formatting
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) |
 |--------|-----------|-------------------|-------------|
-| mixpad-mock | 4.96 | 19.7 | 0 |
+| mixpad-mock | 4.84 | 20.2 | 0 |
 
 
 <!-- BENCHMARK_RESULTS_END -->
