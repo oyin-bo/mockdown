@@ -8,7 +8,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "build:parser": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js",
+    "build:parser": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js --format=cjs --platform=node",
     "build": "npm run build:parser",
     "test-old": "node --loader ts-node/esm --test parser/tests/**/*.test.ts",
     "test": "vitest run parser/tests --exclude parser/docs"
