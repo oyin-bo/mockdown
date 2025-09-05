@@ -522,6 +522,12 @@ export function createScanner(): Scanner {
       textEnd++;
     }
     
+    // Safety check: ensure we make at least some progress
+    if (textEnd <= start && start < end) {
+      // Force advance by one character to prevent infinite loop
+      textEnd = start + 1;
+    }
+    
     if (textEnd > start) {
       // Check if we scanned to end of line
       const scannedToLineEnd = textEnd >= end || isLineBreak(source.charCodeAt(textEnd));
@@ -706,11 +712,44 @@ export function createScanner(): Scanner {
       // Regular text content - scan until next special character
       emitTextRun(start);
     }
+    
+    // Infinite loop protection: ensure position always advances
+    if (pos <= start) {
+      handleInfiniteLoopDetection(start);
+    }
   }
   
   function isDoubleTilde(pos: number): boolean {
     return pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.tilde;
   }
+  
+  /**
+   * Handles infinite loop detection and recovery.
+   * Called when scanner position fails to advance, indicating a potential infinite loop.
+   * This function ensures the scanner can continue by:
+   * 1. Emitting an error token at the problematic character
+   * 2. Forcing position advancement to break the loop
+   * 
+   * This is a generalized utility that can be used throughout the scanner
+   * whenever position advancement stalls.
+   */
+  function handleInfiniteLoopDetection(stuckPosition: number): void {
+    // Emit an error token at the character that caused the infinite loop
+    const problemChar = stuckPosition < end ? source.charCodeAt(stuckPosition) : 0;
+    const errorText = stuckPosition < end ? String.fromCharCode(problemChar) : '';
+    
+    // Set token fields directly to emit error token
+    token = SyntaxKind.Unknown; // Using Unknown as error token type
+    tokenText = errorText;
+    tokenFlags = TokenFlags.HasScanError; // Mark as error
+    
+    // Force advance position by 1 to break the infinite loop
+    const targetPos = Math.min(stuckPosition + 1, end);
+    updatePosition(targetPos);
+    offsetNext = pos;
+  }
+  
+
   
   /**
    * Public interface implementation
