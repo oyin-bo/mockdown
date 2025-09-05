@@ -515,7 +515,7 @@ export function createScanner(): Scanner {
   
   function scanLessThan(start: number): void {
     // Minimal lookahead via direct charCode reads (no substring allocation)
-    const c1 = pos + 1 < end ? source.charCodeAt(pos + 1) : -1;
+    const c1 = start + 1 < end ? source.charCodeAt(start + 1) : -1;
     
     if (c1 === CharacterCodes.slash) {
       // This is </ - emit LessThanSlashToken
@@ -524,13 +524,13 @@ export function createScanner(): Scanner {
     }
     
     // Detect comment start <!--
-    if (c1 === CharacterCodes.exclamation && matchSequence(pos, '<!--')) {
+    if (c1 === CharacterCodes.exclamation && matchSequence(start, '<!--')) {
       scanHtmlComment(start);
       return;
     }
     
     // Detect CDATA <![CDATA[
-    if (c1 === CharacterCodes.exclamation && matchSequence(pos, '<![CDATA[')) {
+    if (c1 === CharacterCodes.exclamation && matchSequence(start, '<![CDATA[')) {
       scanHtmlCdata(start);
       return;
     }
@@ -680,17 +680,17 @@ export function createScanner(): Scanner {
   
   function scanHtmlComment(start: number): void {
     // Scan HTML comment: <!-- ... -->
-    let pos = start + 4; // Skip <!--
+    let commentPos = start + 4; // Skip <!--
     
-    while (pos <= end - 3) {
-      if (source.charCodeAt(pos) === CharacterCodes.minus &&
-          source.charCodeAt(pos + 1) === CharacterCodes.minus &&
-          source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
+    while (commentPos <= end - 3) {
+      if (source.charCodeAt(commentPos) === CharacterCodes.minus &&
+          source.charCodeAt(commentPos + 1) === CharacterCodes.minus &&
+          source.charCodeAt(commentPos + 2) === CharacterCodes.greaterThan) {
         // Found end -->
-        emitToken(SyntaxKind.HtmlComment, start, pos + 3);
+        emitToken(SyntaxKind.HtmlComment, start, commentPos + 3);
         return;
       }
-      pos++;
+      commentPos++;
     }
     
     // Unterminated comment
@@ -699,17 +699,17 @@ export function createScanner(): Scanner {
   
   function scanHtmlCdata(start: number): void {
     // Scan CDATA: <![CDATA[ ... ]]>
-    let pos = start + 9; // Skip <![CDATA[
+    let cdataPos = start + 9; // Skip <![CDATA[
     
-    while (pos <= end - 3) {
-      if (source.charCodeAt(pos) === CharacterCodes.closeBracket &&
-          source.charCodeAt(pos + 1) === CharacterCodes.closeBracket &&
-          source.charCodeAt(pos + 2) === CharacterCodes.greaterThan) {
+    while (cdataPos <= end - 3) {
+      if (source.charCodeAt(cdataPos) === CharacterCodes.closeBracket &&
+          source.charCodeAt(cdataPos + 1) === CharacterCodes.closeBracket &&
+          source.charCodeAt(cdataPos + 2) === CharacterCodes.greaterThan) {
         // Found end ]]>
-        emitToken(SyntaxKind.HtmlCdata, start, pos + 3);
+        emitToken(SyntaxKind.HtmlCdata, start, cdataPos + 3);
         return;
       }
-      pos++;
+      cdataPos++;
     }
     
     // Unterminated CDATA
@@ -718,16 +718,16 @@ export function createScanner(): Scanner {
   
   function scanHtmlProcessingInstruction(start: number): void {
     // Scan PI: <? ... ?>
-    let pos = start + 2; // Skip <?
+    let piPos = start + 2; // Skip <?
     
-    while (pos <= end - 2) {
-      if (source.charCodeAt(pos) === CharacterCodes.question &&
-          source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
+    while (piPos <= end - 2) {
+      if (source.charCodeAt(piPos) === CharacterCodes.question &&
+          source.charCodeAt(piPos + 1) === CharacterCodes.greaterThan) {
         // Found end ?>
-        emitToken(SyntaxKind.HtmlProcessingInstruction, start, pos + 2);
+        emitToken(SyntaxKind.HtmlProcessingInstruction, start, piPos + 2);
         return;
       }
-      pos++;
+      piPos++;
     }
     
     // Unterminated PI
