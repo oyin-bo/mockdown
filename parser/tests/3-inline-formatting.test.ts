@@ -21,17 +21,18 @@ describe('Stage 3: Inline Formatting', () => {
     });
 
     test('ERROR in position: double asterisk at line start', () => {
-      const tokenTest = `
+      const tokenTestWrong = `
 **bold**
 1      2
 @1 AsteriskAsterisk 514
 @2 AsteriskAsterisk 1024`;
-      expect(verifyTokens(tokenTest)).toBe(`
+      const tokenTestCorrect = `
 **bold**
 1     2
 @1 AsteriskAsterisk 514
 @2 AsteriskAsterisk 1024
-`);
+`;
+      expect(verifyTokens(tokenTestWrong)).toBe(tokenTestCorrect);
     });
 
     test('single asterisk recognition', () => {

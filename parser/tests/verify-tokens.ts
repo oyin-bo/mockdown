@@ -209,7 +209,18 @@ function parseAssertLine(assertLine: string) {
           break;
         }
 
-        if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
+        // Determine if the found quote is escaped by counting preceding backslashes.
+        // In JSON strings a quote is escaped iff it's preceded by an odd number of backslashes.
+        let backslashCount = 0;
+        let k = endQuote - 1;
+        while (k >= 0 && assertLine[k] === '\\') {
+          backslashCount++;
+          k--;
+        }
+        // If even number of backslashes, the quote is not escaped and marks the end.
+        if ((backslashCount % 2) === 0) break;
+        // Otherwise the quote is escaped (odd backslashes), continue searching after it.
+        endQuote++;
       }
 
       if (endQuote < 0)
@@ -273,7 +284,24 @@ enum SyntaxKindShadow {
   UnderscoreToken = SyntaxKind.UnderscoreToken,
   UnderscoreUnderscore = SyntaxKind.UnderscoreUnderscore,
   BacktickToken = SyntaxKind.BacktickToken,
-  TildeTilde = SyntaxKind.TildeTilde
+  TildeTilde = SyntaxKind.TildeTilde,
+
+  // Stage 4: HTML tokens
+  LessThanToken = SyntaxKind.LessThanToken,
+  LessThanSlashToken = SyntaxKind.LessThanSlashToken,
+  GreaterThanToken = SyntaxKind.GreaterThanToken,
+  SlashGreaterThanToken = SyntaxKind.SlashGreaterThanToken,
+  EqualsToken = SyntaxKind.EqualsToken,
+  AmpersandToken = SyntaxKind.AmpersandToken,
+  HtmlTagName = SyntaxKind.HtmlTagName,
+  HtmlAttributeName = SyntaxKind.HtmlAttributeName,
+  HtmlAttributeValue = SyntaxKind.HtmlAttributeValue,
+  HtmlEntity = SyntaxKind.HtmlEntity,
+  HtmlComment = SyntaxKind.HtmlComment,
+  HtmlCdata = SyntaxKind.HtmlCdata,
+  HtmlProcessingInstruction = SyntaxKind.HtmlProcessingInstruction,
+  HtmlRawText = SyntaxKind.HtmlRawText,
+  HtmlRCDataText = SyntaxKind.HtmlRCDataText
 }
 
 function tokenFlagsToString(kind: TokenFlags): string {
@@ -287,7 +315,7 @@ function tokenFlagsToString(kind: TokenFlags): string {
   for (const k of stringFlags) {
     combinedFlags |= TokenFlagsShadow[k as any] as any;
   }
-  if (combinedFlags !== kind) 
+  if (combinedFlags !== kind)
     stringFlags.push('0x' + (kind & ~combinedFlags).toFixed(16).toUpperCase());
   return stringFlags.join('|');
 }
