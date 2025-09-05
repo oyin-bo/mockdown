@@ -19,4 +19,26 @@ describe('HTML Comments - Stage 4', () => {
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
+
+  test('unterminated HTML comment fast-breaks at end of line and continues scanning', () => {
+  const tokenTest = `
+<!-- unterminated comment here
+1
+@1 HtmlComment Unterminated
+NextLine
+1
+@1 StringLiteral "NextLine"
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
+
+  test('unterminated HTML comment fast-breaks at next < char', () => {
+  const tokenTest = `
+<!-- missing end but has <laters>
+1                        2
+@1 HtmlComment Unterminated
+@2 LessThanToken
+`;
+  expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
 });

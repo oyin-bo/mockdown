@@ -699,8 +699,17 @@ export function createScanner(): Scanner {
       commentPos++;
     }
 
-    // Unterminated comment
-    emitToken(SyntaxKind.HtmlComment, start, end, TokenFlags.Unterminated);
+    // Unterminated comment - fast-break to first of line break or '<' to limit reparsing
+    let fastEnd = end;
+    for (let i = start + 1; i < end; i++) {
+      const ch = source.charCodeAt(i);
+      if (isLineBreak(ch) || ch === CharacterCodes.lessThan) {
+        fastEnd = i;
+        break;
+      }
+    }
+
+    emitToken(SyntaxKind.HtmlComment, start, fastEnd, TokenFlags.Unterminated);
   }
 
   function scanHtmlCdata(start: number): void {
@@ -718,8 +727,17 @@ export function createScanner(): Scanner {
       cdataPos++;
     }
 
-    // Unterminated CDATA
-    emitToken(SyntaxKind.HtmlCdata, start, end, TokenFlags.Unterminated);
+    // Unterminated CDATA - fast-break to first of line break or '<' to limit reparsing
+    let fastEnd = end;
+    for (let i = start + 1; i < end; i++) {
+      const ch = source.charCodeAt(i);
+      if (isLineBreak(ch) || ch === CharacterCodes.lessThan) {
+        fastEnd = i;
+        break;
+      }
+    }
+
+    emitToken(SyntaxKind.HtmlCdata, start, fastEnd, TokenFlags.Unterminated);
   }
 
   function scanHtmlProcessingInstruction(start: number): void {
@@ -736,8 +754,17 @@ export function createScanner(): Scanner {
       piPos++;
     }
 
-    // Unterminated PI
-    emitToken(SyntaxKind.HtmlProcessingInstruction, start, end, TokenFlags.Unterminated);
+    // Unterminated PI - fast-break to first of line break or '<' to limit reparsing
+    let fastEnd = end;
+    for (let i = start + 1; i < end; i++) {
+      const ch = source.charCodeAt(i);
+      if (isLineBreak(ch) || ch === CharacterCodes.lessThan) {
+        fastEnd = i;
+        break;
+      }
+    }
+
+    emitToken(SyntaxKind.HtmlProcessingInstruction, start, fastEnd, TokenFlags.Unterminated);
   }
 
   function scanHtmlDoctype(start: number): void {

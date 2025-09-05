@@ -29,8 +29,12 @@ describe('DOCTYPE Declarations - Stage 4 (Post-implementation)', () => {
   test('unterminated DOCTYPE shows Unterminated flag', () => {
     const tokenTest = `
 <!DOCTYPE html never closed
+<!DOCTYPE html never closed
 1
-@1 HtmlDoctype`;
+@1 HtmlDoctype Unterminated
+NextLineAfterDoctype
+1
+@1 StringLiteral "NextLineAfterDoctype"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -38,17 +42,20 @@ describe('DOCTYPE Declarations - Stage 4 (Post-implementation)', () => {
   const tokenTest = `
 <!DOCTYPE mydoc never closed here
 1
-@1 HtmlDoctype
+@1 HtmlDoctype Unterminated
 NextLineContent
+1
+@1 StringLiteral "NextLineContent"
 `;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('unterminated DOCTYPE fast-breaks at next \u003c (less-than) char', () => {
-    const tokenTest = `
-<!DOCTYPE abc missing > but has < later<and-more>
-1
-@1 HtmlDoctype
+  const tokenTest = `
+<!DOCTYPE abc missing but has <
+1                             2
+@1 HtmlDoctype Unterminated
+@2 "<"
 `;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
