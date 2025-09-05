@@ -29,12 +29,12 @@ describe('HTML Entities - Stage 4', () => {
   test('invalid entities fallback to ampersand', () => {
   const tokenTest = `
 &invalid &amp &#; &#x; &#x1G;
-1        A   C   F   H
+1        2    3   4    5
 @1 AmpersandToken "&"
-@A AmpersandToken "&"
-@C AmpersandToken "&"
-@F AmpersandToken "&"
-@H AmpersandToken "&"
+@2 AmpersandToken "&"
+@3 AmpersandToken "&"
+@4 AmpersandToken "&"
+@5 AmpersandToken "&"
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });

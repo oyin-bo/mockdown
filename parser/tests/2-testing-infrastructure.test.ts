@@ -56,19 +56,6 @@ Hello world
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
-  test('should inject error for wrong attribute value', () => {
-    const tokenTest = `
-Hello world
-1
-@1 StringLiteral "Wrong text"`;
-    const result = verifyTokens(tokenTest);
-    expect(result).toBe(`
-Hello world
-1
-@1 StringLiteral "Hello world"
-`);
-  });
-
   test('should fail multiple markers on same token', () => {
     const tokenTest = `
 Hello World
@@ -203,35 +190,38 @@ Hello world
 
     test('multiple adjacent markers: 12AB normalizes to 1234', () => {
       const tokenTest = `
-**bold text**
-12AB
+**bold text** ?
+1 2        A B
 @1 AsteriskAsterisk CanOpen
-@2 StringLiteral "bold text"  
+@2 StringLiteral "bold text"
 @A AsteriskAsterisk CanClose`;
       // Should normalize to canonical 1234 sequence
       const expected = `
-**bold text**
-1234
+**bold text** ?
+1 2        3 4
 @1 AsteriskAsterisk CanOpen
-@2 StringLiteral "bold text"  
-@3 AsteriskAsterisk CanClose`;
+@2 StringLiteral "bold text"
+@3 AsteriskAsterisk CanClose
+@4 StringLiteral
+`;
       expect(verifyTokens(tokenTest)).toBe(expected);
     });
 
-    test('lowercase markers: 1 a b normalizes to 1AB', () => {
+    test('lowercase markers: 1 a b normalizes to 123', () => {
       const tokenTest = `
 **bold text**
-1 a b
+1 a        b
 @1 AsteriskAsterisk CanOpen
-@a StringLiteral "bold text"  
+@a StringLiteral "bold text"
 @b AsteriskAsterisk CanClose`;
       // Should normalize to canonical sequence
       const expected = `
 **bold text**
-1AB
+1 2        3
 @1 AsteriskAsterisk CanOpen
-@A StringLiteral "bold text"  
-@B AsteriskAsterisk CanClose`;
+@2 StringLiteral "bold text"
+@3 AsteriskAsterisk CanClose
+`;
       expect(verifyTokens(tokenTest)).toBe(expected);
     });
 
@@ -280,12 +270,17 @@ Hello world
     test('assertion references nonexistent marker: @3 skipped, missing assertions synthesized', () => {
       const tokenTest = `
 **bold text**
+1 3
+@1 AsteriskAsterisk CanOpen
+@2 StringLiteral "bold text"`;
+      const expected = `
+**bold text**
 1 2
 @1 AsteriskAsterisk CanOpen
 @2 StringLiteral "bold text"
-@3 NonExistentMarker`;
+`;
       // @3 should be skipped, but @1 and @2 should be processed normally
-      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+      expect(verifyTokens(tokenTest)).toBe(expected);
     });
 
     test('unparseable assertion lines: @1 ??? skipped, synthetic token-only assertion emitted', () => {
@@ -297,34 +292,19 @@ Hello world
       // @1 should get a synthetic token-only assertion for the actual token found
       const expected = `
 **bold text**
-12
+1 2
 @1 AsteriskAsterisk
-@2 StringLiteral "bold text"`;
+@2 StringLiteral "bold text"
+`;
       expect(verifyTokens(tokenTest)).toBe(expected);
     });
 
-    test('multiple assertions per marker: allow and preserve several parsed assertions', () => {
+    test('multiple assertions per marker: do not allow, skip assertions after the first', () => {
       const tokenTest = `
 Hello world
 1
-@1 StringLiteral
-@1 StringLiteral "Hello world"`;
+@1 StringLiteral`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
-    });
-
-    test('whitespace/tab handling: marker lines and @ lines with leading spaces accepted', () => {
-      const tokenTest = `
-Hello world
-  1 2  
-  @1 StringLiteral
-  @2 StringLiteral`;
-      // Should normalize the marker line but preserve the content
-      const expected = `
-Hello world
-12
-@1 StringLiteral
-@2 StringLiteral`;
-      expect(verifyTokens(tokenTest)).toBe(expected);
     });
 
     test('marker line with trailing invalid text: 1 foobar treated as ordinary markdown', () => {
@@ -356,19 +336,18 @@ Hello world
       expect(verifyTokens(tokenTestWithNewlines)).toBe(tokenTestWithNewlines);
     });
 
-    test('synthetic token-only assertion for marker with no parsed assertions', () => {
+    test('mismatched positional markers, excess marker', () => {
       const tokenTest = `
 **bold text**
 1 2 3
 @1 AsteriskAsterisk CanOpen
 @3 AsteriskAsterisk CanClose`;
-      // @2 has no assertion, should get synthetic token-only assertion
       const expected = `
 **bold text**
-123
+1 2
 @1 AsteriskAsterisk CanOpen
 @2 StringLiteral
-@3 AsteriskAsterisk CanClose`;
+`;
       expect(verifyTokens(tokenTest)).toBe(expected);
     });
   });

@@ -52,22 +52,35 @@ export function verifyTokens(input: string): string {
     output += chunk;
     const lineTokens = tokens.filter(tk => tk.start >= lineStart && tk.end <= lineEnd);
 
-    let positionLine = '';
-    let assertionLines = [];
+    // Map assertions to token starts; deduplicate multiple assertions that map to
+    // the same token start by keeping the first. This also lets us produce a
+    // canonical ordering of markers based on token start order.
+    const tokenStartToAssertionIndex = new Map<number, number>();
     for (let i = 0; i < assertions.length; i++) {
       const assertion = assertions[i];
-
       const token = lineTokens.find(tk =>
         tk.start <= lineStart + assertion.lineOffset &&
         tk.end >= lineStart + assertion.lineOffset + 1
       );
       if (!token) continue;
+      if (!tokenStartToAssertionIndex.has(token.start))
+        tokenStartToAssertionIndex.set(token.start, i);
+    }
 
-      const positionMarker = (i + 1) < 10 ? String(i + 1) :
-        String.fromCharCode('A'.charCodeAt(0) + i - 10);
+    const orderedTokenStarts = Array.from(tokenStartToAssertionIndex.keys()).sort((a, b) => a - b);
+
+    let positionLine = '';
+    const assertionLines: string[] = [];
+    for (let emitted = 0; emitted < orderedTokenStarts.length; emitted++) {
+      const tokenStart = orderedTokenStarts[emitted];
+      const assertionIndex = tokenStartToAssertionIndex.get(tokenStart)!;
+      const assertion = assertions[assertionIndex];
+      const token = lineTokens.find(tk => tk.start === tokenStart)!;
+
+      const positionMarker = (emitted + 1) < 10 ? String(emitted + 1) :
+        String.fromCharCode('A'.charCodeAt(0) + emitted - 10);
 
       const positionMarkerOffset = token.start - lineStart;
-      if (positionLine.length > positionMarkerOffset) continue;
       while (positionLine.length < positionMarkerOffset)
         positionLine += ' ';
       positionLine += positionMarker;
@@ -76,14 +89,20 @@ export function verifyTokens(input: string): string {
       const textMatch = assertion.text == null || assertion.text === token.text;
       const flagsMatch = assertion.flags < 0 || (assertion.flags & token.flags) === assertion.flags;
 
-      if (tokenMatch && textMatch && flagsMatch && assertion.assertionText) {
-        assertionLines.push(assertion.assertionText);
+      const hasConstraint = assertion.token >= 0 || assertion.text != null || assertion.flags >= 0;
+
+      // Helper to rewrite original assertion text to use canonical label
+      const rewriteAssertionLabel = (orig: string) => orig.replace(/^@[A-Za-z0-9]+/, '@' + positionMarker);
+
+      if (!hasConstraint) {
+        assertionLines.push('@' + positionMarker + ' ' + syntaxKindToString(token.token));
+      } else if (tokenMatch && textMatch && flagsMatch && assertion.assertionText) {
+        assertionLines.push(rewriteAssertionLabel(assertion.assertionText));
       } else {
         assertionLines.push(
           '@' + positionMarker +
           (
-            assertion.token < 0 ? '' :
-              ' ' + syntaxKindToString(token.token)
+            ' ' + syntaxKindToString(token.token)
           ) +
           (
             assertion.text == null ? '' :
@@ -127,30 +146,62 @@ function* findAssertions(input: string) {
 
     const positionLine = input.substring(positionLineStart, positionLineEnd);
 
-    let positionMarkerChars = positionLine.trim().split(/\s+/g);
-    const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
-      i < 10 ? mrk === String(i + 1) :
-        mrk.toUpperCase() === String.fromCharCode('A'.charCodeAt(0) + i - 10));
+    // Treat each non-space character in the position line as a separate marker and
+    // record its column offset within the line.
+    const positionMarkerChars: string[] = [];
+    const positionMarkerLineOffsets: number[] = [];
+    for (let i = 0; i < positionLine.length; i++) {
+      const ch = positionLine[i];
+      if (/\s/.test(ch)) continue;
+      positionMarkerChars.push(ch);
+      positionMarkerLineOffsets.push(i);
+    }
+
+    // Validate canonical ordering: must start with '1', be strictly increasing in the
+    // canonical ordinal (1..9 then A..Z), and be unique.
+    const toOrdinal = (ch: string) => {
+      if (/^[1-9]$/.test(ch)) return ch.charCodeAt(0) - '0'.charCodeAt(0);
+      const up = ch.toUpperCase();
+      if (/^[A-Z]$/.test(up)) return up.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      return -1;
+    };
+    const ords = positionMarkerChars.map(toOrdinal);
+    let positionMarkersCorrect = true;
+    if (positionMarkerChars.length === 0) positionMarkersCorrect = false;
+    if (positionMarkersCorrect) {
+      if (ords[0] !== 1) positionMarkersCorrect = false;
+    }
+    if (positionMarkersCorrect) {
+      for (let i = 1; i < ords.length; i++) {
+        if (ords[i] <= ords[i - 1]) { positionMarkersCorrect = false; break; }
+      }
+    }
+    if (positionMarkersCorrect) {
+      const seen = new Set<number>();
+      for (const v of ords) {
+        if (v < 1) { positionMarkersCorrect = false; break; }
+        if (seen.has(v)) { positionMarkersCorrect = false; break; }
+        seen.add(v);
+      }
+    }
 
     if (!positionMarkersCorrect) {
       pos = positionLineEnd;
       continue;
     }
 
-    // Check if next line starts with '@' (stricter requirement)
+    // Check if next line starts with '@' (stricter requirement): require '@' at column 0
     if (positionLineEnd < input.length) {
       const nextLineStart = positionLineEnd + 1;
-      const nextLineMatch = input.substring(nextLineStart).match(/^(\s*)@/);
+      const nextLineMatch = input.substring(nextLineStart).match(/^@/);
       if (!nextLineMatch) {
-        // No immediate '@' line, treat as ordinary markdown
+        // No immediate '@' at start-of-line, treat as ordinary markdown
         pos = positionLineEnd + 1;
         continue;
       }
     }
 
-    const positionMarkerLineOffsets = positionMarkerChars.map(mrk => positionLine.indexOf(mrk));
-
-    const positionMarkerAsserts = positionMarkerLineOffsets.map(lineOffset => ({
+  const positionMarkerAsserts = positionMarkerLineOffsets.map(lineOffset => ({
       lineOffset,
       token: -1,
       text: null as null | string,
@@ -159,24 +210,37 @@ function* findAssertions(input: string) {
     }));
 
     let nextAssertLineStart = positionLineEnd + 1;
-    for (let i = 0; i < positionMarkerChars.length; i++) {
-      if (input.slice(nextAssertLineStart, nextAssertLineStart + 2) !== '@' + positionMarkerChars[i]) break;
+    // Consume any following lines that begin with '@<label>' at column 0
+    while (nextAssertLineStart < input.length) {
+      const rest = input.slice(nextAssertLineStart);
+      const m = rest.match(/^@([A-Za-z0-9]+)/);
+      if (!m) break;
+
+      const label = m[1];
+
       let nextAssertLineEnd = input.indexOf('\n', nextAssertLineStart);
       if (nextAssertLineEnd < 0) nextAssertLineEnd = input.length;
 
-      const assertLineParsed = parseAssertLine(
-        input.slice(nextAssertLineStart + 2, nextAssertLineEnd).trim()
-      );
+      // Attempt to parse the assertion after the label. If parsing fails, consume the line
+      // but do not attach any parsed assertion (this will cause a synthesized token-only
+      // assertion later if the slot remains empty).
+      const afterLabelStart = nextAssertLineStart + 1 + label.length; // '@' + label
+      const assertSlice = input.slice(afterLabelStart, nextAssertLineEnd).trim();
+      const assertLineParsed = parseAssertLine(assertSlice);
 
-      if (!assertLineParsed) break;
-      const { assertToken, assertText, assertFlags } = assertLineParsed;
-      let assertionText = input.slice(nextAssertLineStart, nextAssertLineEnd);
+      // Map label (case-insensitive) to positionMarker slot, if present.
+      const targetIdx = positionMarkerChars.findIndex(mrk => mrk.toUpperCase() === label.toUpperCase());
+      if (targetIdx >= 0 && assertLineParsed) {
+        const { assertToken, assertText, assertFlags } = assertLineParsed;
+        const assertionText = input.slice(nextAssertLineStart, nextAssertLineEnd);
+        positionMarkerAsserts[targetIdx].token = assertToken;
+        positionMarkerAsserts[targetIdx].text = assertText;
+        positionMarkerAsserts[targetIdx].flags = assertFlags;
+        positionMarkerAsserts[targetIdx].assertionText = assertionText;
+      }
 
-      positionMarkerAsserts[i].token = assertToken;
-      positionMarkerAsserts[i].text = assertText;
-      positionMarkerAsserts[i].flags = assertFlags;
-      positionMarkerAsserts[i].assertionText = assertionText;
-
+      // Always consume the @-line whether it mapped or not, to avoid leaving it
+      // as a later chunk in the output.
       nextAssertLineStart = nextAssertLineEnd + 1;
     }
 

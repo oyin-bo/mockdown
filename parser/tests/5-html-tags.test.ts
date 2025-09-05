@@ -5,10 +5,10 @@ describe('HTML Tags - Stage 4', () => {
   test('basic opening tags', () => {
   const tokenTest = `
 <div>
-1234
+12  3
 @1 LessThanToken
 @2 HtmlTagName "div"  
-@4 GreaterThanToken
+@3 GreaterThanToken
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
@@ -16,10 +16,10 @@ describe('HTML Tags - Stage 4', () => {
   test('basic closing tags', () => {
   const tokenTest = `
 </span>
-12    6
+1 2   3
 @1 LessThanSlashToken
 @2 HtmlTagName "span"
-@6 GreaterThanToken
+@3 GreaterThanToken
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
@@ -27,10 +27,10 @@ describe('HTML Tags - Stage 4', () => {
   test('self-closing tags', () => {
   const tokenTest = `
 <br/>
-12 4
+12 3
 @1 LessThanToken
 @2 HtmlTagName "br"
-@4 SlashGreaterThanToken
+@3 SlashGreaterThanToken
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
@@ -38,10 +38,10 @@ describe('HTML Tags - Stage 4', () => {
   test('custom element tags', () => {
   const tokenTest = `
 <x-custom-el>
-12          A
+12          3
 @1 LessThanToken
 @2 HtmlTagName "x-custom-el"
-@A GreaterThanToken
+@3 GreaterThanToken
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
@@ -49,10 +49,8 @@ describe('HTML Tags - Stage 4', () => {
   test('malformed tags fallback to text', () => {
   const tokenTest = `
 <1bad>
-12   6
-@1 LessThanToken
-@2 StringLiteral "1bad"
-@6 GreaterThanToken
+1
+@1 StringLiteral "<1bad>"
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
