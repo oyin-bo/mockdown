@@ -713,3 +713,82 @@ On any malformed construct, the scanner *always* advances at least one character
 6. **Task 2** → **Task 7**: Basic structure before XML-like constructs
 
 Each task should be fully tested with verify-tokens before proceeding to the next task. This ensures incremental progress with comprehensive validation at each step.
+
+### Post-implementation: DOCTYPE support
+
+When you add DOCTYPE scanning, follow these concise, actionable steps and tests to keep the Stage-4 scanner principles (zero-allocation, single-pass scanning, conservative token set).
+
+Token surface changes
+- Add a new `SyntaxKind` entry: `HtmlDoctype` (full span token for `<!DOCTYPE ...>`).
+
+Scanner changes (clarified)
+- Add a case-insensitive match helper (e.g. `matchSequenceCaseInsensitive(pos, '<!DOCTYPE')`) or perform ASCII-folded compares when probing the `<` sequence. Use ASCII fold ((ch | 0x20) == expected) to avoid allocations.
+- In `scanLessThan(start)` detect `<!DOCTYPE` (case-insensitive) and call `scanHtmlDoctype(start)`. Ensure detection order is correct so `<!--` and `<![CDATA[` are tested first. Recommended order in `scanLessThan()`:
+  1. `<!--` (HtmlComment)
+  2. `<![CDATA[` (HtmlCdata)
+  3. `<!DOCTYPE` (HtmlDoctype)
+  4. other `<!...` constructs (defer or treat as text)
+
+- Implement `scanHtmlDoctype(start)` with the following deterministic contract:
+  - Confirm the `<!DOCTYPE` prefix case-insensitively; if it doesn't match, return control to the caller so other `<!` forms can be handled.
+  - Advance the scanner index to the first character after the matched prefix.
+  - Loop until EOF:
+    - If current char is `"` or `'`, set quoteChar and skip forward until the matching quoteChar or EOF (do not treat backslash as escape).
+    - Else if current char is `>` and not inside a quoted run: emit `HtmlDoctype` token covering `[start..pos+1)` and return.
+    - Otherwise advance one char.
+  - If EOF is reached before a terminating `>` is found: emit `HtmlDoctype` covering `[start..EOF)` and set the scanner's Unterminated diagnostic flag (recommend diagnostic name `UnterminatedHtmlDoctype`).
+  - Do NOT attempt to parse or validate PUBLIC/SYSTEM identifiers — this is a lexical token only.
+
+Edge cases and rules (explicit)
+- DOCTYPE matching must be case-insensitive (`<!doctype html>` valid). Require the exact prefix `<!DOCTYPE` CI; accept any following character (including whitespace or `>`).
+- Quoted strings inside DOCTYPE may contain `>`; `>` inside matching single or double quotes must be ignored when deciding termination.
+- Unterminated DOCTYPE (EOF without `>`) must safely emit `HtmlDoctype` up to EOF and set the `UnterminatedHtmlDoctype` diagnostic flag on the token (and record a diagnostic entry).
+- Very long DOCTYPE declarations are allowed; scanning is O(n) and must not allocate intermediate substrings.
+
+Tests to add (explicit)
+ Simple HTML5 DOCTYPE: Verify that the declaration <!DOCTYPE html> is tokenized as a single HtmlDoctype token covering the entire declaration.
+ Case-insensitive DOCTYPE: Verify that a lowercase declaration (for example, <!doctype html>) is accepted and emitted as HtmlDoctype (matching should be case-insensitive).
+ HTML4 DOCTYPE with PUBLIC and SYSTEM identifiers: Verify that a full HTML4 DOCTYPE containing PUBLIC and SYSTEM parts with quoted URIs is emitted as a single HtmlDoctype token and that the quoted URIs remain inside the token span.
+ Quoted greater-than handling: Verify that a DOCTYPE containing a '>' character inside single or double quotes does not terminate the declaration early and that the scanner continues until the closing '>' outside quotes before emitting HtmlDoctype.
+ Unterminated DOCTYPE at EOF: Verify that when a DOCTYPE reaches end-of-file without a closing '>', the scanner emits an HtmlDoctype token spanning to EOF and records an UnterminatedHtmlDoctype diagnostic flag for that token.
+ No-space-after-prefix edge case: Verify that inputs where the prefix characters match the DOCTYPE prefix but are not followed by whitespace (for example, <!DOCtype>) are accepted as a valid DOCTYPE prefix match and result in an HtmlDoctype token covering the span; include a test that asserts the exact desired behavior for this edge case in the harness.
+
+Parser and tooling impact
+- The scanner-only change is isolated; the parser must be updated only if you want dedicated Doctype AST nodes. If so, map `HtmlDoctype` tokens to `HtmlDoctypeNode` in the parser and propagate unterminated diagnostics.
+
+Implementation contract (minimal pseudocode)
+
+```ts
+function scanHtmlDoctype(start: number): void {
+  // `pos` is current scanner index, `end` is source length
+  if (!matchSequenceCaseInsensitive(pos, '<!DOCTYPE')) return; // caller handles other <! forms
+  pos += '<!DOCTYPE'.length; // advance past prefix
+  let inQuote: string | null = null;
+  while (pos < end) {
+    const ch = source.charAt(pos);
+    if (inQuote) {
+      if (ch === inQuote) { inQuote = null; }
+      pos++;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { inQuote = ch; pos++; continue; }
+    if (ch === '>') { emitToken(SyntaxKind.HtmlDoctype, start, pos + 1); return; }
+    pos++;
+  }
+  // EOF reached without closing '>'
+  emitTokenWithUnterminated(SyntaxKind.HtmlDoctype, start, pos, 'UnterminatedHtmlDoctype');
+}
+```
+
+Estimated effort
+- Token + scanner changes + tests: small (30–90 minutes) for someone familiar with the scanner and test harness.
+
+Minimal acceptance checklist
+- [ ] `HtmlDoctype` added to `SyntaxKind` and recognized by `verify-tokens` utilities.
+- [ ] `scanLessThan()` detects `<!DOCTYPE` case-insensitively (after comment/CDATA checks) and delegates to `scanHtmlDoctype`.
+- [ ] `scanHtmlDoctype` correctly skips `>` inside single/double quotes and emits `HtmlDoctype` to the closing `>` or EOF.
+- [ ] Tests for HTML5, HTML4 (PUBLIC/SYSTEM), case-insensitivity, quoted `>` inside DOCTYPE, unterminated DOCTYPE, and the `<!DOCtype>` edge case pass.
+- [ ] `UnterminatedHtmlDoctype` diagnostic is recorded on unterminated tokens.
+- [ ] No unnecessary string allocations are introduced during DOCTYPE scanning (scanner slices only once for `tokenText`).
+
+Implementing DOCTYPE this way preserves the Stage-4 scanner goals while providing the token-level support needed for downstream parsing or editor tooling.
