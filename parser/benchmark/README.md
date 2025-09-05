@@ -7,7 +7,13 @@ A comprehensive benchmarking framework to compare the raw performance of the Mix
 ```bash
 # From the parser/benchmark directory
 npm install
-npm start
+npm run install-competitors
+
+# Run competitive benchmark with real Mixpad scanner (recommended)
+npm run bench:ts:readme
+
+# Or run with JavaScript implementation (uses mock scanner)
+npm run bench:readme
 ```
 
 ## Overview
@@ -73,25 +79,38 @@ npm start
 
 ## Usage
 
-### Run All Benchmarks
+### Run with Real Mixpad Scanner (Recommended)
 
 ```bash
-npm start
+# TypeScript implementation with esbuild compilation - uses REAL scanner
+npm run bench:ts:readme
+npm run bench:ts
+```
+
+### Run All Benchmarks (JavaScript Implementation)
+
+```bash
+# JavaScript implementation - may use mock scanner if real one can't be loaded
+npm run bench:readme
+npm run bench:competitive
 # or
-npm run bench
+npm start
 ```
 
 ### Run with README Update
 
 ```bash
+# Real scanner with README update (recommended)
+npm run bench:ts:readme
+
+# JavaScript implementation with README update
+npm run bench:readme
+
 # Simple benchmark with README update
 npm run bench:simple:readme
 
 # Working benchmark with README update
 npm run bench:working:readme
-
-# Full TypeScript benchmark with README update  
-npm run bench:readme
 
 # Or with any benchmark runner
 npm run bench:simple -- --update-readme
@@ -101,16 +120,20 @@ npm run bench:working -- --update-readme
 ### Run with Garbage Collection (Recommended)
 
 ```bash
-npm run bench
-# Uses --expose-gc flag automatically
+# All npm scripts use --expose-gc flag automatically for accurate memory measurement
+npm run bench:ts:readme
+npm run bench:readme
+npm run bench:competitive
 ```
 
-### Run Compiled JavaScript (Faster)
+### Run with TypeScript Implementation (Real Scanner)
 
 ```bash
-# First compile TypeScript to JavaScript
-npx tsc runner.ts --target es2022 --module nodenext --moduleResolution nodenext
-npm run bench:node
+# Build and run TypeScript implementation with real scanner
+npm run bench:ts:readme
+
+# Or without README update
+npm run bench:ts
 ```
 
 ## Output
@@ -174,30 +197,30 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
 | mixpad | 0.47 | 2.1 | 0 | 146 |
-| commonmark | 0.96 | 1.0 | 91 | N/A |
-| markdown-it | 1.25 | 0.8 | 110 | N/A |
-| marked | 1.39 | 0.7 | 39 | N/A |
-| micromark | 10.44 | 0.1 | 8 | N/A |
+| commonmark | 0.95 | 1.0 | 91 | N/A |
+| markdown-it | 1.23 | 0.8 | 110 | N/A |
+| marked | 1.32 | 0.7 | 40 | N/A |
+| micromark | 10.13 | 0.1 | 8 | N/A |
 
 ### medium-mixed
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 8.97 | 5.4 | 848 | N/A |
-| marked | 10.17 | 4.8 | 375 | N/A |
-| mixpad | 10.99 | 4.4 | 36 | 6365 |
-| markdown-it | 15.47 | 3.2 | 1732 | N/A |
-| micromark | 119.70 | 0.4 | 51 | N/A |
+| commonmark | 7.59 | 6.4 | 797 | N/A |
+| marked | 9.10 | 5.4 | 108 | N/A |
+| mixpad | 12.59 | 3.9 | 44 | 6365 |
+| markdown-it | 16.04 | 3.0 | 1732 | N/A |
+| micromark | 121.91 | 0.4 | 50 | N/A |
 
 ### large-text-heavy
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 3.41 | 143.1 | 49 | N/A |
-| mixpad | 15.81 | 30.9 | 1 | 3439 |
-| marked | 17.51 | 27.9 | 115 | N/A |
-| markdown-it | 19.08 | 25.6 | 1444 | N/A |
-| micromark | 121.06 | 4.0 | 783 | N/A |
+| commonmark | 4.17 | 117.1 | 1326 | N/A |
+| marked | 17.04 | 28.6 | 153 | N/A |
+| mixpad | 20.04 | 24.4 | 30 | 3439 |
+| markdown-it | 20.38 | 24.0 | 1446 | N/A |
+| micromark | 130.64 | 3.7 | 823 | N/A |
 
 
 <!-- BENCHMARK_RESULTS_END -->
@@ -299,15 +322,7 @@ function generateMyDataset(targetSize: number): string {
 
 ## Troubleshooting
 
-### TypeScript Errors
-
-Make sure you have TypeScript installed:
-
-```bash
-npm install --save-dev typescript
-```
-
-### Missing Competitive Parsers
+### Missing Dependencies
 
 Competitive parsers are optional. Install them if you want to compare:
 
@@ -320,7 +335,7 @@ npm run install-competitors
 For accurate memory measurements, run with `--expose-gc`:
 
 ```bash
-node --expose-gc --loader ts-node/esm runner.ts
+node --expose-gc run-competitive.js
 ```
 
 ### Performance Variations

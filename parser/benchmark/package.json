@@ -5,7 +5,7 @@
   "main": "runner.js",
   "scripts": {
     "bench": "node --expose-gc run-working.js",
-    "bench:readme": "node --expose-gc run-working.js --update-readme",
+    "bench:readme": "node --expose-gc run-competitive.js --update-readme",
     "bench:simple:readme": "node --expose-gc run-simple.js --update-readme",
     "bench:working:readme": "node --expose-gc run-working.js --update-readme",
     "bench:simple": "node --expose-gc run-simple.js",
