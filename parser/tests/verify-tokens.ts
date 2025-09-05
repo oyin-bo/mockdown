@@ -209,11 +209,11 @@ function parseAssertLine(assertLine: string) {
           break;
         }
 
-  // If this quote is not escaped (previous char is not a backslash), we've found the end.
-  if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
-  // Otherwise the quote is escaped (e.g. \"), so advance past it to continue the search
-  // to avoid getting stuck at the same index and causing an infinite loop.
-  endQuote++;
+        // If this quote is not escaped (previous char is not a backslash), we've found the end.
+        if (assertLine[endQuote] === '"' && assertLine[endQuote - 1] !== '\\') break;
+        // Otherwise the quote is escaped (e.g. \"), so advance past it to continue the search
+        // to avoid getting stuck at the same index and causing an infinite loop.
+        endQuote++;
       }
 
       if (endQuote < 0)
@@ -308,7 +308,7 @@ function tokenFlagsToString(kind: TokenFlags): string {
   for (const k of stringFlags) {
     combinedFlags |= TokenFlagsShadow[k as any] as any;
   }
-  if (combinedFlags !== kind) 
+  if (combinedFlags !== kind)
     stringFlags.push('0x' + (kind & ~combinedFlags).toFixed(16).toUpperCase());
   return stringFlags.join('|');
 }

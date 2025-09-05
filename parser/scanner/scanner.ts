@@ -1,15 +1,15 @@
 import {
-  SyntaxKind,
-  TokenFlags,
-  RollbackType,
-  ScannerErrorCode
-} from './token-types';
-import {
   CharacterCodes,
   isLineBreak,
-  isWhiteSpaceSingleLine,
-  isWhiteSpace
+  isWhiteSpace,
+  isWhiteSpaceSingleLine
 } from './character-codes';
+import {
+  RollbackType,
+  ScannerErrorCode,
+  SyntaxKind,
+  TokenFlags
+} from './token-types';
 
 export interface Scanner {
   /** Initialize scanner text and optional start/length. */
@@ -136,35 +136,35 @@ export function createScanner(): Scanner {
   let line = 1;
   let column = 1;
   let lastLineStart = 0;
-  
+
   // Content processing mode
   let contentMode: ContentMode = ContentMode.Normal;
   let endPattern: string | undefined = undefined;
-  
+
   // Context flags
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
-  
+
   // Scanner interface fields - these are the 4 public fields
   let token: SyntaxKind = SyntaxKind.Unknown;
   let tokenText: string = '';
   let tokenFlags: TokenFlags = TokenFlags.None;
   let offsetNext: number = 0;
-  
+
   // Cross-line state continuity
   let currentIndentLevel = 0;
   let lastBlankLinePos = -1;
-  
+
   /**
    * Helper functions reused from existing scanner
    */
-  
+
   function updatePosition(newPos: number): void {
     while (pos < newPos) {
       const ch = source.charCodeAt(pos);
       if (isLineBreak(ch)) {
-        if (ch === CharacterCodes.carriageReturn && 
-            pos + 1 < end && 
-            source.charCodeAt(pos + 1) === CharacterCodes.lineFeed) {
+        if (ch === CharacterCodes.carriageReturn &&
+          pos + 1 < end &&
+          source.charCodeAt(pos + 1) === CharacterCodes.lineFeed) {
           pos++; // Skip CR in CRLF
         }
         line++;
@@ -181,10 +181,10 @@ export function createScanner(): Scanner {
       pos++;
     }
   }
-  
+
   function getCurrentIndentLevel(): number {
     if (!(contextFlags & ContextFlags.AtLineStart)) return 0;
-    
+
     let indent = 0;
     let i = lastLineStart;
     while (i < end) {
@@ -200,7 +200,7 @@ export function createScanner(): Scanner {
     }
     return indent;
   }
-  
+
   function isBlankLine(): boolean {
     let i = lastLineStart;
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
@@ -212,7 +212,7 @@ export function createScanner(): Scanner {
     }
     return true;
   }
-  
+
   /**
    * Single-pass string processing that returns either a clean substring or normalized string
    * Optimized for the common case where no normalization is needed
@@ -223,11 +223,11 @@ export function createScanner(): Scanner {
     if (length <= 2) {
       return source.substring(start, endPos);
     }
-    
+
     // First pass - check if normalization is needed at all
     let needsNormalization = false;
     let hasTrailingSpace = false;
-    
+
     for (let i = start; i < endPos; i++) {
       const ch = source.charCodeAt(i);
       if (ch === CharacterCodes.tab) {
@@ -246,37 +246,37 @@ export function createScanner(): Scanner {
         }
       }
     }
-    
+
     // If no normalization needed and no trailing space, return clean substring
     if (!needsNormalization && !hasTrailingSpace) {
       return source.substring(start, endPos);
     }
-    
+
     // If only trailing space needs to be removed, do it efficiently
     if (!needsNormalization && hasTrailingSpace) {
       return source.substring(start, endPos - 1);
     }
-    
+
     // Need normalization - build result with array
     let result: string[] = [];
     let lastCleanStart = start;
     let inSpaceRun = false;
-    
+
     for (let i = start; i < endPos; i++) {
       const ch = source.charCodeAt(i);
-      
+
       if (ch === CharacterCodes.tab || (ch === CharacterCodes.space && inSpaceRun)) {
         // Need to normalize - flush clean content up to this point
         if (i > lastCleanStart) {
           result.push(source.substring(lastCleanStart, i));
         }
-        
+
         // Add single space if not already in a space run
         if (!inSpaceRun) {
           result.push(' ');
           inSpaceRun = true;
         }
-        
+
         // Mark next clean start after this character
         lastCleanStart = i + 1;
       } else if (ch === CharacterCodes.space) {
@@ -290,24 +290,24 @@ export function createScanner(): Scanner {
         }
       }
     }
-    
+
     // Add any remaining clean content
     if (lastCleanStart < endPos) {
       result.push(source.substring(lastCleanStart, endPos));
     }
-    
+
     // Join result and trim trailing spaces
     let finalResult = result.join('');
     return finalResult.replace(/\s+$/, '');
   }
-  
+
   /**
    * Token emission functions
    */
-  
+
   function emitToken(kind: SyntaxKind, start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = kind;
-    
+
     // Use cached text for common fixed tokens to avoid substring allocation
     const length = endPos - start;
     if (length === 1) {
@@ -359,9 +359,9 @@ export function createScanner(): Scanner {
         tokenText = TokenTextCache.LESS_THAN_SLASH;
       } else if (kind === SyntaxKind.SlashGreaterThanToken) {
         tokenText = TokenTextCache.SLASH_GREATER_THAN;
-      } else if (start + 1 < source.length && 
-                 source.charCodeAt(start) === CharacterCodes.carriageReturn &&
-                 source.charCodeAt(start + 1) === CharacterCodes.lineFeed) {
+      } else if (start + 1 < source.length &&
+        source.charCodeAt(start) === CharacterCodes.carriageReturn &&
+        source.charCodeAt(start + 1) === CharacterCodes.lineFeed) {
         tokenText = TokenTextCache.NEWLINE_CRLF;
       } else {
         tokenText = source.substring(start, endPos);
@@ -369,10 +369,10 @@ export function createScanner(): Scanner {
     } else {
       tokenText = source.substring(start, endPos);
     }
-    
+
     tokenFlags = flags;
     offsetNext = endPos;
-    
+
     // Add context-based flags
     if (contextFlags & ContextFlags.PrecedingLineBreak) {
       tokenFlags |= TokenFlags.PrecedingLineBreak;
@@ -380,23 +380,23 @@ export function createScanner(): Scanner {
     if (contextFlags & ContextFlags.AtLineStart) {
       tokenFlags |= TokenFlags.IsAtLineStart;
     }
-    
+
     // Update position tracking
     updatePosition(endPos);
-    
+
     // Reset preceding line break flag after first token
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
 
   function emitStringLiteralToken(start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = SyntaxKind.StringLiteral;
-    
+
     // Single-pass string processing - eliminates double scanning
     tokenText = processStringToken(start, endPos);
-    
+
     tokenFlags = flags;
     offsetNext = endPos;
-    
+
     // Add context-based flags
     if (contextFlags & ContextFlags.PrecedingLineBreak) {
       tokenFlags |= TokenFlags.PrecedingLineBreak;
@@ -404,34 +404,34 @@ export function createScanner(): Scanner {
     if (contextFlags & ContextFlags.AtLineStart) {
       tokenFlags |= TokenFlags.IsAtLineStart;
     }
-    
+
     // Update position tracking
     updatePosition(endPos);
-    
+
     // Reset preceding line break flag after first token
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
-    
+
     // Update paragraph state
     if (tokenText.length > 0) {
       contextFlags |= ContextFlags.InParagraph;
     }
   }
-  
+
   /**
    * Stage 3: Inline formatting scanner functions
    */
-  
+
   function scanAsterisk(start: number): void {
     // Count consecutive asterisks from current position
     let runEnd = start;
     while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.asterisk) {
       runEnd++;
     }
-    
+
     const runLength = runEnd - start;
     let tokenType: SyntaxKind;
     let flags = TokenFlags.None;
-    
+
     // For runs of 2 or more, emit double asterisk token
     if (runLength >= 2) {
       tokenType = SyntaxKind.AsteriskAsterisk;
@@ -441,25 +441,25 @@ export function createScanner(): Scanner {
       tokenType = SyntaxKind.AsteriskToken;
       // Single asterisk - runEnd is already start + 1
     }
-    
+
     // Apply flanking rules for CanOpen/CanClose flags
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.asterisk);
-    
+
     emitToken(tokenType, start, runEnd, flags);
     updatePosition(runEnd);
   }
-  
+
   function scanUnderscore(start: number): void {
     // Count consecutive underscores from current position
     let runEnd = start;
     while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.underscore) {
       runEnd++;
     }
-    
+
     const runLength = runEnd - start;
     let tokenType: SyntaxKind;
     let flags = TokenFlags.None;
-    
+
     // For runs of 2 or more, emit double underscore token
     if (runLength >= 2) {
       tokenType = SyntaxKind.UnderscoreUnderscore;
@@ -469,33 +469,33 @@ export function createScanner(): Scanner {
       tokenType = SyntaxKind.UnderscoreToken;
       // Single underscore - runEnd is already start + 1
     }
-    
+
     // Apply flanking rules for CanOpen/CanClose flags
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.underscore);
-    
+
     emitToken(tokenType, start, runEnd, flags);
     updatePosition(runEnd);
   }
-  
+
   function scanBacktick(start: number): void {
     let runEnd = start;
-    
+
     // Count consecutive backticks
     while (runEnd < end && source.charCodeAt(runEnd) === CharacterCodes.backtick) {
       runEnd++;
     }
-    
+
     // For backticks, we always emit BacktickToken regardless of run length
     // The run length will be encoded in flags for parser use
     const runLength = runEnd - start;
     let flags = TokenFlags.None;
-    
+
     // TODO: Add run length encoding to flags when needed for parser
-    
+
     emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
     updatePosition(runEnd);
   }
-  
+
   function scanTilde(start: number): void {
     // This should only be called for double tildes now, since emitTextRun handles single tildes
     // Double check that we have at least 2 tildes
@@ -508,50 +508,50 @@ export function createScanner(): Scanner {
       emitTextRun(start);
     }
   }
-  
+
   /**
    * Stage 4: HTML scanning functions
    */
-  
+
   function scanLessThan(start: number): void {
     // Minimal lookahead via direct charCode reads (no substring allocation)
     const c1 = start + 1 < end ? source.charCodeAt(start + 1) : -1;
-    
+
     if (c1 === CharacterCodes.slash) {
       // This is </ - emit LessThanSlashToken
       emitToken(SyntaxKind.LessThanSlashToken, start, start + 2);
       return;
     }
-    
+
     // Detect comment start <!--
     if (c1 === CharacterCodes.exclamation && matchSequence(start, '<!--')) {
       scanHtmlComment(start);
       return;
     }
-    
+
     // Detect CDATA <![CDATA[
     if (c1 === CharacterCodes.exclamation && matchSequence(start, '<![CDATA[')) {
       scanHtmlCdata(start);
       return;
     }
-    
+
     // Detect processing instruction <? ... ?>
     if (c1 === CharacterCodes.question) {
       scanHtmlProcessingInstruction(start);
       return;
     }
-    
+
     // Check if this could be a tag name after <
     if (c1 >= 0 && isLetter(c1)) {
       // Regular < token, but let the next scan call handle the tag name
       emitToken(SyntaxKind.LessThanToken, start, start + 1);
       return;
     }
-    
+
     // Regular < token
     emitToken(SyntaxKind.LessThanToken, start, start + 1);
   }
-  
+
   function scanGreaterThan(start: number): void {
     // Check if this might be part of />
     if (start > 0 && source.charCodeAt(start - 1) === CharacterCodes.slash) {
@@ -562,7 +562,7 @@ export function createScanner(): Scanner {
       emitToken(SyntaxKind.GreaterThanToken, start, start + 1);
     }
   }
-  
+
   function scanAmpersand(start: number): void {
     // Named or numeric entities MUST terminate with ';' to be recognized.
     // Strategy: probe character-by-character without substring allocation.
@@ -574,21 +574,21 @@ export function createScanner(): Scanner {
     }
     emitToken(SyntaxKind.AmpersandToken, start, start + 1); // Bare '&'
   }
-  
+
   function scanEquals(start: number): void {
     emitToken(SyntaxKind.EqualsToken, start, start + 1);
   }
-  
+
   function scanHtmlTagName(start: number): boolean {
     let nameEnd = start;
-    
+
     // Tag name start: [A-Za-z]
     if (nameEnd >= end) return false;
     const firstChar = source.charCodeAt(nameEnd);
     if (!isLetter(firstChar)) return false;
-    
+
     nameEnd++;
-    
+
     // Continue: [A-Za-z0-9-]*
     while (nameEnd < end) {
       const ch = source.charCodeAt(nameEnd);
@@ -598,30 +598,30 @@ export function createScanner(): Scanner {
         break;
       }
     }
-    
+
     if (nameEnd > start) {
       emitToken(SyntaxKind.HtmlTagName, start, nameEnd);
       return true;
     }
-    
+
     return false;
   }
-  
+
   function scanNumericEntity(start: number): boolean {
     // Expect patterns: "&#<digits>;" or "&#x<hex>;"
     if (!matchSequence(start, '&#')) return false;
-    
+
     let pos = start + 2;
     if (pos >= end) return false;
-    
+
     let isHex = false;
     if (source.charCodeAt(pos) === CharacterCodes.x || source.charCodeAt(pos) === CharacterCodes.X) {
       isHex = true;
       pos++;
     }
-    
+
     const digitStart = pos;
-    
+
     // Scan digits
     while (pos < end) {
       const ch = source.charCodeAt(pos);
@@ -631,28 +631,28 @@ export function createScanner(): Scanner {
         break;
       }
     }
-    
+
     // Must have at least one digit and end with semicolon
     if (pos === digitStart || pos >= end || source.charCodeAt(pos) !== CharacterCodes.semicolon) {
       return false;
     }
-    
+
     // Digit length cap: 8
     if (pos - digitStart > 8) {
       return false;
     }
-    
+
     emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
     return true;
   }
-  
+
   function scanNamedEntity(start: number): boolean {
     // Scan for named entity pattern: &name;
     if (source.charCodeAt(start) !== CharacterCodes.ampersand) return false;
-    
+
     let pos = start + 1;
     const nameStart = pos;
-    
+
     // Scan entity name (letters only for now)
     while (pos < end && pos - nameStart < 32) { // Max length 32
       const ch = source.charCodeAt(pos);
@@ -662,78 +662,78 @@ export function createScanner(): Scanner {
         break;
       }
     }
-    
+
     // Must have name and end with semicolon
     if (pos === nameStart || pos >= end || source.charCodeAt(pos) !== CharacterCodes.semicolon) {
       return false;
     }
-    
+
     // Check if it's a known entity
     const entityName = source.substring(nameStart, pos);
     if (isValidEntityName(entityName)) {
       emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
       return true;
     }
-    
+
     return false;
   }
-  
+
   function scanHtmlComment(start: number): void {
     // Scan HTML comment: <!-- ... -->
     let commentPos = start + 4; // Skip <!--
-    
+
     while (commentPos <= end - 3) {
       if (source.charCodeAt(commentPos) === CharacterCodes.minus &&
-          source.charCodeAt(commentPos + 1) === CharacterCodes.minus &&
-          source.charCodeAt(commentPos + 2) === CharacterCodes.greaterThan) {
+        source.charCodeAt(commentPos + 1) === CharacterCodes.minus &&
+        source.charCodeAt(commentPos + 2) === CharacterCodes.greaterThan) {
         // Found end -->
         emitToken(SyntaxKind.HtmlComment, start, commentPos + 3);
         return;
       }
       commentPos++;
     }
-    
+
     // Unterminated comment
     emitToken(SyntaxKind.HtmlComment, start, end, TokenFlags.None); // TODO: Add Unterminated flag
   }
-  
+
   function scanHtmlCdata(start: number): void {
     // Scan CDATA: <![CDATA[ ... ]]>
     let cdataPos = start + 9; // Skip <![CDATA[
-    
+
     while (cdataPos <= end - 3) {
       if (source.charCodeAt(cdataPos) === CharacterCodes.closeBracket &&
-          source.charCodeAt(cdataPos + 1) === CharacterCodes.closeBracket &&
-          source.charCodeAt(cdataPos + 2) === CharacterCodes.greaterThan) {
+        source.charCodeAt(cdataPos + 1) === CharacterCodes.closeBracket &&
+        source.charCodeAt(cdataPos + 2) === CharacterCodes.greaterThan) {
         // Found end ]]>
         emitToken(SyntaxKind.HtmlCdata, start, cdataPos + 3);
         return;
       }
       cdataPos++;
     }
-    
+
     // Unterminated CDATA
     emitToken(SyntaxKind.HtmlCdata, start, end, TokenFlags.None); // TODO: Add Unterminated flag
   }
-  
+
   function scanHtmlProcessingInstruction(start: number): void {
     // Scan PI: <? ... ?>
     let piPos = start + 2; // Skip <?
-    
+
     while (piPos <= end - 2) {
       if (source.charCodeAt(piPos) === CharacterCodes.question &&
-          source.charCodeAt(piPos + 1) === CharacterCodes.greaterThan) {
+        source.charCodeAt(piPos + 1) === CharacterCodes.greaterThan) {
         // Found end ?>
         emitToken(SyntaxKind.HtmlProcessingInstruction, start, piPos + 2);
         return;
       }
       piPos++;
     }
-    
+
     // Unterminated PI
     emitToken(SyntaxKind.HtmlProcessingInstruction, start, end, TokenFlags.None); // TODO: Add Unterminated flag
   }
-  
+
   // Helper functions
   function matchSequence(pos: number, sequence: string): boolean {
     if (pos + sequence.length > end) return false;
@@ -744,56 +744,56 @@ export function createScanner(): Scanner {
     }
     return true;
   }
-  
+
   function isValidEntityName(name: string): boolean {
     // Stage 4 curated set
     const NAMED_ENTITIES = new Set(['amp', 'lt', 'gt', 'quot', 'apos', 'nbsp']);
     return NAMED_ENTITIES.has(name);
   }
-  
+
   function isLetter(ch: number): boolean {
     return (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
-           (ch >= CharacterCodes.a && ch <= CharacterCodes.z);
+      (ch >= CharacterCodes.a && ch <= CharacterCodes.z);
   }
-  
+
   function isDigit(ch: number): boolean {
     return ch >= CharacterCodes._0 && ch <= CharacterCodes._9;
   }
-  
+
   function isHexDigit(ch: number): boolean {
     return (ch >= CharacterCodes._0 && ch <= CharacterCodes._9) ||
-           (ch >= CharacterCodes.A && ch <= CharacterCodes.F) ||
-           (ch >= CharacterCodes.a && ch <= CharacterCodes.f);
+      (ch >= CharacterCodes.A && ch <= CharacterCodes.F) ||
+      (ch >= CharacterCodes.a && ch <= CharacterCodes.f);
   }
 
   function emitTextRun(start: number): void {
     let textEnd = start;
-    
+
     // Scan until we hit a special character or line break
     while (textEnd < end) {
       const ch = source.charCodeAt(textEnd);
-      
+
       if (isLineBreak(ch)) {
         break;
       }
-      
+
       // Check for special characters, but handle intraword underscores specially
       if (ch === CharacterCodes.asterisk ||
-          ch === CharacterCodes.backtick ||
-          ch === CharacterCodes.lessThan ||
-          ch === CharacterCodes.greaterThan ||
-          ch === CharacterCodes.ampersand ||
-          ch === CharacterCodes.equals) {
+        ch === CharacterCodes.backtick ||
+        ch === CharacterCodes.lessThan ||
+        ch === CharacterCodes.greaterThan ||
+        ch === CharacterCodes.ampersand ||
+        ch === CharacterCodes.equals) {
         break;
       }
-      
+
       // Special handling for underscores - only break if they can be emphasis delimiters
       if (ch === CharacterCodes.underscore) {
         if (canUnderscoreBeDelimiter(textEnd)) {
           break;
         }
       }
-      
+
       // Special handling for tildes - only break if they are part of double tilde
       if (ch === CharacterCodes.tilde) {
         // Check if this is a double tilde
@@ -802,152 +802,152 @@ export function createScanner(): Scanner {
         }
         // Single tilde - include it in text
       }
-      
+
       textEnd++;
     }
-    
+
     if (textEnd > start) {
       // Check if we scanned to end of line
       const scannedToLineEnd = textEnd >= end || isLineBreak(source.charCodeAt(textEnd));
-      
+
       let flags = TokenFlags.None;
-      
+
       if (contextFlags & ContextFlags.PrecedingLineBreak) {
         flags |= TokenFlags.PrecedingLineBreak;
       }
       if (contextFlags & ContextFlags.AtLineStart) {
         flags |= TokenFlags.IsAtLineStart;
-        
+
         // Add rollback flags for safe restart points when at line start and scanning to line end
         if (scannedToLineEnd) {
           flags |= TokenFlags.CanRollbackHere;
         }
       }
-      
+
       // Always use normalized text for StringLiteral tokens regardless of position
       // String manipulation only happens at token emission time
       emitStringLiteralToken(start, textEnd, flags);
-      
+
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
     }
   }
-  
+
   function canUnderscoreBeDelimiter(pos: number): boolean {
     // Check if underscore at position pos can be an emphasis delimiter
     // According to CommonMark, intraword underscores (surrounded by alphanumeric) cannot be delimiters
-    
+
     const prevChar = pos > 0 ? source.charCodeAt(pos - 1) : 0;
     const nextChar = pos + 1 < end ? source.charCodeAt(pos + 1) : 0;
-    
+
     const prevIsAlnum = isAlphaNumeric(prevChar);
     const nextIsAlnum = isAlphaNumeric(nextChar);
-    
+
     // If surrounded by alphanumeric characters, it's intraword and can't be a delimiter
     if (prevIsAlnum && nextIsAlnum) {
       return false;
     }
-    
+
     return true;
   }
-  
+
   function computeFlankingFlags(start: number, end: number, char: number): TokenFlags {
     let flags = TokenFlags.None;
-    
+
     // Get previous and next characters for flanking rules
     const prevChar = start > 0 ? source.charCodeAt(start - 1) : 0;
     const nextChar = end < source.length ? source.charCodeAt(end) : 0;
-    
+
     // Simplified flanking rules - can be refined later
     const prevIsWhitespace = prevChar === 0 || isWhiteSpace(prevChar);
     const nextIsWhitespace = nextChar === 0 || isWhiteSpace(nextChar);
     const prevIsPunctuation = !prevIsWhitespace && isPunctuation(prevChar);
     const nextIsPunctuation = !nextIsWhitespace && isPunctuation(nextChar);
-    
+
     // Left-flanking: not followed by whitespace and either:
     // - not followed by punctuation, or
     // - followed by punctuation and preceded by whitespace or punctuation
-    const leftFlanking = !nextIsWhitespace && 
+    const leftFlanking = !nextIsWhitespace &&
       (!nextIsPunctuation || prevIsWhitespace || prevIsPunctuation);
-    
+
     // Right-flanking: not preceded by whitespace and either:
     // - not preceded by punctuation, or  
     // - preceded by punctuation and followed by whitespace or punctuation
     const rightFlanking = !prevIsWhitespace &&
       (!prevIsPunctuation || nextIsWhitespace || nextIsPunctuation);
-    
+
     if (leftFlanking) {
       flags |= TokenFlags.CanOpen;
     }
     if (rightFlanking) {
       flags |= TokenFlags.CanClose;
     }
-    
+
     // Special rule for underscore: intraword underscore can't open/close
     if (char === CharacterCodes.underscore) {
       const prevIsAlnum = isAlphaNumeric(prevChar);
       const nextIsAlnum = isAlphaNumeric(nextChar);
-      
+
       if (prevIsAlnum && nextIsAlnum) {
         // Intraword underscore - remove flanking capabilities
         flags &= ~(TokenFlags.CanOpen | TokenFlags.CanClose);
       }
     }
-    
+
     return flags;
   }
-  
+
   function isPunctuation(ch: number): boolean {
     // Basic punctuation check - can be refined
     return (ch >= 0x21 && ch <= 0x2F) ||
-           (ch >= 0x3A && ch <= 0x40) ||
-           (ch >= 0x5B && ch <= 0x60) ||
-           (ch >= 0x7B && ch <= 0x7E);
+      (ch >= 0x3A && ch <= 0x40) ||
+      (ch >= 0x5B && ch <= 0x60) ||
+      (ch >= 0x7B && ch <= 0x7E);
   }
-  
+
   function isAlphaNumeric(ch: number): boolean {
     return (ch >= CharacterCodes.a && ch <= CharacterCodes.z) ||
-           (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
-           (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9);
+      (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
+      (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9);
   }
-  
-  
+
+
   function emitWhitespace(start: number): void {
     let wsEnd = start;
     while (wsEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(wsEnd))) {
       wsEnd++;
     }
-    
+
     if (wsEnd > start) {
       emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
     }
   }
-  
+
   function emitNewline(start: number): void {
     let nlEnd = start;
     const ch = source.charCodeAt(nlEnd);
-    
-    if (ch === CharacterCodes.carriageReturn && 
-        nlEnd + 1 < end && 
-        source.charCodeAt(nlEnd + 1) === CharacterCodes.lineFeed) {
+
+    if (ch === CharacterCodes.carriageReturn &&
+      nlEnd + 1 < end &&
+      source.charCodeAt(nlEnd + 1) === CharacterCodes.lineFeed) {
       nlEnd += 2; // CRLF
     } else if (isLineBreak(ch)) {
       nlEnd++; // LF or other line break
     }
-    
+
     let flags = TokenFlags.None;
-    
+
     // Check if this newline ends a blank line
     if (isBlankLine()) {
       flags |= TokenFlags.IsBlankLine;
       lastBlankLinePos = start;
       contextFlags &= ~ContextFlags.InParagraph; // Reset paragraph context
     }
-    
+
     emitToken(SyntaxKind.NewLineTrivia, start, nlEnd, flags);
     contextFlags |= ContextFlags.AtLineStart | ContextFlags.PrecedingLineBreak;
   }
-  
+
   /**
    * Main scanning function - Stage 3 implementation with inline formatting
    */
@@ -956,27 +956,27 @@ export function createScanner(): Scanner {
       emitToken(SyntaxKind.EndOfFileToken, pos, pos);
       return;
     }
-    
+
     const start = pos;
     const ch = source.charCodeAt(pos);
-    
+
     // Update indent level at line start
     if (contextFlags & ContextFlags.AtLineStart) {
       currentIndentLevel = getCurrentIndentLevel();
     }
-    
+
     // Handle newlines
     if (isLineBreak(ch)) {
       emitNewline(start);
       return;
     }
-    
+
     // Handle leading whitespace at line start
     if (isWhiteSpaceSingleLine(ch) && (contextFlags & ContextFlags.AtLineStart)) {
       emitWhitespace(start);
       return;
     }
-    
+
     // Stage 4: HTML character scanning
     if (ch === CharacterCodes.lessThan) {
       scanLessThan(start);
@@ -991,8 +991,8 @@ export function createScanner(): Scanner {
       emitToken(SyntaxKind.SlashGreaterThanToken, start, start + 2);
     } else if (isLetter(ch)) {
       // Check if this could be an HTML tag name (only at appropriate positions)
-      if (pos > 0 && (source.charCodeAt(pos - 1) === CharacterCodes.lessThan || 
-                      (pos > 1 && source.charCodeAt(pos - 2) === CharacterCodes.lessThan && source.charCodeAt(pos - 1) === CharacterCodes.slash))) {
+      if (pos > 0 && (source.charCodeAt(pos - 1) === CharacterCodes.lessThan ||
+        (pos > 1 && source.charCodeAt(pos - 2) === CharacterCodes.lessThan && source.charCodeAt(pos - 1) === CharacterCodes.slash))) {
         scanHtmlTagName(start);
       } else {
         // Regular text content - scan until next special character
@@ -1013,15 +1013,15 @@ export function createScanner(): Scanner {
       emitTextRun(start);
     }
   }
-  
+
   function isDoubleTilde(pos: number): boolean {
     return pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.tilde;
   }
-  
+
   /**
    * Public interface implementation
    */
-  
+
   function setText(text: string, start: number = 0, length?: number): void {
     source = text;
     pos = start;
@@ -1029,45 +1029,45 @@ export function createScanner(): Scanner {
     line = 1;
     column = 1;
     lastLineStart = 0;
-    
+
     // Reset state
     contentMode = ContentMode.Normal;
     endPattern = undefined;
     contextFlags = ContextFlags.AtLineStart;
     currentIndentLevel = 0;
     lastBlankLinePos = -1;
-    
+
     // Reset token fields
     token = SyntaxKind.Unknown;
     tokenText = '';
     tokenFlags = TokenFlags.None;
     offsetNext = start;
   }
-  
+
   function scan(): void {
     scanImpl();
   }
-  
+
   function rollback(position: number, type: RollbackType): void {
     // Simple rollback implementation for Stage 1
     if (position < 0 || position > source.length) {
       throw new Error(`Invalid rollback position: ${position}`);
     }
-    
+
     // Reset position
     pos = position;
-    
+
     // Recalculate line/column
     line = 1;
     column = 1;
     lastLineStart = 0;
-    
+
     for (let i = 0; i < position; i++) {
       const ch = source.charCodeAt(i);
       if (isLineBreak(ch)) {
-        if (ch === CharacterCodes.carriageReturn && 
-            i + 1 < source.length && 
-            source.charCodeAt(i + 1) === CharacterCodes.lineFeed) {
+        if (ch === CharacterCodes.carriageReturn &&
+          i + 1 < source.length &&
+          source.charCodeAt(i + 1) === CharacterCodes.lineFeed) {
           i++; // Skip CR in CRLF
         }
         line++;
@@ -1077,40 +1077,40 @@ export function createScanner(): Scanner {
         column++;
       }
     }
-    
+
     // Reset context flags
     contextFlags = ContextFlags.AtLineStart;
     if (position > 0) {
       contextFlags |= ContextFlags.PrecedingLineBreak;
     }
-    
+
     // Reset token fields
     token = SyntaxKind.Unknown;
     tokenText = '';
     tokenFlags = TokenFlags.None;
     offsetNext = position;
   }
-  
+
   function fillDebugState(state: ScannerDebugState): void {
     // Fill position state
     state.pos = pos;
     state.line = line;
     state.column = column;
-    state.mode = contentMode === ContentMode.Normal ? 'Normal' : 
-                 contentMode === ContentMode.RawText ? 'RawText' : 'RCData';
-    
+    state.mode = contentMode === ContentMode.Normal ? 'Normal' :
+      contentMode === ContentMode.RawText ? 'RawText' : 'RCData';
+
     // Fill context state
     state.atLineStart = !!(contextFlags & ContextFlags.AtLineStart);
     state.inParagraph = !!(contextFlags & ContextFlags.InParagraph);
     state.precedingLineBreak = !!(contextFlags & ContextFlags.PrecedingLineBreak);
-    
+
     // Fill token state
     state.currentToken = token;
     state.currentTokenText = tokenText;
     state.currentTokenFlags = tokenFlags;
     state.nextOffset = offsetNext;
   }
-  
+
   // Return the scanner interface object
   const scanner: Scanner = {
     // Methods
@@ -1118,20 +1118,20 @@ export function createScanner(): Scanner {
     rollback,
     fillDebugState,
     initText: setText,
-    
+
     // Direct field access - these are the 4 public fields
     get token() { return token; },
     set token(value: SyntaxKind) { token = value; },
-    
+
     get tokenText() { return tokenText; },
     set tokenText(value: string) { tokenText = value; },
-    
+
     get tokenFlags() { return tokenFlags; },
     set tokenFlags(value: TokenFlags) { tokenFlags = value; },
-    
+
     get offsetNext() { return offsetNext; },
     set offsetNext(value: number) { offsetNext = value; }
   };
-  
+
   return scanner;
 }
