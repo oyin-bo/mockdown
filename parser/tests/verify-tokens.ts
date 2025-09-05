@@ -111,7 +111,11 @@ export function verifyTokens(input: string): string {
 function* findAssertions(input: string) {
   let lastPos = 0;
   let pos = 0;
-  while (pos < input.length) {
+  let safetyCounter = 0;
+  
+  while (pos < input.length && safetyCounter < 1000) {
+    safetyCounter++;
+    
     const newLine1Regex = /(^|\n)\s*1/g;
     newLine1Regex.lastIndex = pos;
     let positionLineStart = newLine1Regex.exec(input)?.index;
@@ -121,11 +125,9 @@ function* findAssertions(input: string) {
     positionLineStart++;
 
     const positionLineEnd = input.indexOf('\n', positionLineStart + 1);
-    if (positionLineEnd < 0) {
-      pos = input.length;
-    }
+    const actualLineEnd = positionLineEnd < 0 ? input.length : positionLineEnd;
 
-    const positionLine = input.substring(positionLineStart, positionLineEnd);
+    const positionLine = input.substring(positionLineStart, actualLineEnd);
 
     let positionMarkerChars = positionLine.trim().split(/\s+/g);
     const positionMarkersCorrect = positionMarkerChars.every((mrk, i) =>
@@ -133,7 +135,7 @@ function* findAssertions(input: string) {
         mrk.toUpperCase() === String.fromCharCode('A'.charCodeAt(0) + i - 10));
 
     if (!positionMarkersCorrect) {
-      pos = positionLineEnd;
+      pos = actualLineEnd + (positionLineEnd < 0 ? 0 : 1); // Move past this line
       continue;
     }
 
@@ -147,8 +149,9 @@ function* findAssertions(input: string) {
       assertionText: null as null | string
     }));
 
-    let nextAssertLineStart = positionLineEnd + 1;
+    let nextAssertLineStart = actualLineEnd + (positionLineEnd < 0 ? 0 : 1);
     for (let i = 0; i < positionMarkerChars.length; i++) {
+      if (nextAssertLineStart >= input.length) break; // No more content
       if (input.slice(nextAssertLineStart, nextAssertLineStart + 2) !== '@' + positionMarkerChars[i]) break;
       let nextAssertLineEnd = input.indexOf('\n', nextAssertLineStart);
       if (nextAssertLineEnd < 0) nextAssertLineEnd = input.length;
@@ -173,6 +176,10 @@ function* findAssertions(input: string) {
     pos = lastPos = nextAssertLineStart;
 
     yield { assertions: positionMarkerAsserts, chunk };
+  }
+
+  if (safetyCounter >= 1000) {
+    console.error('INFINITE LOOP DETECTED in findAssertions! Breaking...');
   }
 
   if (pos <= input.length) {
