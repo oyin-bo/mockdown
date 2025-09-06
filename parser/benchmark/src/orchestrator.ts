@@ -10,7 +10,12 @@ export async function runOrchestrator(argv: string[]) {
   const distBundle = join(benchRoot, 'dist', 'benchmark.bundle.js');
   // Simple dataset/parsers list for scaffolding
   const parsers = ['mixpad', 'marked', 'markdown-it', 'micromark', 'remark', 'commonmark'];
-  const datasets = ['small-simple', 'docs-collection', 'super-heavy'];
+  // Temporarily exclude 'super-heavy' while we debug hang issues
+  const datasets = [
+    'small-simple',
+    'docs-collection',
+    // 'super-heavy'
+  ];
 
   // Verify bundle exists
   try {
@@ -30,39 +35,59 @@ export async function runOrchestrator(argv: string[]) {
   // Table printing helpers
   const headers = ['Parser', 'Time ms', 'Memory Δ', 'Tokens', 'Notes'];
   const parserColWidth = Math.max(...parsers.map(p => p.length), headers[0].length) + 2;
-  const numColWidth = 12;
-  const tokensColWidth = 12;
+  const numColWidth = 14;
+  const tokensColWidth = 20;
   const notesColWidth = 30;
   const totalWidth = parserColWidth + numColWidth + numColWidth + tokensColWidth + notesColWidth + 10;
 
-  function pad(s: string, width: number) { return s.length >= width ? s : s + ' '.repeat(width - s.length); }
+  // pad with alignment option: 'left' (default) or 'right'
+  function pad(s: string, width: number, align: 'left' | 'right' = 'left') {
+    const str = String(s ?? '');
+    if (str.length >= width) return str.slice(0, width);
+    const space = ' '.repeat(width - str.length);
+    return align === 'left' ? str + space : space + str;
+  }
+
   function printHeader() {
-    const row = pad(headers[0], parserColWidth) + pad(headers[1], numColWidth) + pad(headers[2], numColWidth) + pad(headers[3], tokensColWidth) + pad(headers[4], notesColWidth);
-    console.log(row);
-    console.log('-'.repeat(Math.min(totalWidth, 200)));
+  // add 1-char gap between Tokens and Notes so headers don't run together
+  const row = pad(headers[0], parserColWidth, 'left') + pad(headers[1], numColWidth, 'right') + pad(headers[2], numColWidth, 'right') + pad(headers[3], tokensColWidth, 'right') + ' ' + pad(headers[4], notesColWidth - 1, 'left');
+  console.log(row);
   }
 
   function printDatasetSeparator(name: string) {
-    const label = `== ${name} `;
-    const padLen = Math.max(0, totalWidth - label.length);
-    console.log(label + '='.repeat(padLen));
+    // Print a single dash line with the dataset name offset from the right.
+    // Place the name about 8 characters from the right edge, without any '==' prefix.
+    const shiftFromRight = 8;
+    const label = ' ' + name;
+    const padLen = Math.max(0, totalWidth - label.length - shiftFromRight);
+    console.log('-'.repeat(padLen) + ' ' + name);
   }
 
   function extractTokens(m: any) {
     if (!m) return '';
     const r = m.result || {};
-    if (typeof r.tokenCount === 'number') return String(r.tokenCount);
-    if (typeof r.tokensLength === 'number') return String(r.tokensLength);
-    if (typeof r.outLength === 'number') return String(r.outLength);
-    if (typeof r.html === 'string') return String(r.html.length);
+    try {
+      if (typeof r.tokenCount === 'number') return r.tokenCount.toLocaleString();
+      if (typeof r.tokensLength === 'number') return r.tokensLength.toLocaleString();
+      if (typeof r.outLength === 'number') return r.outLength.toLocaleString() + 'ch';
+      if (typeof r.html === 'string') return r.html.length.toLocaleString() + 'ch';
+    } catch (e) {
+      // fall back to plain string
+    }
     if (r.type) return String(r.type);
     return '';
   }
 
   function printRow(m: any) {
-    const parserName = pad(String(m.parser || ''), parserColWidth);
-    const time = typeof m.parseTimeMs === 'number' ? m.parseTimeMs.toFixed(2) : (m._timedOut ? 'TIMEOUT' : '');
-    const mem = typeof m.memoryDelta === 'number' ? String(m.memoryDelta) : '';
+    const parserName = pad(String(m.parser || ''), parserColWidth, 'left');
+    const time = typeof m.parseTimeMs === 'number'
+      ? Number(m.parseTimeMs).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+      : (m._timedOut ? 'TIMEOUT' : '');
+    let mem = '';
+    if (typeof m.memoryDelta === 'number') {
+      const kb = Math.round(m.memoryDelta / 1024);
+      mem = kb.toLocaleString() + 'K';
+    }
     const tokens = extractTokens(m);
     const notesParts: string[] = [];
     if (m.error) notesParts.push(String(m.error));
@@ -71,10 +96,10 @@ export async function runOrchestrator(argv: string[]) {
     const notes = notesParts.join(' ');
     const row =
       pad(m.parser, parserColWidth).slice(m.parser.length) +
-      pad(time, numColWidth) +
-      pad(mem, numColWidth) +
-      pad(tokens, tokensColWidth) +
-      pad(notes, notesColWidth);
+      pad(time, numColWidth, 'right') +
+      pad(mem, numColWidth, 'right') +
+      pad(tokens, tokensColWidth, 'right') +
+      pad(notes, notesColWidth, 'left');
     console.log(row);
   }
 
