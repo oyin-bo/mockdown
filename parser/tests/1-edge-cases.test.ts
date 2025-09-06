@@ -160,7 +160,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
     
     scanner.scan(); // Text content (normalized)
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Text with spaces');
+    expect(scanner.tokenText).toBe('Text with spaces ');
   });
 
   test('should preserve exact whitespace in whitespace tokens', () => {

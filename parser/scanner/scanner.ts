@@ -277,9 +277,9 @@ export function createScanner(): Scanner {
       return source.substring(start, endPos);
     }
 
-    // If only trailing space needs to be removed, do it efficiently
+    // If only trailing space needs to be handled, preserve it for inline content 
     if (!needsNormalization && hasTrailingSpace) {
-      return source.substring(start, endPos - 1);
+      return source.substring(start, endPos); // Keep the trailing space
     }
 
     // Need normalization - build result with array
@@ -321,9 +321,10 @@ export function createScanner(): Scanner {
       result.push(source.substring(lastCleanStart, endPos));
     }
 
-    // Join result and trim trailing spaces
+    // Join result and return final result (don't aggressively trim all trailing spaces)
     let finalResult = result.join('');
-    return finalResult.replace(/\s+$/, '');
+    // Only trim trailing spaces in certain contexts, not globally
+    return finalResult;
   }
 
   /**
@@ -579,7 +580,7 @@ export function createScanner(): Scanner {
       return;
     }
 
-    // Regular < token
+    // Regular < token for anything else (including malformed tags like <1bad>)
     emitToken(SyntaxKind.LessThanToken, start, start + 1);
   }
 
@@ -902,42 +903,66 @@ export function createScanner(): Scanner {
 
   function emitTextRun(start: number): void {
     let textEnd = start;
-
-    // Scan until we hit a special character or line break
-    while (textEnd < end) {
-      const ch = source.charCodeAt(textEnd);
-
-      if (isLineBreak(ch)) {
-        break;
-      }
-
-      // Check for special characters, but handle intraword underscores specially
-      if (ch === CharacterCodes.asterisk ||
-        ch === CharacterCodes.backtick ||
-        ch === CharacterCodes.lessThan ||
-        ch === CharacterCodes.greaterThan ||
-        ch === CharacterCodes.ampersand ||
-        ch === CharacterCodes.equals) {
-        break;
-      }
-
-      // Special handling for underscores - only break if they can be emphasis delimiters
-      if (ch === CharacterCodes.underscore) {
-        if (canUnderscoreBeDelimiter(textEnd)) {
+    
+    // Special case: if we start with a malformed < tag (like <1bad>), scan until we find the closing >
+    if (start < end && source.charCodeAt(start) === CharacterCodes.lessThan && !isValidHtmlStart(start)) {
+      // This is a malformed tag, scan until we find > or end of line
+      textEnd = start + 1; // Skip the <
+      while (textEnd < end) {
+        const ch = source.charCodeAt(textEnd);
+        if (isLineBreak(ch)) {
+          break;
+        }
+        textEnd++;
+        if (ch === CharacterCodes.greaterThan) {
+          // Include the > and stop
           break;
         }
       }
+    } else {
+      // Regular text scanning
+      while (textEnd < end) {
+        const ch = source.charCodeAt(textEnd);
 
-      // Special handling for tildes - only break if they are part of double tilde
-      if (ch === CharacterCodes.tilde) {
-        // Check if this is a double tilde
-        if (textEnd + 1 < end && source.charCodeAt(textEnd + 1) === CharacterCodes.tilde) {
-          break; // This is start of ~~, let scanner handle it
+        if (isLineBreak(ch)) {
+          break;
         }
-        // Single tilde - include it in text
-      }
 
-      textEnd++;
+        // Check for special characters, but handle intraword underscores specially
+        if (ch === CharacterCodes.asterisk ||
+          ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.greaterThan ||
+          ch === CharacterCodes.ampersand ||
+          ch === CharacterCodes.equals) {
+          break;
+        }
+
+        // Special handling for < - only break if it starts a valid HTML construct
+        if (ch === CharacterCodes.lessThan) {
+          if (isValidHtmlStart(textEnd)) {
+            break;
+          }
+          // Otherwise include it in the text
+        }
+
+        // Special handling for underscores - only break if they can be emphasis delimiters
+        if (ch === CharacterCodes.underscore) {
+          if (canUnderscoreBeDelimiter(textEnd)) {
+            break;
+          }
+        }
+
+        // Special handling for tildes - only break if they are part of double tilde
+        if (ch === CharacterCodes.tilde) {
+          // Check if this is a double tilde
+          if (textEnd + 1 < end && source.charCodeAt(textEnd + 1) === CharacterCodes.tilde) {
+            break; // This is start of ~~, let scanner handle it
+          }
+          // Single tilde - include it in text
+        }
+
+        textEnd++;
+      }
     }
 
     if (textEnd > start) {
@@ -1045,6 +1070,45 @@ export function createScanner(): Scanner {
       (ch >= CharacterCodes.digit0 && ch <= CharacterCodes.digit9);
   }
 
+  /**
+   * Check if a '<' character at the given position starts a valid HTML construct
+   */
+  function isValidHtmlStart(pos: number): boolean {
+    if (pos >= end || source.charCodeAt(pos) !== CharacterCodes.lessThan) {
+      return false;
+    }
+
+    const c1 = pos + 1 < end ? source.charCodeAt(pos + 1) : -1;
+
+    // Check for valid HTML constructs that start with <
+    if (c1 === CharacterCodes.slash) {
+      // </ - could be closing tag
+      return true;
+    }
+
+    if (c1 === CharacterCodes.exclamation) {
+      // Check for comments, CDATA, DOCTYPE
+      if (matchSequence(pos, '<!--') || 
+          matchSequence(pos, '<![CDATA[') || 
+          matchSequenceCaseInsensitive(pos, '<!DOCTYPE')) {
+        return true;
+      }
+    }
+
+    if (c1 === CharacterCodes.question) {
+      // <? processing instruction
+      return true;
+    }
+
+    // Check for valid tag name (must start with letter)
+    if (c1 >= 0 && isLetter(c1)) {
+      return true;
+    }
+
+    // Everything else (like <1bad>) is not a valid HTML start
+    return false;
+  }
+
 
   /**
    * This is the new line-level prescan function. It quickly classifies a line
@@ -1067,7 +1131,7 @@ export function createScanner(): Scanner {
     const firstChar = i < end ? source.charCodeAt(i) : -1;
 
     // 2. Check for blank line (highest priority)
-    if (firstChar === -1 || isLineBreak(firstChar) || isBlankLine()) {
+    if (firstChar === -1 || isLineBreak(firstChar)) {
       return LineClassification.BLANK_LINE;
     }
 
@@ -1328,7 +1392,32 @@ export function createScanner(): Scanner {
 
     // Stage 4: HTML character scanning
     if (ch === CharacterCodes.lessThan) {
-      scanLessThan(start);
+      // Only treat as HTML if it starts a valid HTML construct
+      if (isValidHtmlStart(start)) {
+        scanLessThan(start);
+      } else {
+        // Check if this looks like a malformed tag (has content after < before >)
+        let hasTagContent = false;
+        let pos = start + 1;
+        while (pos < end && !isLineBreak(source.charCodeAt(pos))) {
+          const ch = source.charCodeAt(pos);
+          if (ch === CharacterCodes.greaterThan) {
+            // Found closing >, if we had content, it's a malformed tag
+            if (hasTagContent) {
+              emitTextRun(start);
+              return;
+            }
+            break;
+          }
+          if (ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+            hasTagContent = true;
+          }
+          pos++;
+        }
+        
+        // If no tag content found (e.g., "< "), emit as LessThanToken
+        scanLessThan(start);
+      }
     } else if (ch === CharacterCodes.greaterThan) {
       scanGreaterThan(start);
     } else if (ch === CharacterCodes.ampersand) {

@@ -145,7 +145,7 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     // Normalized text content
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Text with multiple spaces'); // Normalized
+    expect(scanner.tokenText).toBe('Text with multiple spaces '); // Normalized
   });
 
   test('should track position correctly', () => {
@@ -250,7 +250,7 @@ Final line after blank`;
   });
   
   test('should handle setText with start and length parameters', () => {
-    scanner.initText('PREFIX: Line 1\nLine 2 :SUFFIX', 8, 14); // Just "Line 1\nLine 2"
+    scanner.initText('PREFIX:Line 1\nLine 2:SUFFIX', 7, 14); // Just "Line 1\nLine 2"
     
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);

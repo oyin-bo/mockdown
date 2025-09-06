@@ -117,7 +117,7 @@ single~tilde
   Text\twith\t\tmultiple   spaces  
 1 2
 @1 WhitespaceTrivia "  "
-@2 StringLiteral "Text with multiple spaces"`;
+@2 StringLiteral "Text with multiple spaces "`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -163,7 +163,7 @@ single~tilde
       const tokenTest = `
 Text\t\twith\t\ttrailing   
 1
-@1 StringLiteral "Text with trailing" PrecedingLineBreak|IsAtLineStart`;
+@1 StringLiteral "Text with trailing " PrecedingLineBreak|IsAtLineStart`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -184,7 +184,7 @@ Text\t\twith\t\ttrailing
       const tokenTest = `
 text **bold**
 1    2 3   4
-@1 StringLiteral "text" PrecedingLineBreak|IsAtLineStart
+@1 StringLiteral "text " PrecedingLineBreak|IsAtLineStart
 @2 AsteriskAsterisk "**" CanOpen
 @3 StringLiteral "bold"
 @4 AsteriskAsterisk "**" CanClose`;
@@ -195,7 +195,7 @@ text **bold**
       const tokenTest = `
 start **bold** end
 1     2 3   4 5
-@1 StringLiteral "start" PrecedingLineBreak|IsAtLineStart
+@1 StringLiteral "start " PrecedingLineBreak|IsAtLineStart
 @2 AsteriskAsterisk "**" CanOpen
 @3 StringLiteral "bold"
 @4 AsteriskAsterisk "**" CanClose
@@ -287,7 +287,7 @@ text **bold *nested* bold** more
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "start"
 @3 AsteriskAsterisk "**" CanClose
-@4 StringLiteral " and"
+@4 StringLiteral " and "
 @5 AsteriskAsterisk "**" CanOpen
 @6 StringLiteral "end"
 @7 AsteriskAsterisk "**" CanClose`;

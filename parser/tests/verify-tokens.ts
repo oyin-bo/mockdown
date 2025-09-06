@@ -78,7 +78,7 @@ export function verifyTokens(input: string): string {
       const token = lineTokens.find(tk => tk.start === tokenStart)!;
 
       const positionMarker = (emitted + 1) < 10 ? String(emitted + 1) :
-        String.fromCharCode('A'.charCodeAt(0) + emitted - 10);
+        String.fromCharCode('A'.charCodeAt(0) + emitted - 9);
 
       const positionMarkerOffset = token.start - lineStart;
       while (positionLine.length < positionMarkerOffset)
