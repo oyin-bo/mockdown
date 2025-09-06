@@ -176,14 +176,60 @@ export async function runOrchestrator(argv: string[]) {
       // Trim top2/bottom2 if possible and compute average
       const times = measurements.map(m => m.parseTimeMs).filter(t => typeof t === 'number');
       times.sort((a, b) => a - b);
-      const trimmed = times.slice(2, Math.max(2, times.length - 2));
-      const avg = trimmed.length ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length : null;
+      const trimmedTimes = times.slice(2, Math.max(2, times.length - 2));
+      const avgTime = trimmedTimes.length ? trimmedTimes.reduce((a, b) => a + b, 0) / trimmedTimes.length : null;
+
+      // memory average (in bytes) excluding top2/bottom2
+      const mems = measurements.map(m => m.memoryDelta).filter(t => typeof t === 'number');
+      mems.sort((a, b) => a - b);
+      const trimmedMems = mems.slice(2, Math.max(2, mems.length - 2));
+      const avgMem = trimmedMems.length ? trimmedMems.reduce((a, b) => a + b, 0) / trimmedMems.length : null;
+
+      // tokens numeric extraction
+      function getNumericTokens(m: any): { val: number; isChars: boolean } | null {
+        try {
+          const r = m.result || {};
+          if (typeof r.tokenCount === 'number') return { val: r.tokenCount, isChars: false };
+          if (typeof r.tokensLength === 'number') return { val: r.tokensLength, isChars: false };
+          if (typeof r.outLength === 'number') return { val: r.outLength, isChars: true };
+          if (typeof r.html === 'string') return { val: r.html.length, isChars: true };
+        } catch (e) { /* ignore */ }
+        return null;
+      }
+
+      const tokenEntries = measurements.map(getNumericTokens).filter((x): x is { val: number; isChars: boolean } => x !== null);
+      const tokenVals = tokenEntries.map(t => t.val);
+      tokenVals.sort((a, b) => a - b);
+      const trimmedTokens = tokenVals.slice(2, Math.max(2, tokenVals.length - 2));
+      const avgTokensNum = trimmedTokens.length ? Math.round(trimmedTokens.reduce((a, b) => a + b, 0) / trimmedTokens.length) : null;
+      const tokensAreChars = tokenEntries.length ? tokenEntries.reduce((acc, e) => acc + (e.isChars ? 1 : 0), 0) > tokenEntries.length / 2 : false;
+
+      // Print summary row: underscores as padding, no parser name
+      function padChar(s: string, width: number, align: 'left' | 'right' = 'left', ch = '_') {
+        const str = String(s ?? '');
+        if (str.length >= width) return str.slice(0, width);
+        const pad = ch.repeat(width - str.length);
+        return align === 'left' ? str + pad : pad + str;
+      }
+
+      const summaryParserCol = '_'.repeat(parserColWidth);
+      const avgTimeStr = avgTime !== null ? Number(avgTime).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : '';
+      const avgMemStr = avgMem !== null ? Math.round(avgMem / 1024).toLocaleString() + 'K' : '';
+      const avgTokensStr = avgTokensNum !== null ? (avgTokensNum.toLocaleString() + (tokensAreChars ? 'ch' : '')) : '';
+
+      const summaryRow =
+        padChar(summaryParserCol, parserColWidth, 'left', '_') +
+        padChar(avgTimeStr, numColWidth, 'right', '_') +
+        padChar(avgMemStr, numColWidth, 'right', '_') +
+        padChar(avgTokensStr, tokensColWidth, 'right', '_') +
+        padChar('', notesColWidth, 'left', '_');
+      console.log(summaryRow);
 
       // Save aggregate result
       const resultsDir = join(benchRoot, 'results');
       await fs.mkdir(resultsDir, { recursive: true });
       const report = {
-        parser, dataset, samples: measurements.length, averageParseTimeMs: avg, timestamp: new Date().toISOString()
+        parser, dataset, samples: measurements.length, averageParseTimeMs: avgTime, timestamp: new Date().toISOString()
       };
       const fname = join(resultsDir, `result-${parser}-${dataset}-${Date.now()}.json`);
       await fs.writeFile(fname, JSON.stringify(report, null, 2), 'utf8');
