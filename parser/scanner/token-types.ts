@@ -18,6 +18,11 @@ export const enum SyntaxKind {
   WhitespaceTrivia,         // Leading whitespace at line start
   NewLineTrivia,            // Line breaks (LF, CRLF, CR)
   
+  // Block-level tokens from line classification
+  HashToken,                // #, ##, etc. for ATX headings
+  CodeFence,                // ``` or ~~~
+  ThematicBreak,            // ---, ***, ___
+
   // Stage 3: Inline formatting tokens
   AsteriskToken,            // *
   AsteriskAsterisk,         // **

@@ -62,4 +62,109 @@ Notes
 - Precedence is a guidance order; actual parser logic also considers active modes (fence, HTML subtype, directive, math) and container stacks (list/blockquote).
 - Lookahead is intentionally shallow (previous/next line) to keep speculation bounded.
 
-*speculatives*
+# Examples of ambiguous scenarios
+
+The examples below show minimal inputs that trigger the common ambiguities discussed earlier. Each example contains the raw lines and a short "Expected" note describing how the prescan + parser should classify or transform the lines.
+
+### Paragraph promoted to Setext (equals)
+```md
+Hello World
+===========
+```
+Expected: `SETEXT_UNDERLINE_CANDIDATE` on line 2 → promote line 1 to Setext H1; consume line 2 (not a paragraph line).
+
+### Paragraph promoted to Setext (hyphens)
+```md
+Hello World
+-----------
+```
+Expected: line 2 has both `SETEXT_UNDERLINE_CANDIDATE` and `THEMATIC_BREAK` bits for hyphen runs; because a non-blank paragraph precedes, prefer Setext promotion (H2) and consume line 2.
+
+### Hyphen run as Thematic Break when no paragraph precedes
+```md
+---
+```
+Expected: `THEMATIC_BREAK` → emit horizontal rule (HR). No paragraph to promote.
+
+### Hyphen run after paragraph followed by blank line — do not treat as HR, still setext
+```md
+Hello World
+---
+
+```
+Rare heuristic, not planned in Mixpad: If the underline-like line is followed immediately by a blank line, parse as `THEMATIC_BREAK` (HR) and leave the preceding line as a paragraph; parser uses next-line context to decide.
+
+### Table header confirmed by alignment row (GFM)
+```md
+Name | Age
+-----|----
+Alice | 30
+```
+Expected: First line marked `TABLE_PIPE_HEADER_CANDIDATE`; next line matches `TABLE_ALIGNMENT_ROW` → retro-promote header and emit table rows.
+
+### Pipe-containing lines but no alignment row → paragraphs
+```md
+Name | Age
+This is not an align row
+```
+Expected: No `TABLE_ALIGNMENT_ROW` detected on line 2 → treat both lines as paragraph content (no table promotion).
+
+### Fenced code opener inside a buffered paragraph
+```md
+Some intro text
+```
+code block line
+```
+```
+Expected: `FENCED_CODE_OPEN` on the fence line preempts treating it as paragraph content; parser flushes the tentative paragraph, then opens fenced code mode and consumes until `FENCED_CODE_CLOSE`.
+
+### YAML frontmatter at document start vs thematic break
+```md
+---
+title: Example
+---
+```
+Expected: At document start, `FRONTMATTER_YAML_OPEN` is recognized; parser enters frontmatter mode and does not treat the first `---` as `THEMATIC_BREAK`.
+
+### HTML block start vs inline/autolink
+```md
+<div class="note">
+Some text
+</div>
+```
+Expected: `HTML_BLOCK_START` (depending on subtype) → captured as HTML tag (with attributes).
+
+### Indented code vs list continuation
+```md
+- item
+		code indented by 4 spaces
+```
+Expected: Parser considers list baseline; if the post-marker content indent reaches 4 spaces relative to the content baseline, treat the indented line as `INDENTED_CODE_START` inside the list item (an indented code block); otherwise it may be `LIST_ITEM_CONTINUATION`.
+
+### Lazy list continuation (non-indented continuation)
+```md
+- item one
+	continued line without marker
+```
+Expected: Within a list item, a non-blank line that does not start a new marker but satisfies lazy continuation rules is `PARAGRAPH_LAZY_CONT` and attaches to the current list item's paragraph.
+
+### Attribute block attaches to previous block
+```md
+A paragraph with attributes
+{#my-id .class}
+```
+Expected: Line 2 matches `ATTRIBUTE_BLOCK_LINE` → attach attributes to the immediately preceding block rather than creating a standalone block.
+
+### Math block (`$$`) container
+```md
+Some text
+$$
+E = mc^2
+$$
+```
+Expected: `MATH_BLOCK_DOLLAR_OPEN` on the `$$` line → enter math block mode; previous paragraph is finalized; close on matching `$$`.
+
+### Summary note
+- Use a sliding-window prescan (lookahead = 1) to set candidates that depend on the next line (table alignment, setext candidates). The block parser then uses those finalized flags plus container stack state to deterministically apply promotions (paragraph→setext, header→table promotion, HR emission, etc.) without global rollback.
+
+

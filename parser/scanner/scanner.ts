@@ -64,6 +64,28 @@ const enum ContextFlags {
   PrecedingLineBreak = 1 << 2,
 }
 
+/**
+ * Line classification flags that determine a line's structural potential.
+ * These are the "big flags" set by the initial line prescan.
+ */
+const enum LineClassification {
+  None = 0,
+  BLANK_LINE = 1 << 0,
+  ATX_HEADING = 1 << 1,
+  SETEXT_UNDERLINE_CANDIDATE = 1 << 2,
+  THEMATIC_BREAK = 1 << 3,
+  FENCED_CODE_OPEN = 1 << 4,
+  FENCED_CODE_CLOSE = 1 << 5,
+  BLOCKQUOTE_MARKER = 1 << 6,
+  LIST_UNORDERED_MARKER = 1 << 7,
+  LIST_ORDERED_MARKER = 1 << 8,
+  TABLE_ALIGNMENT_ROW = 1 << 9,
+  TABLE_PIPE_HEADER_CANDIDATE = 1 << 10,
+  PARAGRAPH_PLAIN = 1 << 11,
+  HTML_BLOCK_START = 1 << 12,
+  INDENTED_CODE = 1 << 13,
+}
+
 /** Cached token text for common fixed tokens to avoid substring allocation. */
 const TokenTextCache = {
   TILDE_TILDE: '~~',
@@ -143,6 +165,9 @@ export function createScanner(): Scanner {
 
   // Context flags
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
+
+  // Line classification flags for the current line
+  let currentLineFlags: LineClassification = LineClassification.None;
 
   // Scanner interface fields - these are the 4 public fields
   let token: SyntaxKind = SyntaxKind.Unknown;
@@ -1021,15 +1046,144 @@ export function createScanner(): Scanner {
   }
 
 
+  /**
+   * This is the new line-level prescan function. It quickly classifies a line
+   * to determine its structural potential without emitting any tokens.
+   */
+  function classifyLine(lineStart: number): LineClassification {
+    let i = lineStart;
+    let indent = 0;
+
+    // 1. Calculate indent and find first non-space character
+    while (i < end && source.charCodeAt(i) === CharacterCodes.space) {
+      i++;
+      indent++;
+    }
+    if (i < end && source.charCodeAt(i) === CharacterCodes.tab) {
+      indent = (indent + 4) & ~3;
+      i++;
+    }
+    
+    const firstChar = i < end ? source.charCodeAt(i) : -1;
+
+    // 2. Check for blank line (highest priority)
+    if (firstChar === -1 || isLineBreak(firstChar) || isBlankLine()) {
+      return LineClassification.BLANK_LINE;
+    }
+
+    // 3. Check for indented code
+    if (indent >= 4) {
+      return LineClassification.INDENTED_CODE;
+    }
+
+    // 4. Check for high-precedence block markers based on `firstChar`
+    switch (firstChar) {
+      case CharacterCodes.hash: {
+        let hLevel = 0;
+        while (i < end && source.charCodeAt(i) === CharacterCodes.hash) {
+          hLevel++;
+          i++;
+        }
+        if (hLevel > 0 && hLevel <= 6 && (i >= end || isWhiteSpace(source.charCodeAt(i)) || isLineBreak(source.charCodeAt(i)))) {
+          return LineClassification.ATX_HEADING;
+        }
+        break; // Fall through to paragraph if not a valid heading
+      }
+      case CharacterCodes.greaterThan:
+        return LineClassification.BLOCKQUOTE_MARKER;
+
+      case CharacterCodes.backtick:
+      case CharacterCodes.tilde: {
+        const fenceChar = firstChar;
+        let fenceLen = 0;
+        while (i < end && source.charCodeAt(i) === fenceChar) {
+          fenceLen++;
+          i++;
+        }
+        if (fenceLen >= 3) {
+          // TODO: Differentiate open/close based on parser state
+          return LineClassification.FENCED_CODE_OPEN;
+        }
+        break;
+      }
+      case CharacterCodes.minus:
+      case CharacterCodes.asterisk:
+      case CharacterCodes.underscore: {
+        const markerChar = firstChar;
+        let markerCount = 0;
+        let p = i;
+        while (p < end && !isLineBreak(source.charCodeAt(p))) {
+          const ch = source.charCodeAt(p);
+          if (ch === markerChar || isWhiteSpace(ch)) {
+            if (ch === markerChar) markerCount++;
+          } else {
+            markerCount = 0; // Not a thematic break
+            break;
+          }
+          p++;
+        }
+        if (markerCount >= 3) return LineClassification.THEMATIC_BREAK;
+        // Could also be a list marker, fall through for now
+        break;
+      }
+    }
+
+    // 5. If no specific marker found, check for patterns like tables or paragraphs
+    // This requires scanning the whole line content
+    let hasPipe = false;
+    let isAlignmentRow = true;
+    let p = lineStart;
+    while (p < end && !isLineBreak(source.charCodeAt(p))) {
+      const ch = source.charCodeAt(p);
+      if (ch === CharacterCodes.bar) { // Changed from .pipe to .bar
+        hasPipe = true;
+      } else if (ch !== CharacterCodes.colon && ch !== CharacterCodes.minus && ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+        isAlignmentRow = false;
+      }
+      p++;
+    }
+
+    if (hasPipe && isAlignmentRow) {
+        // More thorough check for alignment row
+        p = lineStart;
+        while (p < end && !isLineBreak(source.charCodeAt(p))) {
+            const ch = source.charCodeAt(p);
+            if (ch !== CharacterCodes.bar && ch !== CharacterCodes.colon && ch !== CharacterCodes.minus && ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+                isAlignmentRow = false;
+                break;
+            }
+            p++;
+        }
+        if(isAlignmentRow) return LineClassification.TABLE_ALIGNMENT_ROW;
+    }
+    if (hasPipe) {
+      return LineClassification.TABLE_PIPE_HEADER_CANDIDATE;
+    }
+    
+    // Check for Setext underline
+    p = lineStart;
+    while (p < end && isWhiteSpace(source.charCodeAt(p))) p++;
+    const firstNonSpace = source.charCodeAt(p);
+    if (firstNonSpace === CharacterCodes.equals || firstNonSpace === CharacterCodes.minus) {
+        let p2 = p;
+        while(p2 < end && source.charCodeAt(p2) === firstNonSpace) p2++;
+        while(p2 < end && isWhiteSpace(source.charCodeAt(p2))) p2++;
+        if (p2 >= end || isLineBreak(source.charCodeAt(p2))) {
+            return LineClassification.SETEXT_UNDERLINE_CANDIDATE;
+        }
+    }
+
+    return LineClassification.PARAGRAPH_PLAIN;
+  }
+
+
   function emitWhitespace(start: number): void {
     let wsEnd = start;
     while (wsEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(wsEnd))) {
       wsEnd++;
     }
 
-    if (wsEnd > start) {
-      emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
-    }
+    emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
   }
 
   function emitNewline(start: number): void {
@@ -1047,7 +1201,7 @@ export function createScanner(): Scanner {
     let flags = TokenFlags.None;
 
     // Check if this newline ends a blank line
-    if (isBlankLine()) {
+    if (currentLineFlags & LineClassification.BLANK_LINE) {
       flags |= TokenFlags.IsBlankLine;
       lastBlankLinePos = start;
       contextFlags &= ~ContextFlags.InParagraph; // Reset paragraph context
@@ -1066,13 +1220,99 @@ export function createScanner(): Scanner {
       return;
     }
 
+    // If at the start of a line, classify it first.
+    if (contextFlags & ContextFlags.AtLineStart) {
+      currentLineFlags = classifyLine(pos);
+    }
+
+    // Delegate to the appropriate line-level scanner
+    scanCurrentLine();
+  }
+
+  /**
+   * New top-level dispatcher that decides which specialized scanner to use
+   * based on the pre-calculated line classification flags.
+   */
+  function scanCurrentLine(): void {
+    if (currentLineFlags & LineClassification.BLANK_LINE) {
+      emitNewline(pos);
+    } else if (currentLineFlags & LineClassification.ATX_HEADING) {
+      scanAtxHeadingLine();
+    } else if (currentLineFlags & (LineClassification.FENCED_CODE_OPEN | LineClassification.FENCED_CODE_CLOSE)) {
+      scanFenceLine();
+    } else if (currentLineFlags & LineClassification.THEMATIC_BREAK) {
+      scanThematicBreakLine();
+    } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
+      // Fallback to detailed inline parsing for anything that looks like a paragraph
+      scanParagraphContent();
+    } else {
+      // Default fallback for unhandled line types
+      scanParagraphContent();
+    }
+  }
+
+  /**
+   * Scans a line that has been identified as an ATX Heading.
+   */
+  function scanAtxHeadingLine(): void {
+    const start = pos;
+    let i = start;
+    
+    // 1. Emit Hash tokens (e.g., ##)
+    while (i < end && source.charCodeAt(i) === CharacterCodes.hash) { i++; }
+    emitToken(SyntaxKind.HashToken, start, i);
+    // updatePosition is called in emitToken
+
+    // 2. Emit Whitespace
+    const wsStart = i;
+    while (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) { i++; }
+    if (i > wsStart) { 
+      emitToken(SyntaxKind.WhitespaceTrivia, wsStart, i);
+    }
+
+    // 3. The rest of the line is paragraph content
+    scanParagraphContent();
+  }
+
+  /**
+   * Scans a line that is a code fence.
+   */
+  function scanFenceLine(): void {
+    let i = pos;
+    while (i < end && !isLineBreak(source.charCodeAt(i))) {
+      i++;
+    }
+    emitToken(SyntaxKind.CodeFence, pos, i);
+    scanParagraphContent(); // Scan newline
+  }
+
+  /**
+   * Scans a line that is a thematic break.
+   */
+  function scanThematicBreakLine(): void {
+    let i = pos;
+    while (i < end && !isLineBreak(source.charCodeAt(i))) {
+      i++;
+    }
+    emitToken(SyntaxKind.ThematicBreak, pos, i);
+    scanParagraphContent(); // Scan newline
+  }
+
+  /**
+   * This function contains the original inline scanning logic, now used for
+   * paragraph-like content within any line type.
+   */
+  function scanParagraphContent(): void {
+    if (pos >= end) {
+      // Don't emit another EOF if we are already at the end.
+      if (token !== SyntaxKind.EndOfFileToken) {
+        emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      }
+      return;
+    }
+
     const start = pos;
     const ch = source.charCodeAt(pos);
-
-    // Update indent level at line start
-    if (contextFlags & ContextFlags.AtLineStart) {
-      currentIndentLevel = getCurrentIndentLevel();
-    }
 
     // Handle newlines
     if (isLineBreak(ch)) {
