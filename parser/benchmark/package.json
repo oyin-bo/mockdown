@@ -8,11 +8,23 @@
     "bench": "npm run build && node --expose-gc dist/benchmark.bundle.js",
     "bench:readme": "npm run build && node --expose-gc dist/benchmark.bundle.js --update-readme"
   },
-  "keywords": ["benchmark", "markdown", "parser", "performance"],
+  "keywords": [
+    "benchmark",
+    "markdown",
+    "parser",
+    "performance"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "esbuild": "^0.18.0",
-    "@types/node": "^18.0.0"
+    "@types/node": "^18.0.0",
+    "esbuild": "^0.18.0"
+  },
+  "dependencies": {
+    "commonmark": "^0.31.2",
+    "markdown-it": "^14.1.0",
+    "marked": "^16.2.1",
+    "micromark": "^4.0.2",
+    "remark-parse": "^11.0.0"
   }
 }

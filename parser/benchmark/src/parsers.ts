@@ -1,10 +1,10 @@
 // Static imports so esbuild bundles these libraries into the single output.
-import * as marked from 'marked';
-import MarkdownIt from 'markdown-it';
-import { micromark } from 'micromark';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
 import * as commonmark from 'commonmark';
+import MarkdownIt from 'markdown-it';
+import * as marked from 'marked';
+import { micromark } from 'micromark';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 // mparser.js is a local CommonJS build; require it at runtime so esbuild bundles it correctly
 // Prefer importing the parser source so changes in the TS sources are picked up
 // without needing an intermediate build step.

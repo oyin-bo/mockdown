@@ -1,8 +1,8 @@
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import { performance } from 'perf_hooks';
 import { getDataset } from './datasets';
 import { parseWithParser } from './parsers';
-import { join } from 'path';
-import { promises as fs } from 'fs';
-import { performance } from 'perf_hooks';
 
 export async function runWorker(argv: string[]) {
   const parserArg = argv.find(a => a.startsWith('--parser=')) || '--parser=mixpad';

@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
-import { join } from 'path';
 import { promises as fs } from 'fs';
+import { join } from 'path';
 
 const TIMEOUT_MS = 180_000; // 3 minutes
 const ITERATIONS = 5;
@@ -14,11 +14,11 @@ export async function runOrchestrator(argv: string[]) {
   const datasets = [
     'small-simple',
     'docs-collection',
-  'medium',
-  'medium-mixed',
-  'large-text-heavy',
-  'pathological',
-    // 'super-heavy'
+    'medium',
+    'medium-mixed',
+    'large-text-heavy',
+    'pathological',
+    //'super-heavy'
   ];
 
   // Verify bundle exists
@@ -39,7 +39,7 @@ export async function runOrchestrator(argv: string[]) {
   const saveMeasurements = argv.includes('--save-measurements');
 
   // Table printing helpers
-  const headers = ['Parser', 'Time ms', 'Memory Δ', 'Tokens', 'Notes'];
+  const headers = ['Parser', 'Time ms', 'Memory +/-', 'Tokens', 'Notes'];
   const parserColWidth = Math.max(...parsers.map(p => p.length), headers[0].length) + 2;
   const numColWidth = 14;
   const tokensColWidth = 20;
@@ -55,9 +55,9 @@ export async function runOrchestrator(argv: string[]) {
   }
 
   function printHeader() {
-  // add 1-char gap between Tokens and Notes so headers don't run together
-  const row = pad(headers[0], parserColWidth, 'left') + pad(headers[1], numColWidth, 'right') + pad(headers[2], numColWidth, 'right') + pad(headers[3], tokensColWidth, 'right') + ' ' + pad(headers[4], notesColWidth - 1, 'left');
-  console.log(row);
+    // add 1-char gap between Tokens and Notes so headers don't run together
+    const row = pad(headers[0], parserColWidth, 'left') + pad(headers[1], numColWidth, 'right') + pad(headers[2], numColWidth, 'right') + pad(headers[3], tokensColWidth, 'right') + ' ' + pad(headers[4], notesColWidth - 1, 'left');
+    console.log(row);
   }
 
   function printDatasetSeparator(name: string) {
@@ -351,22 +351,22 @@ export async function runOrchestrator(argv: string[]) {
         outLines.push(`| ${parserName} | ${time} | ${throughput} | ${mem} | ${tokens} |`);
       }
 
-  // Normalize so we always insert exactly one newline after the start marker and
-  // exactly one newline before the end marker. This prevents growth of blank
-  // lines when the updater runs multiple times.
-  let prefix = before;
-  if (!prefix.endsWith('\n')) prefix += '\n';
-  // Remove any leading newlines from the 'after' slice so we don't accumulate
-  // blank lines before the end marker.
-  let suffix = after;
-  while (suffix.startsWith('\n')) suffix = suffix.slice(1);
+      // Normalize so we always insert exactly one newline after the start marker and
+      // exactly one newline before the end marker. This prevents growth of blank
+      // lines when the updater runs multiple times.
+      let prefix = before;
+      if (!prefix.endsWith('\n')) prefix += '\n';
+      // Remove any leading newlines from the 'after' slice so we don't accumulate
+      // blank lines before the end marker.
+      let suffix = after;
+      while (suffix.startsWith('\n')) suffix = suffix.slice(1);
 
-  // Remove leading blank lines so we don't accumulate empty lines after the start marker.
-  while (outLines.length > 0 && outLines[0].trim() === '') outLines.shift();
-  const content = outLines.join('\n').replace(/\s+$/g, '');
-  const out = prefix + content + '\n' + suffix;
-  await fs.writeFile(readmePath, out, 'utf8');
-  console.log('Conservatively updated README at', readmePath);
+      // Remove leading blank lines so we don't accumulate empty lines after the start marker.
+      while (outLines.length > 0 && outLines[0].trim() === '') outLines.shift();
+      const content = outLines.join('\n').replace(/\s+$/g, '');
+      const out = prefix + content + '\n' + suffix;
+      await fs.writeFile(readmePath, out, 'utf8');
+      console.log('Conservatively updated README at', readmePath);
     } catch (e) {
       console.error('Failed to update README:', (e as Error).message);
     }
