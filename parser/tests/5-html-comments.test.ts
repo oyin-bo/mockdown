@@ -37,7 +37,7 @@ NextLine
 <!-- missing end but has <laters>
 1                        2
 @1 HtmlComment Unterminated
-@2 LessThanToken
+@2 HtmlTagOpenName
 `;
   expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });

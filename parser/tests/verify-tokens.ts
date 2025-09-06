@@ -362,13 +362,12 @@ enum SyntaxKindShadow {
   TildeTilde = SyntaxKind.TildeTilde,
 
   // Stage 4: HTML tokens
-  LessThanToken = SyntaxKind.LessThanToken,
-  LessThanSlashToken = SyntaxKind.LessThanSlashToken,
   GreaterThanToken = SyntaxKind.GreaterThanToken,
   SlashGreaterThanToken = SyntaxKind.SlashGreaterThanToken,
   EqualsToken = SyntaxKind.EqualsToken,
   AmpersandToken = SyntaxKind.AmpersandToken,
-  HtmlTagName = SyntaxKind.HtmlTagName,
+  HtmlTagOpenName = SyntaxKind.HtmlTagOpenName,
+  HtmlTagCloseName = SyntaxKind.HtmlTagCloseName,
   HtmlAttributeName = SyntaxKind.HtmlAttributeName,
   HtmlAttributeValue = SyntaxKind.HtmlAttributeValue,
   HtmlEntity = SyntaxKind.HtmlEntity,

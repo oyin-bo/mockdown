@@ -33,15 +33,15 @@ export const enum SyntaxKind {
 
   // Stage 4: HTML and entities
   // HTML Structural Delimiters
-  LessThanToken,            // <
-  LessThanSlashToken,       // </
   GreaterThanToken,         // >
   SlashGreaterThanToken,    // /> (recognized as a single token after a tag/attribute sequence)
   EqualsToken,              // = (only meaningful inside tag attribute context)
   AmpersandToken,           // & (when not forming a valid entity)
 
   // HTML Name / Value Tokens
-  HtmlTagName,              // Tag name (case-preserving slice). Examples: div, script, textarea
+  // Note: Tag name-only tokens are used for open/close forms.
+  HtmlTagOpenName,          // Combined '<name' open tag-start (coarsened token)
+  HtmlTagCloseName,         // Combined '</name' close tag-start (coarsened token)
   HtmlAttributeName,        // Attribute name (data-id, aria-label, xml:lang, etc.)
   HtmlAttributeValue,       // Quoted or unquoted attribute value (raw slice, quotes included for quoted)
   HtmlEntity,               // Complete named or numeric entity WITH terminating ';'

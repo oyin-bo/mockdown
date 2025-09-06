@@ -163,6 +163,8 @@ export function createScanner(): Scanner {
   let contentMode: ContentMode = ContentMode.Normal;
   let endPattern: string | undefined = undefined;
 
+  // HTML tag coarsening: emit name-only tokens for tag starts.
+
   // Context flags
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
 
@@ -243,9 +245,11 @@ export function createScanner(): Scanner {
    * Optimized for the common case where no normalization is needed
    */
   function processStringToken(start: number, endPos: number): string {
-    // Fast path for very short strings
+    // Fast path for very short strings (single-char only). Keep two-char runs
+    // going through the normal normalization path so that two-space runs get
+    // collapsed to a single space as expected by tests.
     const length = endPos - start;
-    if (length <= 2) {
+    if (length <= 1) {
       return source.substring(start, endPos);
     }
 
@@ -266,7 +270,7 @@ export function createScanner(): Scanner {
       // Normalize any whitespace-only run to a single space for consistent
       // inline formatting behavior. Do not return an empty string for
       // whitespace-only inputs.
-      return ' ';
+  return ' ';
     }
 
     for (let i = start; i < endPos; i++) {
@@ -434,9 +438,7 @@ export function createScanner(): Scanner {
         tokenText = TokenTextCache.ASTERISK_ASTERISK;
       } else if (kind === SyntaxKind.UnderscoreUnderscore) {
         tokenText = TokenTextCache.UNDERSCORE_UNDERSCORE;
-      } else if (kind === SyntaxKind.LessThanSlashToken) {
-        tokenText = TokenTextCache.LESS_THAN_SLASH;
-      } else if (kind === SyntaxKind.SlashGreaterThanToken) {
+  } else if (kind === SyntaxKind.SlashGreaterThanToken) {
         tokenText = TokenTextCache.SLASH_GREATER_THAN;
       } else if (start + 1 < source.length &&
         source.charCodeAt(start) === CharacterCodes.carriageReturn &&
@@ -597,8 +599,10 @@ export function createScanner(): Scanner {
     const c1 = start + 1 < end ? source.charCodeAt(start + 1) : -1;
 
     if (c1 === CharacterCodes.slash) {
-      // This is </ - emit LessThanSlashToken
-      emitToken(SyntaxKind.LessThanSlashToken, start, start + 2);
+      // Closing tag start - emit close-name token with name-only span when possible
+      if (scanHtmlTagStart(start)) return;
+  // Fallback to emitting the raw text as a StringLiteral for malformed starts
+  emitStringLiteralToken(start, Math.min(start + 2, end), TokenFlags.None);
       return;
     }
 
@@ -628,13 +632,16 @@ export function createScanner(): Scanner {
 
     // Check if this could be a tag name after <
     if (c1 >= 0 && isLetter(c1)) {
-      // Regular < token, but let the next scan call handle the tag name
-      emitToken(SyntaxKind.LessThanToken, start, start + 1);
+      // Opening tag start - emit open-name token with name-only span when possible
+      if (scanHtmlTagStart(start)) return;
+
+  // Fallback: emit the raw '<' as text for malformed starts
+  emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
       return;
     }
 
-    // Regular < token for anything else (including malformed tags like <1bad>)
-    emitToken(SyntaxKind.LessThanToken, start, start + 1);
+  // Regular '<' for anything else (including malformed tags like <1bad>) - emit as text
+  emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
   }
 
   function scanGreaterThan(start: number): void {
@@ -685,7 +692,69 @@ export function createScanner(): Scanner {
     }
 
     if (nameEnd > start) {
-      emitToken(SyntaxKind.HtmlTagName, start, nameEnd);
+      // Determine if this name was preceded by '<' or '</' to choose open/close name token
+      let sawSlash = false;
+      if (start > 0 && source.charCodeAt(start - 1) === CharacterCodes.slash) {
+        // If immediately preceded by '/', consider it a close name
+        sawSlash = true;
+      } else if (start > 1 && source.charCodeAt(start - 2) === CharacterCodes.lessThan && source.charCodeAt(start - 1) === CharacterCodes.slash) {
+        sawSlash = true;
+      }
+
+      if (sawSlash) {
+        emitToken(SyntaxKind.HtmlTagCloseName, start, nameEnd);
+      } else {
+        emitToken(SyntaxKind.HtmlTagOpenName, start, nameEnd);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Attempt to scan a combined tag start token: '<name' or '</name'.
+   * Emits a single HtmlTagName token spanning from the '<' (or '</') through the tag name.
+   * Returns true if a combined token was emitted.
+   */
+  function scanHtmlTagStart(start: number): boolean {
+    // start points at '<'
+    if (start >= end || source.charCodeAt(start) !== CharacterCodes.lessThan) return false;
+
+    let i = start + 1;
+    let sawSlash = false;
+    if (i < end && source.charCodeAt(i) === CharacterCodes.slash) {
+      sawSlash = true;
+      i++;
+    }
+
+    if (i >= end) return false;
+
+    const firstChar = source.charCodeAt(i);
+    if (!isLetter(firstChar)) return false;
+
+    // Scan tag name characters [A-Za-z0-9-]*
+    let nameEnd = i + 1;
+    while (nameEnd < end) {
+      const ch = source.charCodeAt(nameEnd);
+      if (isLetter(ch) || isDigit(ch) || ch === CharacterCodes.minus) {
+        nameEnd++;
+      } else {
+        break;
+      }
+    }
+
+    if (nameEnd > i) {
+      // Emit a coarsened token that contains only the tag name text (callers only need the name).
+      const nameStart = i;
+      const nameEndPos = nameEnd; // do not include following whitespace/attributes or angle brackets
+      if (sawSlash) {
+        // Emit close-name token but only the name slice
+        emitToken(SyntaxKind.HtmlTagCloseName, nameStart, nameEndPos);
+      } else {
+        // Emit open-name token but only the name slice
+        emitToken(SyntaxKind.HtmlTagOpenName, nameStart, nameEndPos);
+      }
       return true;
     }
 
