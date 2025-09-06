@@ -33,6 +33,8 @@ export async function runOrchestrator(argv: string[]) {
   const onlyDatasetArg = argv.find(a => a.startsWith('--only-dataset='));
   const onlyParser = onlyParserArg ? onlyParserArg.split('=')[1] : null;
   const onlyDataset = onlyDatasetArg ? onlyDatasetArg.split('=')[1] : null;
+  const updateReadme = argv.includes('--update-readme');
+  const saveMeasurements = argv.includes('--save-measurements');
 
   // Table printing helpers
   const headers = ['Parser', 'Time ms', 'Memory Δ', 'Tokens', 'Notes'];
@@ -109,6 +111,9 @@ export async function runOrchestrator(argv: string[]) {
   printHeader();
   const runDatasets = onlyDataset ? [onlyDataset] : datasets;
   const runParsers = onlyParser ? [onlyParser] : parsers;
+
+  // Collected reports kept in-memory. By default we do not write per-run JSON files.
+  const collectedReports: any[] = [];
 
   for (const dataset of runDatasets) {
     printDatasetSeparator(dataset);
@@ -227,15 +232,141 @@ export async function runOrchestrator(argv: string[]) {
         padChar('', notesColWidth, 'left', '_');
       console.log(summaryRow);
 
-      // Save aggregate result
+      // Keep the aggregate result in memory. If the user requested a single
+      // measurements file, we'll write it once at the end.
+      const report = {
+        parser,
+        dataset,
+        samples: measurements.length,
+        averageParseTimeMs: avgTime,
+        averageMemoryBytes: avgMem,
+        averageTokens: avgTokensNum,
+        tokensAreChars,
+        timestamp: new Date().toISOString(),
+        measurements // preserve fine-grained per-iteration measurements in memory
+      };
+      collectedReports.push(report);
+    }
+  }
+
+  // If requested, write a single measurements JSON file containing all collected reports
+  if (saveMeasurements) {
+    try {
       const resultsDir = join(benchRoot, 'results');
       await fs.mkdir(resultsDir, { recursive: true });
-      const report = {
-        parser, dataset, samples: measurements.length, averageParseTimeMs: avgTime, timestamp: new Date().toISOString()
-      };
-      const fname = join(resultsDir, `result-${parser}-${dataset}-${Date.now()}.json`);
-      await fs.writeFile(fname, JSON.stringify(report, null, 2), 'utf8');
-      // console.log('Wrote', fname);
+      const fname = join(resultsDir, `measurements-${Date.now()}.json`);
+      await fs.writeFile(fname, JSON.stringify({ generated: new Date().toISOString(), reports: collectedReports }, null, 2), 'utf8');
+      console.log('Wrote consolidated measurements to', fname);
+    } catch (e) {
+      console.error('Failed to write measurements file:', (e as Error).message);
+    }
+  }
+
+  // Conservative README updater: only replace numeric table cells in the existing
+  // benchmark block between <!-- BENCHMARK_RESULTS_START --> and <!-- BENCHMARK_RESULTS_END -->.
+  // It uses the in-memory `collectedReports` and does not touch any other part of the README.
+  if (updateReadme) {
+    try {
+      const readmePath = join(benchRoot, 'README.md');
+      const readmeRaw = await fs.readFile(readmePath, 'utf8');
+      const startMarker = '<!-- BENCHMARK_RESULTS_START -->';
+      const endMarker = '<!-- BENCHMARK_RESULTS_END -->';
+      const startIdx = readmeRaw.indexOf(startMarker);
+      const endIdx = readmeRaw.indexOf(endMarker);
+      if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+        console.log('README does not contain expected markers; skipping update.');
+        return;
+      }
+
+      const before = readmeRaw.slice(0, startIdx + startMarker.length);
+      const block = readmeRaw.slice(startIdx + startMarker.length, endIdx);
+      const after = readmeRaw.slice(endIdx);
+
+      // Build a quick map latestReport[dataset][parser] -> report
+      const latestReport: Record<string, Record<string, any>> = {};
+      for (const r of collectedReports) {
+        if (!r.dataset || !r.parser) continue;
+        latestReport[r.dataset] = latestReport[r.dataset] || {};
+        const prev = latestReport[r.dataset][r.parser];
+        if (!prev || (r.timestamp && Date.parse(r.timestamp) > Date.parse(prev.timestamp || '0'))) latestReport[r.dataset][r.parser] = r;
+      }
+
+      // Replace numeric cells in table rows matching: | ParserName | ... |
+      // We'll scan the block line-by-line and for each table row that starts with '| parserName ' and
+      // has 5 columns, we'll replace columns 2..5 with computed numeric values if available.
+      const lines = block.split('\n');
+      const outLines: string[] = [];
+      const tableRowRe = /^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$/;
+      let currentDataset: string | null = null;
+      const datasetHeaderRe = /^###\s+(.+)$/;
+      for (const line of lines) {
+        const m = datasetHeaderRe.exec(line);
+        if (m) {
+          currentDataset = m[1].trim();
+          outLines.push(line);
+          continue;
+        }
+        const row = tableRowRe.exec(line);
+        if (!row || !currentDataset) { outLines.push(line); continue; }
+
+        const parserName = row[1].trim();
+        const existingTime = row[2].trim();
+        const existingThroughput = row[3].trim();
+        const existingMem = row[4].trim();
+        const existingTokens = row[5].trim();
+
+        const rep = latestReport[currentDataset] && latestReport[currentDataset][parserName];
+        if (!rep) { outLines.push(line); continue; }
+
+        // Compute conservative replacements
+        const time = typeof rep.averageParseTimeMs === 'number' ? Number(rep.averageParseTimeMs).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : existingTime;
+        let throughput = existingThroughput;
+        if (typeof rep.averageParseTimeMs === 'number') {
+          // try to compute throughput if dataset size available in report (it may not be)
+          let datasetBytes: number | null = typeof rep.datasetBytes === 'number' ? rep.datasetBytes : null;
+          if (datasetBytes === null && rep.measurements && rep.measurements.length) {
+            const first = rep.measurements[0];
+            if (first && first.input && typeof first.input === 'string') {
+              // Use Buffer.byteLength if available, otherwise TextEncoder
+              try {
+                // @ts-ignore Buffer may not be declared in TS env
+                datasetBytes = typeof Buffer !== 'undefined' ? Buffer.byteLength(first.input, 'utf8') : (new TextEncoder().encode(first.input).length);
+              } catch (e) {
+                try { datasetBytes = new TextEncoder().encode(first.input).length; } catch (_) { datasetBytes = null; }
+              }
+            }
+          }
+          if (datasetBytes !== null && rep.averageParseTimeMs > 0) {
+            const mb = datasetBytes / (1024 * 1024);
+            const s = rep.averageParseTimeMs / 1000;
+            const val = s > 0 ? (mb / s) : 0;
+            throughput = Number(val).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+          }
+        }
+        const mem = typeof rep.averageMemoryBytes === 'number' ? Math.round(rep.averageMemoryBytes / 1024).toLocaleString() : existingMem;
+        const tokens = typeof rep.averageTokens === 'number' ? rep.averageTokens.toLocaleString() : existingTokens;
+
+        outLines.push(`| ${parserName} | ${time} | ${throughput} | ${mem} | ${tokens} |`);
+      }
+
+  // Normalize so we always insert exactly one newline after the start marker and
+  // exactly one newline before the end marker. This prevents growth of blank
+  // lines when the updater runs multiple times.
+  let prefix = before;
+  if (!prefix.endsWith('\n')) prefix += '\n';
+  // Remove any leading newlines from the 'after' slice so we don't accumulate
+  // blank lines before the end marker.
+  let suffix = after;
+  while (suffix.startsWith('\n')) suffix = suffix.slice(1);
+
+  // Remove leading blank lines so we don't accumulate empty lines after the start marker.
+  while (outLines.length > 0 && outLines[0].trim() === '') outLines.shift();
+  const content = outLines.join('\n').replace(/\s+$/g, '');
+  const out = prefix + content + '\n' + suffix;
+  await fs.writeFile(readmePath, out, 'utf8');
+  console.log('Conservatively updated README at', readmePath);
+    } catch (e) {
+      console.error('Failed to update README:', (e as Error).message);
     }
   }
 }
