@@ -74,3 +74,11 @@ Line2
 
 This testing philosophy is central to MixPad's ability to move fast while staying grounded - every feature is specified, verified, and documented through this unified approach, creating a feedback loop that accelerates development while maintaining reliability.
 
+## Explicit Constraints
+
+These are considered hard constraints set out as the policy.
+
+* ESBuild tool is used for all builds and bundling.
+* No JavaScript output files are committed to the repository.
+* No TypeScript compilation to JavaScript is allowed.
+

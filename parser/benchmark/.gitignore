@@ -1,9 +1,6 @@
-node_modules/
-*.log
-*.tmp
+/dist/
+/dist/
+/node_modules/
+/.bench-temp/
+/*.built.js
 results/*.json
-.DS_Store
-*.tsbuildinfo
-# Build artifacts
-run-competitive-built.js
-*.js.map
