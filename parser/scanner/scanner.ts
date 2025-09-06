@@ -1958,27 +1958,6 @@ export function createScanner(): Scanner {
 
     const ch = source.charCodeAt(p);
 
-    // Pre-check for malformed equals: '=' followed by optional whitespace then '>' or '/>' or EOF.
-    if (ch === CharacterCodes.equals) {
-      let peek = p + 1;
-      while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
-      const peekCh = peek < end ? source.charCodeAt(peek) : -1;
-      if (peekCh === CharacterCodes.greaterThan) {
-        diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-        // Advance to '>' and emit it from this same scan() call
-        pos = peek;
-        // Fall through to end-of-tag handling below
-      } else if (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) {
-        diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-        pos = peek; // will be handled by '/>' branch below
-      } else if (peekCh === -1) {
-        diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-        // Move to EOF and let EOF emission happen
-        pos = end;
-      }
-      p = pos;
-    }
-
     // If the previous emitted token was '=', then the next token must be the value
     // (quoted or unquoted). This avoids misclassifying attribute names as values.
     if (token === SyntaxKind.EqualsToken) {
@@ -1995,8 +1974,13 @@ export function createScanner(): Scanner {
           offsetNext = p;
           return;
         } else {
-          let scanTo = p;
-          while (scanTo < end && source.charCodeAt(scanTo) !== CharacterCodes.greaterThan) scanTo++;
+          // Unterminated: scan from just after opening quote to the first '>' or line break
+          let scanTo = valStart + 1;
+          while (scanTo < end) {
+            const c = source.charCodeAt(scanTo);
+            if (c === CharacterCodes.greaterThan || isLineBreak(c)) break;
+            scanTo++;
+          }
           emitAttributeValueToken(valStart, scanTo, /*isQuoted*/true, TokenFlags.Unterminated);
           pos = scanTo;
           offsetNext = scanTo;
@@ -2045,6 +2029,26 @@ export function createScanner(): Scanner {
   emitToken(SyntaxKind.HtmlAttributeName, nameStart, p);
   // Move to next non-whitespace meaningful char
   while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+  // If the next char is '=' and after optional whitespace we hit '>' or '/>' or EOF,
+  // treat this as malformed (missing value). Do not emit '='; instead advance to the
+  // terminator so the next scan emits the correct GreaterThanToken at its own column.
+  if (p < end && source.charCodeAt(p) === CharacterCodes.equals) {
+    let peek = p + 1;
+    while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
+    const peekCh = peek < end ? source.charCodeAt(peek) : -1;
+    if (peekCh === CharacterCodes.greaterThan) {
+      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+      pos = peek; offsetNext = peek; return;
+    }
+    if (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) {
+      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+      pos = peek; offsetNext = peek; return;
+    }
+    if (peekCh === -1) {
+      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+      pos = end; offsetNext = end; return;
+    }
+  }
   pos = p;
   offsetNext = p;
       return;
@@ -2106,9 +2110,13 @@ export function createScanner(): Scanner {
   offsetNext = p;
         return;
       } else {
-        // Unterminated quoted value: emit until '>' or EOF with flag
-        let scanTo = p;
-        while (scanTo < end && source.charCodeAt(scanTo) !== CharacterCodes.greaterThan) scanTo++;
+        // Unterminated quoted value: emit until first '>' or line break with flag
+        let scanTo = valStart + 1;
+        while (scanTo < end) {
+          const c = source.charCodeAt(scanTo);
+          if (c === CharacterCodes.greaterThan || isLineBreak(c)) break;
+          scanTo++;
+        }
   emitAttributeValueToken(valStart, scanTo, /*isQuoted*/true, TokenFlags.Unterminated);
   // Do not exit tag scanning; let next scan emit '>' if present
   while (scanTo < end && isWhiteSpaceSingleLine(source.charCodeAt(scanTo))) scanTo++;
