@@ -21,17 +21,18 @@ describe('Stage 3: Inline Formatting', () => {
     });
 
     test('ERROR in position: double asterisk at line start', () => {
-      const tokenTest = `
+      const tokenTestWrong = `
 **bold**
 1      2
 @1 AsteriskAsterisk 514
 @2 AsteriskAsterisk 1024`;
-      expect(verifyTokens(tokenTest)).toBe(`
+      const tokenTestCorrect = `
 **bold**
 1     2
 @1 AsteriskAsterisk 514
 @2 AsteriskAsterisk 1024
-`);
+`;
+      expect(verifyTokens(tokenTestWrong)).toBe(tokenTestCorrect);
     });
 
     test('single asterisk recognition', () => {
@@ -141,7 +142,7 @@ single~tilde
     test('text after other formatting tokens gets normalized consistently', () => {
       const tokenTest = `
 *italic* and\tthen\t\tmore   text
-1      23   4
+12     34
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "italic"
 @3 AsteriskToken "*" CanClose
@@ -227,11 +228,11 @@ start **bold** end
 @1 AsteriskAsterisk "**" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "bold"
 @3 AsteriskAsterisk "**" CanClose
-@4 StringLiteral "  "
+@4 StringLiteral " "
 @5 AsteriskToken "*" CanOpen
 @6 StringLiteral "italic"
 @7 AsteriskToken "*" CanClose
-@8 StringLiteral "   "
+@8 StringLiteral " "
 @9 TildeTilde "~~"
 @A StringLiteral "strike"
 @B TildeTilde "~~"`;
@@ -255,11 +256,11 @@ start **bold** end
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "first"
 @3 AsteriskToken "*" CanClose
-@4 StringLiteral "    "
+@4 StringLiteral " "
 @5 AsteriskAsterisk "**" CanOpen
 @6 StringLiteral "second"
 @7 AsteriskAsterisk "**" CanClose
-@8 StringLiteral "   third"`;
+@8 StringLiteral " third"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
