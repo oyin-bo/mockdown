@@ -14,6 +14,8 @@ export async function runOrchestrator(argv: string[]) {
   const datasets = [
     'small-simple',
     'docs-collection',
+  'medium',
+  'pathological',
     // 'super-heavy'
   ];
 

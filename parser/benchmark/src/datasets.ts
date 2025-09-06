@@ -20,6 +20,73 @@ export function getDataset(name: string): { name: string; content: string } {
     }
   }
 
+  if (name === 'medium') {
+    // Medium deterministic markdown generator ~512 KiB
+    const targetBytes = 512 * 1024; // 512 KiB
+    let seed = 12345;
+    function next() { seed = (1103515245 * seed + 12345) >>> 0; return seed; }
+    const words = ['lorem','ipsum','dolor','sit','amet','alpha','beta','gamma','delta','example','paragraph','token','scanner','parser','benchmark','node','typescript','javascript','markup','format'];
+    const chunks: string[] = [];
+    while (Buffer.byteLength(chunks.join('\n\n')) < targetBytes) {
+      const wcount = (next() % 30) + 5;
+      const lineWords: string[] = [];
+      for (let i = 0; i < wcount; i++) lineWords.push(words[next() % words.length]);
+      const r = next() % 100;
+      if (r < 6) {
+        chunks.push('# ' + lineWords.join(' '));
+      } else if (r < 18) {
+        chunks.push('## ' + lineWords.join(' '));
+      } else if (r < 34) {
+        chunks.push('- ' + lineWords.join(' '));
+      } else if (r < 48) {
+        // code block with more content
+        chunks.push('```\n' + lineWords.join(' ') + '\n' + lineWords.join(' ') + '\n```');
+      } else if (r < 62) {
+        // inline code heavy
+        chunks.push(lineWords.map(w => '`' + w + '`').join(' '));
+      } else {
+        chunks.push(lineWords.join(' '));
+      }
+    }
+    return { name, content: chunks.join('\n\n') };
+  }
+
+  if (name === 'pathological') {
+    // Pathological but deterministic input designed to stress parsers.
+    // Deeply nested lists, many emphasis/strong markers, many inline code and links.
+    const targetBytes = 180 * 1024; // ~180 KiB
+    let seed = 424242;
+    function next() { seed = (214013 * seed + 2531011) >>> 0; return seed; }
+    const emph = ['*', '**', '_', '__'];
+    const chunks: string[] = [];
+
+    // Deep nested list blocks
+    for (let block = 0; Buffer.byteLength(chunks.join('\n\n')) < targetBytes && block < 1200; block++) {
+      const depth = 1 + (next() % 10);
+      const items = 1 + (next() % 6);
+      for (let i = 0; i < items; i++) {
+        const indent = '  '.repeat(depth);
+        const e = emph[next() % emph.length];
+        // create a list item with heavy inline emphasis and code spans
+        const words = [] as string[];
+        const wcount = 3 + (next() % 12);
+        for (let k = 0; k < wcount; k++) words.push(('word' + ((next() % 1000))));
+        const code = '`' + words.slice(0, Math.min(3, words.length)).join('-') + '`';
+        const item = `${indent}- ${e}${words.join(' ')}${e} ${code} [link](http://example.com/${next() % 10000})`;
+        chunks.push(item);
+      }
+      // occasional long emphasis paragraph
+      if ((next() % 5) === 0) {
+        const e1 = emph[next() % emph.length];
+        const e2 = emph[next() % emph.length];
+        const parts = [] as string[];
+        for (let p = 0; p < 4 + (next() % 6); p++) parts.push(e1 + 'patho' + (next() % 10000) + e2);
+        chunks.push(parts.join(' '));
+      }
+    }
+    return { name, content: chunks.join('\n\n') };
+  }
+
   if (name === 'super-heavy') {
     // Deterministic pseudo-random generator (LCG) to produce ~12MB of markdown-like content.
     // Use a simple, fast generator so repeated runs are identical.
