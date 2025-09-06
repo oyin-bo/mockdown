@@ -1,4 +1,11 @@
 export function getDataset(name: string): { name: string; content: string } {
+  function safeByteLength(s: string) {
+    try {
+      // @ts-ignore Buffer may not be declared in some TS environments
+      if (typeof Buffer !== 'undefined' && typeof Buffer.byteLength === 'function') return Buffer.byteLength(s, 'utf8');
+    } catch (e) { }
+    try { return new TextEncoder().encode(s).length; } catch (e) { return s.length; }
+  }
   if (name === 'small-simple') return { name, content: '# Hi\n\nThis is a small document.' };
 
   if (name === 'docs-collection') {
@@ -51,6 +58,27 @@ export function getDataset(name: string): { name: string; content: string } {
     return { name, content: chunks.join('\n\n') };
   }
 
+  if (name === 'medium-mixed') {
+    // Historical 'medium-mixed' dataset (~50 KiB) used in older benchmarks.
+    const targetBytes = 50 * 1024; // 50 KiB
+    let seed = 13579;
+    function next() { seed = (1103515245 * seed + 12345) >>> 0; return seed; }
+    const complexPatterns = [
+      '# Complex Document\n\n',
+      'This paragraph contains **nested *italic inside bold* formatting** and more text.\n\n',
+      '```javascript\n// Code block\nfunction example() {\n  return "Hello World";\n}\n```\n\n',
+      '| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| Cell 1   | Cell 2   | Cell 3   |\n\n',
+      '> This is a blockquote with **bold text**\n> and multiple lines.\n\n',
+      '1. Ordered list item\n2. Another ordered item\n3. Third item with `code`\n\n'
+    ];
+
+    const parts: string[] = [];
+    while (safeByteLength(parts.join('\n\n')) < targetBytes) {
+      parts.push(complexPatterns[next() % complexPatterns.length]);
+    }
+    return { name, content: parts.join('\n\n').substring(0, targetBytes) };
+  }
+
   if (name === 'pathological') {
     // Pathological but deterministic input designed to stress parsers.
     // Deeply nested lists, many emphasis/strong markers, many inline code and links.
@@ -61,7 +89,7 @@ export function getDataset(name: string): { name: string; content: string } {
     const chunks: string[] = [];
 
     // Deep nested list blocks
-    for (let block = 0; Buffer.byteLength(chunks.join('\n\n')) < targetBytes && block < 1200; block++) {
+  for (let block = 0; safeByteLength(chunks.join('\n\n')) < targetBytes && block < 1200; block++) {
       const depth = 1 + (next() % 10);
       const items = 1 + (next() % 6);
       for (let i = 0; i < items; i++) {
@@ -96,7 +124,7 @@ export function getDataset(name: string): { name: string; content: string } {
     function next() { seed = (1664525 * seed + 1013904223) >>> 0; return seed; }
     const words = ['lorem','ipsum','dolor','sit','amet','consectetur','adipiscing','elit','markdown','code','list','item','heading','subheading','example','paragraph','token','scanner','parser','benchmark'];
     const chunks: string[] = [];
-    while (Buffer.byteLength(chunks.join('\n\n')) < targetBytes) {
+  while (safeByteLength(chunks.join('\n\n')) < targetBytes) {
       const wcount = (next() % 40) + 1;
       const lineWords: string[] = [];
       for (let i = 0; i < wcount; i++) lineWords.push(words[next() % words.length]);
@@ -115,6 +143,15 @@ export function getDataset(name: string): { name: string; content: string } {
       }
     }
     return { name, content: chunks.join('\n\n') };
+  }
+
+  if (name === 'large-text-heavy') {
+    // Historical large text heavy dataset (~500 KiB) used for throughput tests.
+    const targetBytes = 500 * 1024; // 500 KiB
+    const textBlock = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n\n';
+    let content = '# Large Text Document\n\n';
+  while (safeByteLength(content) < targetBytes) content += textBlock;
+    return { name, content: content.substring(0, targetBytes) };
   }
 
   return { name, content: '' };

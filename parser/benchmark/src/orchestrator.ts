@@ -15,6 +15,8 @@ export async function runOrchestrator(argv: string[]) {
     'small-simple',
     'docs-collection',
   'medium',
+  'medium-mixed',
+  'large-text-heavy',
   'pathological',
     // 'super-heavy'
   ];
