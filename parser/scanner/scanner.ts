@@ -253,6 +253,22 @@ export function createScanner(): Scanner {
     let needsNormalization = false;
     let hasTrailingSpace = false;
 
+    // If the substring contains only spaces/tabs, either preserve or normalize
+    let onlyWhitespace = true;
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+      if (ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+        onlyWhitespace = false;
+        break;
+      }
+    }
+    if (onlyWhitespace) {
+      // Normalize any whitespace-only run to a single space for consistent
+      // inline formatting behavior. Do not return an empty string for
+      // whitespace-only inputs.
+      return ' ';
+    }
+
     for (let i = start; i < endPos; i++) {
       const ch = source.charCodeAt(i);
       if (ch === CharacterCodes.tab) {
@@ -321,10 +337,47 @@ export function createScanner(): Scanner {
       result.push(source.substring(lastCleanStart, endPos));
     }
 
-    // Join result and return final result (don't aggressively trim all trailing spaces)
-    let finalResult = result.join('');
-    // Only trim trailing spaces in certain contexts, not globally
-    return finalResult;
+    // Join result and build final normalized string
+    const joined = result.join('');
+
+    // If the original substring was only whitespace we returned early above.
+    // For normalized inline content, trim by default but preserve a single
+    // leading/trailing space when the original text had whitespace that
+    // bordered a neighboring non-whitespace token. This keeps separation
+    // between adjacent elements (e.g. emphasis tokens and text).
+
+    // Detect original leading/trailing whitespace in the raw slice
+    const originalHasLeadingWhitespace = start < endPos &&
+      (source.charCodeAt(start) === CharacterCodes.space || source.charCodeAt(start) === CharacterCodes.tab);
+    const originalHasTrailingWhitespace = endPos - 1 >= start &&
+      (source.charCodeAt(endPos - 1) === CharacterCodes.space || source.charCodeAt(endPos - 1) === CharacterCodes.tab);
+
+    let preserveLeft = false;
+    let preserveRight = false;
+
+    // Preserve left whitespace only when there's a non-whitespace character immediately before
+    if (originalHasLeadingWhitespace && start > 0) {
+      const prev = source.charCodeAt(start - 1);
+      if (!isWhiteSpaceSingleLine(prev) && !isLineBreak(prev)) {
+        preserveLeft = true;
+      }
+    }
+
+    // Preserve right whitespace only when there's a non-whitespace character immediately after
+    if (originalHasTrailingWhitespace && endPos < end) {
+      const next = source.charCodeAt(endPos);
+      if (!isWhiteSpaceSingleLine(next) && !isLineBreak(next)) {
+        preserveRight = true;
+      }
+    }
+
+    // Default normalized content (trimmed)
+    let normalized = joined.trim();
+
+    if (preserveLeft) normalized = ' ' + normalized;
+    if (preserveRight) normalized = normalized + ' ';
+
+    return normalized;
   }
 
   /**
@@ -800,36 +853,36 @@ export function createScanner(): Scanner {
 
     while (doctypePos < end) {
       const ch = source.charCodeAt(doctypePos);
-      
+
       if (inQuote) {
         // Inside quoted string - only exit on matching quote
         if ((inQuote === '"' && ch === CharacterCodes.doubleQuote) ||
-            (inQuote === "'" && ch === CharacterCodes.singleQuote)) {
+          (inQuote === "'" && ch === CharacterCodes.singleQuote)) {
           inQuote = null;
         }
         doctypePos++;
         continue;
       }
-      
+
       // Not in quote - check for quote start or end
       if (ch === CharacterCodes.doubleQuote) {
         inQuote = '"';
         doctypePos++;
         continue;
       }
-      
+
       if (ch === CharacterCodes.singleQuote) {
         inQuote = "'";
         doctypePos++;
         continue;
       }
-      
+
       if (ch === CharacterCodes.greaterThan) {
         // Found closing > outside quotes
         emitToken(SyntaxKind.HtmlDoctype, start, doctypePos + 1);
         return;
       }
-      
+
       doctypePos++;
     }
 
@@ -838,8 +891,8 @@ export function createScanner(): Scanner {
     // Search should begin after the <!DOCTYPE prefix (doctypePos) to avoid zero-length tokens.
     let fastEnd = end;
 
-  // Find first line break or '<' after the start (skip the initial '<' at `start`)
-  for (let i = start + 1; i < end; i++) {
+    // Find first line break or '<' after the start (skip the initial '<' at `start`)
+    for (let i = start + 1; i < end; i++) {
       const ch = source.charCodeAt(i);
       if (isLineBreak(ch) || ch === CharacterCodes.lessThan) {
         fastEnd = i;
@@ -868,11 +921,11 @@ export function createScanner(): Scanner {
     for (let i = 0; i < sequence.length; i++) {
       const sourceChar = source.charCodeAt(pos + i);
       const expectedChar = sequence.charCodeAt(i);
-      
+
       // ASCII case-insensitive comparison
       const sourceLower = (sourceChar >= 65 && sourceChar <= 90) ? sourceChar + 32 : sourceChar;
       const expectedLower = (expectedChar >= 65 && expectedChar <= 90) ? expectedChar + 32 : expectedChar;
-      
+
       if (sourceLower !== expectedLower) {
         return false;
       }
@@ -903,7 +956,7 @@ export function createScanner(): Scanner {
 
   function emitTextRun(start: number): void {
     let textEnd = start;
-    
+
     // Special case: if we start with a malformed < tag (like <1bad>), scan until we find the closing >
     if (start < end && source.charCodeAt(start) === CharacterCodes.lessThan && !isValidHtmlStart(start)) {
       // This is a malformed tag, scan until we find > or end of line
@@ -1088,9 +1141,9 @@ export function createScanner(): Scanner {
 
     if (c1 === CharacterCodes.exclamation) {
       // Check for comments, CDATA, DOCTYPE
-      if (matchSequence(pos, '<!--') || 
-          matchSequence(pos, '<![CDATA[') || 
-          matchSequenceCaseInsensitive(pos, '<!DOCTYPE')) {
+      if (matchSequence(pos, '<!--') ||
+        matchSequence(pos, '<![CDATA[') ||
+        matchSequenceCaseInsensitive(pos, '<!DOCTYPE')) {
         return true;
       }
     }
@@ -1118,16 +1171,14 @@ export function createScanner(): Scanner {
     let i = lineStart;
     let indent = 0;
 
-    // 1. Calculate indent and find first non-space character
-    while (i < end && source.charCodeAt(i) === CharacterCodes.space) {
-      i++;
-      indent++;
+    // 1. Calculate indent and find first non-space/tab character
+    while (i < end) {
+      const c = source.charCodeAt(i);
+      if (c === CharacterCodes.space) { indent++; i++; continue; }
+      if (c === CharacterCodes.tab) { indent = (indent + 4) & ~3; i++; continue; }
+      break;
     }
-    if (i < end && source.charCodeAt(i) === CharacterCodes.tab) {
-      indent = (indent + 4) & ~3;
-      i++;
-    }
-    
+
     const firstChar = i < end ? source.charCodeAt(i) : -1;
 
     // 2. Check for blank line (highest priority)
@@ -1208,47 +1259,42 @@ export function createScanner(): Scanner {
     }
 
     if (hasPipe && isAlignmentRow) {
-        // More thorough check for alignment row
-        p = lineStart;
-        while (p < end && !isLineBreak(source.charCodeAt(p))) {
-            const ch = source.charCodeAt(p);
-            if (ch !== CharacterCodes.bar && ch !== CharacterCodes.colon && ch !== CharacterCodes.minus && ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
-                isAlignmentRow = false;
-                break;
-            }
-            p++;
+      // More thorough check for alignment row
+      p = lineStart;
+      while (p < end && !isLineBreak(source.charCodeAt(p))) {
+        const ch = source.charCodeAt(p);
+        if (ch !== CharacterCodes.bar && ch !== CharacterCodes.colon && ch !== CharacterCodes.minus && ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+          isAlignmentRow = false;
+          break;
         }
-        if(isAlignmentRow) return LineClassification.TABLE_ALIGNMENT_ROW;
+        p++;
+      }
+      if (isAlignmentRow) return LineClassification.TABLE_ALIGNMENT_ROW;
     }
     if (hasPipe) {
       return LineClassification.TABLE_PIPE_HEADER_CANDIDATE;
     }
-    
+
     // Check for Setext underline
     p = lineStart;
     while (p < end && isWhiteSpace(source.charCodeAt(p))) p++;
     const firstNonSpace = source.charCodeAt(p);
     if (firstNonSpace === CharacterCodes.equals || firstNonSpace === CharacterCodes.minus) {
-        let p2 = p;
-        while(p2 < end && source.charCodeAt(p2) === firstNonSpace) p2++;
-        while(p2 < end && isWhiteSpace(source.charCodeAt(p2))) p2++;
-        if (p2 >= end || isLineBreak(source.charCodeAt(p2))) {
-            return LineClassification.SETEXT_UNDERLINE_CANDIDATE;
-        }
+      let p2 = p;
+      while (p2 < end && source.charCodeAt(p2) === firstNonSpace) p2++;
+      while (p2 < end && isWhiteSpace(source.charCodeAt(p2))) p2++;
+      if (p2 >= end || isLineBreak(source.charCodeAt(p2))) {
+        return LineClassification.SETEXT_UNDERLINE_CANDIDATE;
+      }
     }
 
     return LineClassification.PARAGRAPH_PLAIN;
   }
 
 
-  function emitWhitespace(start: number): void {
-    let wsEnd = start;
-    while (wsEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(wsEnd))) {
-      wsEnd++;
-    }
-
-    emitToken(SyntaxKind.WhitespaceTrivia, start, wsEnd);
-  }
+  // Leading inline whitespace tokens removed. Leading indentation is handled by classifyLine
+  // and block decisions. For rare cases where a single space must be preserved as text,
+  // `StringLiteral` will be emitted with that single space.
 
   function emitNewline(start: number): void {
     let nlEnd = start;
@@ -1269,6 +1315,46 @@ export function createScanner(): Scanner {
       flags |= TokenFlags.IsBlankLine;
       lastBlankLinePos = start;
       contextFlags &= ~ContextFlags.InParagraph; // Reset paragraph context
+
+      // Emit any leading whitespace on the blank line as a StringLiteral so
+      // callers that expect to see visible whitespace receive a token.
+      if (start > lastLineStart) {
+        emitStringLiteralToken(lastLineStart, start, TokenFlags.None);
+      }
+    }
+
+    // Detect hard line break pattern: two or more spaces immediately before the newline
+    // or a single trailing backslash before the newline. If found, emit a HardLineBreak
+    // token instead of treating the trailing spaces as separate trivia.
+    let hardBreakStart = -1;
+    // Look backwards from start to find trailing run of spaces or a backslash
+    let j = start - 1;
+    let spaceCount = 0;
+    while (j >= lastLineStart) {
+      const pc = source.charCodeAt(j);
+      if (pc === CharacterCodes.space) {
+        spaceCount++; j--; continue;
+      }
+      if (pc === CharacterCodes.backslash && spaceCount === 0) {
+        // backslash hard break
+        hardBreakStart = j;
+      }
+      break;
+    }
+
+    if (spaceCount >= 2) {
+      hardBreakStart = start - spaceCount;
+    }
+
+    if (hardBreakStart >= 0) {
+      // Emit StringLiteral for any content up to hardBreakStart, if needed, then emit HardLineBreak
+      if (hardBreakStart > lastLineStart) {
+        // emit text before the trailing spaces/backslash as a StringLiteral
+        emitStringLiteralToken(lastLineStart, hardBreakStart, TokenFlags.None);
+      }
+      emitToken(SyntaxKind.HardLineBreak, hardBreakStart, nlEnd, flags);
+      contextFlags |= ContextFlags.AtLineStart | ContextFlags.PrecedingLineBreak;
+      return;
     }
 
     emitToken(SyntaxKind.NewLineTrivia, start, nlEnd, flags);
@@ -1299,7 +1385,9 @@ export function createScanner(): Scanner {
    */
   function scanCurrentLine(): void {
     if (currentLineFlags & LineClassification.BLANK_LINE) {
-      emitNewline(pos);
+      // Delegate to paragraph scanner so it can find the actual newline char
+      // and emit any whitespace run correctly as a StringLiteral before the newline.
+      scanParagraphContent();
     } else if (currentLineFlags & LineClassification.ATX_HEADING) {
       scanAtxHeadingLine();
     } else if (currentLineFlags & (LineClassification.FENCED_CODE_OPEN | LineClassification.FENCED_CODE_CLOSE)) {
@@ -1321,17 +1409,20 @@ export function createScanner(): Scanner {
   function scanAtxHeadingLine(): void {
     const start = pos;
     let i = start;
-    
+
     // 1. Emit Hash tokens (e.g., ##)
     while (i < end && source.charCodeAt(i) === CharacterCodes.hash) { i++; }
     emitToken(SyntaxKind.HashToken, start, i);
     // updatePosition is called in emitToken
 
-    // 2. Emit Whitespace
+    // 2. Consume separator whitespace after ATX hashes. Preserve a single space as text
     const wsStart = i;
     while (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) { i++; }
-    if (i > wsStart) { 
-      emitToken(SyntaxKind.WhitespaceTrivia, wsStart, i);
+    if (i > wsStart) {
+      // If there's at least one whitespace character, emit a single-space StringLiteral marker
+      // to represent the visual separator (rarely semantically significant beyond text).
+      emitStringLiteralToken(wsStart, Math.min(wsStart + 1, i), TokenFlags.None);
+      // Advance position was handled by emitStringLiteralToken
     }
 
     // 3. The rest of the line is paragraph content
@@ -1375,8 +1466,8 @@ export function createScanner(): Scanner {
       return;
     }
 
-    const start = pos;
-    const ch = source.charCodeAt(pos);
+    let start = pos;
+    let ch = source.charCodeAt(pos);
 
     // Handle newlines
     if (isLineBreak(ch)) {
@@ -1384,10 +1475,32 @@ export function createScanner(): Scanner {
       return;
     }
 
-    // Handle leading whitespace at line start
+    // Handle leading whitespace at line start: consume it and only emit as text when
+    // the rest of the line contains no other non-whitespace characters (rare case).
     if (isWhiteSpaceSingleLine(ch) && (contextFlags & ContextFlags.AtLineStart)) {
-      emitWhitespace(start);
-      return;
+      let wsEnd = start;
+      while (wsEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(wsEnd))) wsEnd++;
+
+      // If the rest of the line is only whitespace/newline, emit it as StringLiteral so callers
+      // that expect a visible space get a token. Otherwise, consume the leading whitespace and
+      // let the following text emission produce a single normalized StringLiteral (no consecutive
+      // StringLiterals).
+      let p = wsEnd;
+      while (p < end && !isLineBreak(source.charCodeAt(p))) {
+        if (!isWhiteSpaceSingleLine(source.charCodeAt(p))) break;
+        p++;
+      }
+
+      const restHasNonWhite = (p < end && !isLineBreak(source.charCodeAt(p)));
+      if (!restHasNonWhite) {
+        // Whole line is whitespace - emit it so blank-line detection can follow
+        emitStringLiteralToken(start, wsEnd, TokenFlags.None);
+        return;
+      }
+
+      // Otherwise, skip leading whitespace and continue scanning the rest of the line
+      pos = wsEnd;
+      ch = source.charCodeAt(pos);
     }
 
     // Stage 4: HTML character scanning
@@ -1414,7 +1527,7 @@ export function createScanner(): Scanner {
           }
           pos++;
         }
-        
+
         // If no tag content found (e.g., "< "), emit as LessThanToken
         scanLessThan(start);
       }

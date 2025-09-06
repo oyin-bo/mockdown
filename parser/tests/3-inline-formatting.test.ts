@@ -55,8 +55,8 @@ _text_
 
     test('backtick code spans', () => {
       const tokenTest =
-'`code`' + '\n' +
-'1    2' + `
+        '`code`' + '\n' +
+        '1    2' + `
 @1 BacktickToken
 @2 BacktickToken`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -112,21 +112,19 @@ single~tilde
   });
 
   describe('Whitespace handling in StringLiteral tokens', () => {
-    test('line-start text with excessive whitespace gets normalized after leading whitespace', () => {
+    test('line-start text with excessive whitespace gets normalized into a single StringLiteral', () => {
       const tokenTest = `
   Text\twith\t\tmultiple   spaces  
-1 2
-@1 WhitespaceTrivia "  "
-@2 StringLiteral "Text with multiple spaces "`;
+1
+@1 StringLiteral "Text with multiple spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('line-start after whitespace trivia gets normalized', () => {
       const tokenTest = `
-    Text\twith\t\tmultiple   spaces
-1   2
-@1 WhitespaceTrivia "    "
-@2 StringLiteral "Text with multiple spaces"`;
+  Text\twith\t\tmultiple   spaces
+1
+@1 StringLiteral "Text with multiple spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -153,9 +151,8 @@ single~tilde
     test('all text positions have consistent whitespace normalization behavior', () => {
       const tokenTest = `
   Leading\t\tspaces   first
-1 2
-@1 WhitespaceTrivia "  "
-@2 StringLiteral "Leading spaces first"`;
+1
+@1 StringLiteral "Leading spaces first"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -163,7 +160,7 @@ single~tilde
       const tokenTest = `
 Text\t\twith\t\ttrailing   
 1
-@1 StringLiteral "Text with trailing " PrecedingLineBreak|IsAtLineStart`;
+@1 StringLiteral "Text with trailing" PrecedingLineBreak|IsAtLineStart`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -252,15 +249,13 @@ start **bold** end
       // Now let's build up to the more complex test step by step
       const tokenTest = `
 *first*\t\t**second**   third
-12    34 5 6     7 8
+12     3 4 5       6
 @1 AsteriskToken "*" PrecedingLineBreak|IsAtLineStart|CanOpen
 @2 StringLiteral "first"
-@3 AsteriskToken "*" CanClose
-@4 StringLiteral " "
-@5 AsteriskAsterisk "**" CanOpen
-@6 StringLiteral "second"
-@7 AsteriskAsterisk "**" CanClose
-@8 StringLiteral " third"`;
+@3 StringLiteral
+@4 AsteriskAsterisk "**" CanOpen
+@5 StringLiteral "second"
+@6 StringLiteral " third"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 

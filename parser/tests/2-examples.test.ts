@@ -6,7 +6,7 @@
  * Do not pass two string literals separately.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { verifyTokens } from './verify-tokens.js';
 
 describe('Scanner2 Testing Infrastructure - Examples', () => {
@@ -29,19 +29,18 @@ Second line of content
 
   test('example 3: whitespace and text tokens', () => {
     const tokenTest = `
-    Indented content here
-1   2
-@1 WhitespaceTrivia
-@2 StringLiteral "Indented content here"`;
+  Indented content here
+1
+@1 StringLiteral "Indented content here"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('example 4: multiple position markers with flags', () => {
     const tokenTest = `
-  Content with spacing
-1 2
-@1 WhitespaceTrivia 2
-@2 StringLiteral 10`;
+  Content *with* spacing
+1         2
+@1 StringLiteral 2
+@2 "*"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -72,9 +71,8 @@ Actual content
   test('example 8: simple whitespace and text', () => {
     const tokenTest = `
   Simple indented content
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral "Simple indented content"`;
+1
+@1 StringLiteral "Simple indented content"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 });

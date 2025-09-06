@@ -196,44 +196,44 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 0.62 | 0.6 | 8 | 4 |
-| commonmark | 1.28 | 0.2 | 26 | N/A |
-| marked | 9.20 | 0.2 | 189 | 45 |
-| markdown-it | 2.30 | 0.2 | 23 | 6 |
-| remark | 3.52 | 0.1 | 202 | N/A |
-| micromark | 3.51 | 0.1 | 300 | 44 |
+| mixpad | 0.63 | 0.6 | 8 | 4 |
+| commonmark | 1.02 | 0.2 | 26 | N/A |
+| marked | 7.57 | 0.2 | 189 | 45 |
+| markdown-it | 1.97 | 0.2 | 23 | 6 |
+| remark | 3.03 | 0.1 | 365 | N/A |
+| micromark | 2.80 | 0.1 | 269 | 44 |
 
 ### medium-mixed
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 8.96 | 3.0 | 107 | 10,177 |
-| commonmark | 14.34 | 2.9 | 423 | N/A |
-| markdown-it | 16.23 | 1.7 | 836 | 2,630 |
-| marked | 20.01 | 1.6 | 888 | 76,889 |
-| remark | 125.54 | 0.3 | 17,519 | N/A |
-| micromark | 125.99 | 0.3 | 16,274 | 76,767 |
+| mixpad | 11.18 | 3.0 | 185 | 8,914 |
+| commonmark | 13.13 | 2.9 | 420 | N/A |
+| markdown-it | 14.88 | 1.7 | 909 | 2,630 |
+| marked | 16.94 | 1.6 | 895 | 76,889 |
+| remark | 111.75 | 0.3 | 17,403 | N/A |
+| micromark | 112.13 | 0.3 | 16,244 | 76,767 |
 
 ### large-text-heavy
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 7.90 | 59.2 | 2,471 | N/A |
-| mixpad | 13.96 | 21.4 | 285 | 3,439 |
-| marked | 18.64 | 18.7 | 2,203 | 518,884 |
-| markdown-it | 17.64 | 18.2 | 3,176 | 3,441 |
-| remark | 91.77 | 3.1 | 3,819 | N/A |
-| micromark | 93.21 | 3.0 | 11,655 | 518,882 |
+| commonmark | 6.83 | 59.2 | 2,465 | N/A |
+| mixpad | 15.60 | 21.4 | 299 | 3,439 |
+| marked | 15.29 | 18.7 | 2,194 | 518,884 |
+| markdown-it | 14.72 | 18.2 | 3,186 | 3,441 |
+| remark | 85.08 | 3.1 | 11,668 | N/A |
+| micromark | 86.14 | 3.0 | 11,973 | 518,882 |
 
 ### pathological
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| mixpad | 13.56 | 4.2 | 197 | 15,984 |
-| commonmark | 20.20 | 4.1 | -1,280 | N/A |
-| marked | 29.48 | 1.2 | -681 | 202,930 |
-| micromark | 180.12 | 0.2 | 14,256 | 203,393 |
-| remark | 183.02 | 0.2 | 15,969 | N/A |
+| mixpad | 18.66 | 4.2 | 495 | 14,733 |
+| commonmark | 18.15 | 4.1 | -1,141 | N/A |
+| marked | 25.53 | 1.2 | -618 | 202,930 |
+| micromark | 151.93 | 0.2 | 14,903 | 203,393 |
+| remark | 161.82 | 0.2 | 15,891 | N/A |
 
 ### super-heavy
 
@@ -250,11 +250,11 @@ Results are automatically saved to `results/benchmark-TIMESTAMP.json`:
 
 | Parser | Time (ms) | Throughput (MB/s) | Memory (KB) | Tokens |
 |--------|-----------|-------------------|-------------|--------|
-| commonmark | 0.80 | 11.1 | 21 | N/A |
-| mixpad | 0.21 | 5.3 | 8 | 0 |
-| marked | 0.64 | 2.8 | 7 | 0 |
-| remark | 1.96 | 0.8 | 86 | N/A |
-| micromark | 1.74 | 0.6 | 94 | 0 |
+| commonmark | 0.58 | 11.1 | 21 | N/A |
+| mixpad | 0.17 | 5.3 | 8 | 0 |
+| marked | 0.52 | 2.8 | 7 | 0 |
+| remark | 1.56 | 0.8 | 86 | N/A |
+| micromark | 1.46 | 0.6 | 94 | 0 |
 <!-- BENCHMARK_RESULTS_END -->
 
 ## Features

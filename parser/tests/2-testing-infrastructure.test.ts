@@ -6,7 +6,7 @@
  * Do not pass two string literals separately.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { verifyTokens } from './verify-tokens.js';
 
 describe('Scanner2 Testing Infrastructure', () => {
@@ -30,21 +30,17 @@ Simple text line
     const tokenTest = `
 Hello world
 1
-@1 WhitespaceTrivia`;
+@1 StringLiteral`;
     const result = verifyTokens(tokenTest);
-    expect(result).toBe(`
-Hello world
-1
-@1 StringLiteral
-`);
+    expect(result).toBe(tokenTest);
   });
 
   test('should handle multiple position markers', () => {
     const tokenTest = `
-  Hello world
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral`;
+  Hello *world*
+1       2
+@1 StringLiteral
+@2 "*"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
@@ -82,42 +78,32 @@ Line2
   test('should handle leading whitespace', () => {
     const tokenTest = `
   Indented text
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral`;
+1
+@1 StringLiteral`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
-  test('should handle leading whitespace tokens', () => {
-    const tokenTest = `
-  Hello World
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral "Hello World"`;
-    expect(verifyTokens(tokenTest)).toBe(tokenTest);
-  });
-
-  test('should validate flags attribute', () => {
-    // WhitespaceTrivia should have IsAtLineStart flag (1 << 1 = 2)
+  test('should validate flags attribute using numerical value 2:IsAtLineStart', () => {
+    // Leading single-space should be StringLiteral and have IsAtLineStart flag
     const tokenTest = `
   Hello world
 1
-@1 WhitespaceTrivia 2`;
+@1 StringLiteral 2`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('infrastructure failure: wrong position marker should inject descriptive error', () => {
     // Position 12 should be beyond the "Hello world" token (which ends at position 10)
     const tokenTest = `
- Hello world
-1      2
-@1 WhitespaceTrivia
+ Hello *world*
+1         2
+@1 StringLiteral
 @2 StringLiteral`;
     const result = verifyTokens(tokenTest);
     expect(result).toBe(`
- Hello world
-12
-@1 WhitespaceTrivia
+ Hello *world*
+1       2
+@1 StringLiteral
 @2 StringLiteral
 `);
   });
@@ -143,7 +129,7 @@ Hello world
 1
 @1 StringLiteral
 `;
-    
+
     const result = verifyTokens(tokenTestWithNewlines);
     expect(result).toBe(tokenTestWithNewlines); // Should return original, not stripped
   });
@@ -155,17 +141,7 @@ Hello world
 1
 @1 StringLiteral`;
     expect(verifyTokens(tokenTest1)).toBe(tokenTest1);
-    
-    // Test that digit 1 aligns with the start of whitespace, digit 2 with "Hello"
-    // For "  Hello world":
-    // Position 0-1: "  " (WhitespaceTrivia)
-    // Position 2-12: "Hello world" (StringLiteral)
-    const tokenTest2 = `
-  Hello world
-1 2
-@1 WhitespaceTrivia
-@2 StringLiteral`;
-    expect(verifyTokens(tokenTest2)).toBe(tokenTest2);
+
   });
 
   test('readme example test', () => {
@@ -272,7 +248,7 @@ Hello world
 **bold text**
 1 3
 @1 AsteriskAsterisk CanOpen
-@2 StringLiteral "bold text"`;
+@3 StringLiteral "bold text"`;
       const expected = `
 **bold text**
 1 2

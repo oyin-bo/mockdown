@@ -15,9 +15,9 @@ export const enum SyntaxKind {
 
   // Stage 1: Basic text and whitespace tokens
   StringLiteral,            // Text content (normalized, one per line)
-  WhitespaceTrivia,         // Leading whitespace at line start
+  HardLineBreak,            // Hard line break (two or more trailing spaces before newline or trailing backslash)
   NewLineTrivia,            // Line breaks (LF, CRLF, CR)
-  
+
   // Block-level tokens from line classification
   HashToken,                // #, ##, etc. for ATX headings
   CodeFence,                // ``` or ~~~
@@ -30,7 +30,7 @@ export const enum SyntaxKind {
   UnderscoreUnderscore,     // __
   BacktickToken,            // `
   TildeTilde,               // ~~
-  
+
   // Stage 4: HTML and entities
   // HTML Structural Delimiters
   LessThanToken,            // <
@@ -53,7 +53,7 @@ export const enum SyntaxKind {
   HtmlDoctype,              // <!DOCTYPE html> (full span)
   HtmlRawText,              // Content inside <script>/<style> (no entity scanning)
   HtmlRCDataText,           // Content inside <textarea>/<title> (entity scanning active)
-  
+
   // Future stages will add more tokens as needed:
   // Later stages: Progressive Markdown construct addition
 }
@@ -63,16 +63,16 @@ export const enum SyntaxKind {
  */
 export const enum TokenFlags {
   None = 0,
-  
+
   // Line and position context
   PrecedingLineBreak = 1 << 0,   // Token follows a line break
   IsAtLineStart = 1 << 1,        // Token appears at start of line
   IsBlankLine = 1 << 2,          // Newline token ends a whitespace-only line
-  
+
   // Rollback safety flags for new scanner architecture
   CanRollbackHere = 1 << 3,      // Scanning can safely restart at this position
   RollbackTypeMask = 0x7 << 4,   // 3 bits for rollback type (8 types max)
-  
+
   // Specific rollback type flags
   RollbackDocumentStart = 0 << 4,     // Position 0 - always safe
   RollbackBlankLine = 1 << 4,         // After blank line - resets block context
@@ -82,11 +82,11 @@ export const enum TokenFlags {
   RollbackHtmlTagBoundary = 5 << 4,   // Immediately after completing '>' or '/>' of a tag
   RollbackHtmlEntityComplete = 6 << 4,// Immediately after emitting a HtmlEntity token
   RollbackContentModeBoundary = 7 << 4,// Right after switching into or out of RawText / RCData
-  
+
   // Stage 3: Emphasis delimiter flags
   CanOpen = 1 << 9,              // Delimiter can open emphasis/strong
   CanClose = 1 << 10,            // Delimiter can close emphasis/strong
-  
+
   // Stage 4: HTML construct flags
   Unterminated = 1 << 11,        // Token was not properly terminated (missing closing delimiter)
 }

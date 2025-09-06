@@ -201,7 +201,7 @@ function* findAssertions(input: string) {
       }
     }
 
-  const positionMarkerAsserts = positionMarkerLineOffsets.map(lineOffset => ({
+    const positionMarkerAsserts = positionMarkerLineOffsets.map(lineOffset => ({
       lineOffset,
       token: -1,
       text: null as null | string,
@@ -351,7 +351,7 @@ enum SyntaxKindShadow {
   EndOfFileToken = SyntaxKind.EndOfFileToken,
 
   StringLiteral = SyntaxKind.StringLiteral,
-  WhitespaceTrivia = SyntaxKind.WhitespaceTrivia,
+  HardLineBreak = SyntaxKind.HardLineBreak,
   NewLineTrivia = SyntaxKind.NewLineTrivia,
 
   AsteriskToken = SyntaxKind.AsteriskToken,
