@@ -2,13 +2,16 @@ import {
   CharacterCodes,
   isLineBreak,
   isWhiteSpace,
-  isWhiteSpaceSingleLine
+  isWhiteSpaceSingleLine,
+  isAttributeNameCharacter,
+  isAttributeNameStart
 } from './character-codes';
 import {
   RollbackType,
   ScannerErrorCode,
   SyntaxKind,
   TokenFlags
+  , Diagnostics
 } from './token-types';
 
 export interface Scanner {
@@ -164,7 +167,13 @@ export function createScanner(): Scanner {
   let endPattern: string | undefined = undefined;
 
   // HTML tag coarsening: emit name-only tokens for tag starts.
-
+  // HTML tag coarsening: emit name-only tokens for tag starts.
+  // When a tag-name is emitted we enter a short-lived "inTagScanning" mode
+  // so subsequent scan() calls will return attribute-related tokens one by one.
+  let inTagScanning = false;
+  let tagScanEnd = 0;
+  // Diagnostics collected by scanner (out-of-band, zero-allocation style)
+  const diagnostics: { code: number, start: number, length: number }[] = [];
   // Context flags
   let contextFlags: ContextFlags = ContextFlags.AtLineStart;
 
@@ -601,8 +610,8 @@ export function createScanner(): Scanner {
     if (c1 === CharacterCodes.slash) {
       // Closing tag start - emit close-name token with name-only span when possible
       if (scanHtmlTagStart(start)) return;
-  // Fallback to emitting the raw text as a StringLiteral for malformed starts
-  emitStringLiteralToken(start, Math.min(start + 2, end), TokenFlags.None);
+      // Fallback to emitting the raw text as a StringLiteral for malformed starts
+      emitStringLiteralToken(start, Math.min(start + 2, end), TokenFlags.None);
       return;
     }
 
@@ -633,10 +642,30 @@ export function createScanner(): Scanner {
     // Check if this could be a tag name after <
     if (c1 >= 0 && isLetter(c1)) {
       // Opening tag start - emit open-name token with name-only span when possible
-      if (scanHtmlTagStart(start)) return;
+      if (scanHtmlTagStart(start)) {
+        // If we just emitted an open-name, enter in-tag scanning mode so the
+        // next scan() invocation will emit the first attribute or the closing
+        // '>' or '/>' token. We must NOT emit multiple tokens from a single
+        // scan() call because the public scanner API expects exactly one
+        // token per scan() invocation.
+        if (token === SyntaxKind.HtmlTagOpenName || token === SyntaxKind.HtmlTagCloseName) {
+          inTagScanning = true;
+          tagScanEnd = pos; // pos was advanced to just after the name
+          // Compute the next non-whitespace offset so public `offsetNext` points
+          // to the true start of the next token (skipping intra-tag spaces).
+          let next = pos;
+          while (next < end && isWhiteSpaceSingleLine(source.charCodeAt(next))) next++;
+          // Set both public offsetNext and internal pos to the same value so
+          // subsequent scan() calls are consistent.
+          offsetNext = next;
+          updatePosition(next);
+          pos = next;
+        }
+        return;
+      }
 
-  // Fallback: emit the raw '<' as text for malformed starts
-  emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
+      // Fallback: emit the raw '<' as text for malformed starts
+      emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
       return;
     }
 
@@ -744,7 +773,7 @@ export function createScanner(): Scanner {
       }
     }
 
-    if (nameEnd > i) {
+  if (nameEnd > i) {
       // Emit a coarsened token that contains only the tag name text (callers only need the name).
       const nameStart = i;
       const nameEndPos = nameEnd; // do not include following whitespace/attributes or angle brackets
@@ -755,6 +784,11 @@ export function createScanner(): Scanner {
         // Emit open-name token but only the name slice
         emitToken(SyntaxKind.HtmlTagOpenName, nameStart, nameEndPos);
       }
+
+      // Advance scanner position to the end of the name so subsequent attribute
+      // scanning can proceed from the correct location.
+      updatePosition(nameEndPos);
+      pos = nameEndPos;
       return true;
     }
 
@@ -798,6 +832,113 @@ export function createScanner(): Scanner {
 
     emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
     return true;
+  }
+
+  /**
+   * Scan HTML attributes starting at `pos` (position after the tag-name).
+   * Emits HtmlAttributeName and HtmlAttributeValue tokens and consumes
+   * the terminating '>' or '/>' if present.
+   */
+  function scanHtmlAttributes(afterNamePos: number): void {
+    let p = afterNamePos;
+
+    // Loop scanning attributes until we hit '>' or '/>' or newline/EOF
+    while (p < end) {
+      // Skip whitespace between attributes
+      while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+
+      if (p >= end) break;
+
+      const ch = source.charCodeAt(p);
+
+      // End of tag
+      if (ch === CharacterCodes.greaterThan) {
+        emitToken(SyntaxKind.GreaterThanToken, p, p + 1);
+        p++;
+        break;
+      }
+
+      // Self-closing '/>'
+      if (ch === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan) {
+        emitToken(SyntaxKind.SlashGreaterThanToken, p, p + 2);
+        p += 2;
+        break;
+      }
+
+      // Attribute name start
+      if (isAttributeNameCharacter(ch)) {
+        const nameStart = p;
+        p++;
+        while (p < end && isAttributeNameCharacter(source.charCodeAt(p))) p++;
+        emitToken(SyntaxKind.HtmlAttributeName, nameStart, p);
+
+        // After name, skip whitespace
+        while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+
+        // If there's an equals sign, parse a value
+        if (p < end && source.charCodeAt(p) === CharacterCodes.equals) {
+          // Peek next non-whitespace to decide if this is a malformed a=> case
+          let peek = p + 1;
+          while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
+          const peekCh = peek < end ? source.charCodeAt(peek) : -1;
+
+          // Malformed: '=' followed immediately by '>' or '/>' or EOF -> do not emit '=' or a value
+          if (peekCh === CharacterCodes.greaterThan || (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) || peekCh === -1) {
+            // Skip the '=' and continue scanning attributes (treat as boolean-like missing value)
+            p = peek;
+            continue;
+          }
+
+          // emit equals as token for parser context
+          emitToken(SyntaxKind.EqualsToken, p, p + 1);
+          p++;
+          while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+
+          // Parse attribute value
+          if (p < end) {
+            const vch = source.charCodeAt(p);
+            if (vch === CharacterCodes.doubleQuote || vch === CharacterCodes.singleQuote) {
+              // Quoted value
+              const quote = vch;
+              const valStart = p;
+              p++;
+              while (p < end && source.charCodeAt(p) !== quote) p++;
+              if (p < end && source.charCodeAt(p) === quote) {
+                p++; // include closing quote
+                emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+              } else {
+                // Unterminated quoted value: emit as unterminated and stop at EOF or '>'
+                let scanTo = p;
+                while (scanTo < end && source.charCodeAt(scanTo) !== CharacterCodes.greaterThan) scanTo++;
+                emitToken(SyntaxKind.HtmlAttributeValue, valStart, scanTo, TokenFlags.Unterminated);
+                p = scanTo;
+              }
+            } else {
+              // Unquoted value: scan until whitespace or '>' or '/>'
+              const valStart = p;
+              while (p < end) {
+                const c = source.charCodeAt(p);
+                if (isWhiteSpaceSingleLine(c) || c === CharacterCodes.greaterThan || (c === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan)) break;
+                p++;
+              }
+              emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+            }
+          }
+          continue;
+        }
+
+        // No '=' -> boolean attribute, continue loop
+        continue;
+      }
+
+      // Unexpected char inside tag - treat as text run and stop attribute scanning
+      emitTextRun(p);
+      return;
+    }
+
+    // Advance main scanner position to p
+    updatePosition(p);
+    pos = p;
   }
 
   function scanNamedEntity(start: number): boolean {
@@ -1041,6 +1182,8 @@ export function createScanner(): Scanner {
           break;
         }
       }
+      // DEBUG
+      // console.error(`[DBG] HtmlAttributeValue ${valStart}-${p} -> "${source.substring(valStart,p)}"`);
     } else {
       // Regular text scanning
       while (textEnd < end) {
@@ -1057,6 +1200,8 @@ export function createScanner(): Scanner {
           ch === CharacterCodes.ampersand ||
           ch === CharacterCodes.equals) {
           break;
+          // DEBUG
+          // console.error(`[DBG] HtmlAttributeValue(unquoted) ${valStart}-${p} -> "${source.substring(valStart,p)}"`);
         }
 
         // Special handling for < - only break if it starts a valid HTML construct
@@ -1527,6 +1672,12 @@ export function createScanner(): Scanner {
    * paragraph-like content within any line type.
    */
   function scanParagraphContent(): void {
+    // If we are in a tag scanning state (after emitting the tag-name), emit
+    // one attribute-related token per scan() call.
+    if (inTagScanning) {
+      scanHtmlAttributeToken();
+      return;
+    }
     if (pos >= end) {
       // Don't emit another EOF if we are already at the end.
       if (token !== SyntaxKind.EndOfFileToken) {
@@ -1632,6 +1783,175 @@ export function createScanner(): Scanner {
       // Regular text content - scan until next special character
       emitTextRun(start);
     }
+  }
+
+  function scanHtmlAttributeToken(): void {
+    // Single-iteration attribute scanner: mirror scanHtmlAttributes but emit exactly one token
+    let p = pos;
+
+    // If there's intra-tag whitespace, emit it as HtmlTagWhitespace (covering run)
+    if (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p)) && !isLineBreak(source.charCodeAt(p))) {
+      let wsStart = p;
+      while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p)) && !isLineBreak(source.charCodeAt(p))) p++;
+      emitToken(SyntaxKind.HtmlTagWhitespace, wsStart, p);
+      pos = p;
+      return;
+    }
+
+    // Ensure p is synced
+    p = pos;
+
+    if (p >= end) {
+      emitToken(SyntaxKind.EndOfFileToken, p, p);
+      return;
+    }
+
+    const ch = source.charCodeAt(p);
+
+    // End of tag
+    if (ch === CharacterCodes.greaterThan) {
+      inTagScanning = false;
+      emitToken(SyntaxKind.GreaterThanToken, p, p + 1);
+      pos = p + 1;
+      return;
+    }
+
+    // Self-closing '/>'
+    if (ch === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan) {
+      inTagScanning = false;
+      emitToken(SyntaxKind.SlashGreaterThanToken, p, p + 2);
+      pos = p + 2;
+      return;
+    }
+
+    // If the previous non-whitespace character is '=' then this position
+    // must be an attribute value (quoted or unquoted). Handle value parsing
+    // before attribute-name detection so values like abc-123 are not
+    // mis-classified as another attribute name.
+    let back = p - 1;
+    while (back >= 0 && isWhiteSpaceSingleLine(source.charCodeAt(back))) back--;
+    const backCh = back >= 0 ? source.charCodeAt(back) : -1;
+    if (backCh === CharacterCodes.equals) {
+      // Quoted value
+      if (ch === CharacterCodes.doubleQuote || ch === CharacterCodes.singleQuote) {
+        const quote = ch;
+        const valStart = p;
+        p++;
+        while (p < end && source.charCodeAt(p) !== quote) p++;
+        if (p < end && source.charCodeAt(p) === quote) {
+          p++; // include closing quote
+          emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+          pos = p;
+          return;
+        } else {
+          let scanTo = p;
+          while (scanTo < end && source.charCodeAt(scanTo) !== CharacterCodes.greaterThan) scanTo++;
+          emitToken(SyntaxKind.HtmlAttributeValue, valStart, scanTo, TokenFlags.Unterminated);
+          pos = scanTo;
+          inTagScanning = false;
+          return;
+        }
+      }
+
+      // Unquoted value
+      if (!isWhiteSpaceSingleLine(ch) && ch !== CharacterCodes.greaterThan) {
+        const valStart = p;
+        while (p < end) {
+          const c = source.charCodeAt(p);
+          if (isWhiteSpaceSingleLine(c) || c === CharacterCodes.greaterThan || (c === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan)) break;
+          p++;
+        }
+        emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+        pos = p;
+        return;
+      }
+    }
+
+    // Attribute name (use start-specific check)
+    if (isAttributeNameStart(ch)) {
+      const nameStart = p;
+      p++;
+      while (p < end && isAttributeNameCharacter(source.charCodeAt(p))) p++;
+      emitToken(SyntaxKind.HtmlAttributeName, nameStart, p);
+      pos = p;
+      return;
+    }
+
+    // Equals sign
+    if (ch === CharacterCodes.equals) {
+      // Peek next non-whitespace to decide if this is malformed per Equals-token rule
+      let peek = p + 1;
+      while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
+      const peekCh = peek < end ? source.charCodeAt(peek) : -1;
+
+      // If '=' is followed (after optional whitespace) by '>' or EOF or '/>' then it's malformed
+      if (peekCh === CharacterCodes.greaterThan || (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) || peekCh === -1) {
+        // Record diagnostic for invalid html attribute - associate with the '=' position
+        diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+
+        // Advance to peek and emit the token found there (or EOF)
+        if (peekCh === CharacterCodes.greaterThan) {
+          inTagScanning = false;
+          emitToken(SyntaxKind.GreaterThanToken, peek, peek + 1);
+          pos = peek + 1;
+          return;
+        }
+        if (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) {
+          inTagScanning = false;
+          emitToken(SyntaxKind.SlashGreaterThanToken, peek, peek + 2);
+          pos = peek + 2;
+          return;
+        }
+        // EOF-ish
+        emitToken(SyntaxKind.EndOfFileToken, peek, peek);
+        pos = peek;
+        return;
+      }
+
+      // Normal '=' that introduces a value - emit equals token
+      emitToken(SyntaxKind.EqualsToken, p, p + 1);
+      pos = p + 1;
+      return;
+    }
+
+    // Quoted value
+    if (ch === CharacterCodes.doubleQuote || ch === CharacterCodes.singleQuote) {
+      const quote = ch;
+      const valStart = p;
+      p++;
+      while (p < end && source.charCodeAt(p) !== quote) p++;
+      if (p < end && source.charCodeAt(p) === quote) {
+        p++; // include closing quote
+        emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+        pos = p;
+        return;
+      } else {
+        // Unterminated quoted value: emit until '>' or EOF with flag
+        let scanTo = p;
+        while (scanTo < end && source.charCodeAt(scanTo) !== CharacterCodes.greaterThan) scanTo++;
+        emitToken(SyntaxKind.HtmlAttributeValue, valStart, scanTo, TokenFlags.Unterminated);
+        pos = scanTo;
+        inTagScanning = false;
+        return;
+      }
+    }
+
+    // Unquoted value
+    if (!isWhiteSpaceSingleLine(ch) && ch !== CharacterCodes.greaterThan) {
+      const valStart = p;
+      while (p < end) {
+        const c = source.charCodeAt(p);
+        if (isWhiteSpaceSingleLine(c) || c === CharacterCodes.greaterThan || (c === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan)) break;
+        p++;
+      }
+      emitToken(SyntaxKind.HtmlAttributeValue, valStart, p);
+      pos = p;
+      return;
+    }
+
+    // Fallback - emit text run and exit tag scanning
+    inTagScanning = false;
+    emitTextRun(p);
   }
 
   function isDoubleTilde(pos: number): boolean {

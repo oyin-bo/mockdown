@@ -242,6 +242,13 @@ export function isAttributeNameCharacter(ch: number): boolean {
          ch === CharacterCodes.colon;
 }
 
+/**
+ * Attribute name start characters per Stage 4: [A-Za-z_:@]
+ */
+export function isAttributeNameStart(ch: number): boolean {
+  return isLetter(ch) || ch === CharacterCodes.underscore || ch === CharacterCodes.colon || ch === CharacterCodes.at;
+}
+
 // Simplified Unicode identifier functions - would need full Unicode tables in production
 function isUnicodeIdentifierStart(ch: number): boolean {
   // Simplified - would need full Unicode identifier tables

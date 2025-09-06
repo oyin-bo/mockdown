@@ -792,3 +792,88 @@ Minimal acceptance checklist
 - [ ] No unnecessary string allocations are introduced during DOCTYPE scanning (scanner slices only once for `tokenText`).
 
 Implementing DOCTYPE this way preserves the Stage-4 scanner goals while providing the token-level support needed for downstream parsing or editor tooling.
+
+## Missing: HTML attributes (concise)
+
+What is missing (short):
+- Robust single-token-per-scan attribute emission that covers all valid and invalid attribute forms: quoted (single/double), unquoted, boolean, empty, malformed (missing value after `=`), and unterminated quoted values.
+
+Concrete rules (copy-paste friendly)
+- Equals-token rule: Emit `EqualsToken` iff a `=` is present and the next non-whitespace character is not `>` and not EOF. Otherwise treat the `=` as part of a malformed/boolean attribute (do not emit `EqualsToken`) and record an `InvalidHtmlAttribute` diagnostic.
+  
+  Examples (explicit):
+  - `a=b` → emit `EqualsToken` + `HtmlAttributeValue` for `b`.
+  - `a=  "b"` → emit `EqualsToken` + `HtmlAttributeValue` for `"b"` (whitespace allowed between `=` and value).
+  - `a=>` or `a=   >` → do NOT emit `EqualsToken`; record `InvalidHtmlAttribute` (zero-length value).
+- HtmlTagWhitespace semantics: Emit `HtmlTagWhitespace` for each contiguous intra-tag whitespace run. Whitespace must be covered by tokens exactly once (simplifies spans and test expectations).
+- Attribute name characters:
+  - Start: `[A-Za-z_:@]`
+  - Continue: `[A-Za-z0-9_.:-]`
+  - Note: tag-name rules differ: Stage 4 tag names do NOT include `:`; attribute names may include `:`.
+- Zero-length value handling (e.g. `a=>` or `a=>` with whitespace): Do not emit `HtmlAttributeValue` for zero-length values. If the next non-space char after `=` is `>` or EOF, do not emit `EqualsToken` (per Equals-token rule) and record `InvalidHtmlAttribute`. In other situations where `=` is followed by whitespace and then `>`/EOF, treat as malformed similarly.
+
+Token kinds / text semantics (clarified):
+- `HtmlAttributeName` — raw name span only (start..end) using the name char rules above.
+- `EqualsToken` — single-character token for `=` when emitted per the equals rule.
+- `HtmlAttributeValue` — **token span covers the entire raw value (including quotes if present), but `tokenText` contains the logical decoded value** (see attribute value extraction rules below).
+- `HtmlTagWhitespace` — covers runs of whitespace between name, equals, value, and `>`; emitted so coverage invariant holds.
+
+Attribute value extraction and decoding (comprehensive):
+- **Token span**: Always covers the complete raw attribute value in the source, including surrounding quotes for quoted values (e.g., span covers `"hello world"` entirely).
+- **Token text (logical value)**: Contains the normalized, decoded logical value that applications should use:
+  - **Quote removal**: Strip surrounding single (`'`) or double (`"`) quotes from quoted values; unquoted values remain as-is.
+  - **HTML entity decoding**: Decode all valid HTML entities within the value (`&amp;` → `&`, `&lt;` → `<`, `&quot;` → `"`, `&#65;` → `A`, `&#x41;` → `A`, etc.). Invalid entities remain as literal text.
+  - **Percent-encoding decoding**: Decode percent-encoded sequences (`%20` → space, `%3D` → `=`, etc.). Invalid percent sequences (e.g., `%ZZ`, `%2`) remain as literal text.
+  - **Whitespace normalization**: For quoted values, preserve internal whitespace exactly. For unquoted values, trim leading/trailing whitespace and collapse internal runs of whitespace to single spaces.
+  - **Newline handling**: Convert `\r\n`, `\r`, and `\n` sequences within quoted values to single `\n` characters.
+
+Examples of value extraction:
+- `class="hello world"` → span: `"hello world"`, text: `hello world`
+- `title='Tom &amp; Jerry'` → span: `'Tom &amp; Jerry'`, text: `Tom & Jerry`
+- `href="page.html?id=123&amp;type=info"` → span: `"page.html?id=123&amp;type=info"`, text: `page.html?id=123&type=info`
+- `data-url="https%3A//example.com"` → span: `"https%3A//example.com"`, text: `https://example.com`
+- `style="color:   red;  margin: 0"` → span: `"color:   red;  margin: 0"`, text: `color:   red;  margin: 0` (preserve internal spacing in quoted values)
+- `id=user-123` → span: `user-123`, text: `user-123`
+- `class=  main  secondary  ` → span: `main  secondary`, text: `main secondary` (trim and normalize whitespace for unquoted)
+- `title="Line 1&#10;Line 2"` → span: `"Line 1&#10;Line 2"`, text: `Line 1\nLine 2`
+- `alt="unterminated` → span: `"unterminated`, text: `unterminated`, flags: `TokenFlags.Unterminated`
+
+Diagnostics / flags mapping (copy-paste):
+- `InvalidHtmlAttribute` — emitted when `=` is present but the next non-whitespace char is `>` or EOF (zero-length value) or when attribute name contains illegal chars; scanner records this diagnostic with the attribute name span.
+- `UnterminatedHtmlAttributeValue` — set on `HtmlAttributeValue` tokens that reach `>` or EOF without a matching closing quote; also add diagnostics array entry with the value token span.
+
+Diagnostic object shape (example):
+```ts
+{ code: Diagnostics.InvalidHtmlAttribute, start: tokenStart, length: tokenLength }
+```
+Use the same shape for `UnterminatedHtmlAttributeValue` with the appropriate `Diagnostics` enum member.
+
+Test expectations (what tests must assert):
+- token kind
+- **token text (logical decoded value)**: stripped quotes, decoded entities/percent-encoding, normalized whitespace per the extraction rules
+- **span offsets (raw coverage)**: token spans must cover the complete raw attribute value including quotes; tokens must cover every source character exactly once (`HtmlTagWhitespace` helps ensure this)
+- presence of `TokenFlags.Unterminated` where expected
+- presence of recorded diagnostics where applicable (e.g. `InvalidHtmlAttribute`, `UnterminatedHtmlAttributeValue`)
+- **value extraction correctness**: tests must verify that complex attribute values with mixed encoding (entities + percent-encoding + quotes + whitespace) decode to the expected logical text while preserving correct raw spans
+
+Implementation checklist (minimal, actionable):
+- [ ] Keep `one token per scan()` and mirror `scanHtmlAttributes` semantics while emitting exactly one token each call.
+- [ ] Emit `HtmlTagWhitespace` runs for intra-tag whitespace so coverage is explicit.
+- [ ] Implement the Equals-token rule above exactly.
+- [ ] Use the attribute name start/continue character sets above.
+- [ ] Ensure `offsetNext` and `pos` are always advanced so token spans cover every source character exactly once.
+- [ ] **Implement attribute value extraction**: token spans cover raw value (including quotes), but `tokenText` contains logical decoded value per the extraction rules above.
+- [ ] **Add decoding functions**: HTML entity decoder, percent-encoding decoder, whitespace normalizer, and newline converter for attribute values.
+- [ ] **Handle extraction edge cases**: invalid entities/percent-sequences remain literal, unterminated quoted values extract available content, preserve vs. normalize whitespace based on quoted/unquoted context.
+- [ ] Record diagnostics with exact diagnostic codes for malformed cases (`InvalidHtmlAttribute`, `UnterminatedHtmlAttributeValue`).
+- [ ] Add unit tests for the cases listed previously (quoted, unquoted, boolean, a=>, unterminated, mixed attributes) **plus value extraction tests**.
+- [ ] **Add value extraction unit tests**: entity decoding in values, percent-decoding, whitespace normalization, quote removal, newline handling, mixed encoding scenarios.
+- [ ] Run full test suite and fix failures until `parser/tests/5-html-attributes.test.ts` passes completely.
+
+Current status (brief):
+- Coarsened tag-name tokens implemented (`HtmlTagOpenName`/`HtmlTagCloseName`) and defaulted; tag-name token text is the raw name only.
+- Per-scan attribute emission (`inTagScanning`) is implemented; `scanHtmlAttributeToken` has been iteratively rewritten to emit a single token per `scan()` and to mirror the previous looped `scanHtmlAttributes` semantics.
+- Many HTML tests pass. `parser/tests/5-html-attributes.test.ts` is currently failing in a small subset of assertions (8 failing assertions in the last run). The next step is to refine attribute token spans, equals/value heuristics, and unterminated-value handling to make the attribute tests green.
+
+Next step (short):
+- I'll proceed to adjust `scanHtmlAttributeToken` to implement the equals-token rule, name char sets, HtmlTagWhitespace emission, and diagnostic recording (per the checklist), run the tests, and iterate until the attribute tests pass. If you'd like, I can make those scanner changes and run the test suite now.

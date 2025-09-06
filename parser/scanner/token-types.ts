@@ -44,6 +44,7 @@ export const enum SyntaxKind {
   HtmlTagCloseName,         // Combined '</name' close tag-start (coarsened token)
   HtmlAttributeName,        // Attribute name (data-id, aria-label, xml:lang, etc.)
   HtmlAttributeValue,       // Quoted or unquoted attribute value (raw slice, quotes included for quoted)
+  HtmlTagWhitespace,        // Whitespace inside an HTML tag (between name, attrs, and >)
   HtmlEntity,               // Complete named or numeric entity WITH terminating ';'
 
   // HTML Aggregate / Content Tokens
@@ -114,4 +115,13 @@ export enum ScannerErrorCode {
   InvalidCharacter,
   InvalidRollbackPosition,
   InvalidRollbackType,
+}
+
+/**
+ * Specific scanner diagnostics emitted for HTML scanning issues
+ */
+export enum Diagnostics {
+  None = 0,
+  InvalidHtmlAttribute,
+  UnterminatedHtmlAttributeValue,
 }
