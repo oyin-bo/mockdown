@@ -1908,12 +1908,11 @@ export function createScanner(): Scanner {
    * Scans a line that starts with a list marker.
    */
   function scanListMarkerLine(): void {
-    const ch = source.charCodeAt(pos);
-    
     if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
       // Unordered list markers: -, *, +
       emitToken(SyntaxKind.ListMarkerUnordered, pos, pos + 1);
-      return;
+      // The rest of the line will be handled in the next scan() call
+      // since emitToken advances pos and the content will be scanned as paragraph
     } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
       // Ordered list markers: 1., 2), etc.
       let i = pos;
@@ -1926,11 +1925,11 @@ export function createScanner(): Scanner {
         i++;
       }
       emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
-      return;
+      // The rest of the line will be handled in the next scan() call
+    } else {
+      // Fallback to paragraph content if classification was wrong
+      scanParagraphContent();
     }
-    
-    // Fallback to paragraph content if classification was wrong
-    scanParagraphContent();
   }
 
   /**
