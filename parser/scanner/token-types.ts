@@ -28,6 +28,9 @@ export const enum SyntaxKind {
   PipeToken,                // | for tables
   ColonToken,               // : for table alignment
   MinusToken,               // - for table alignment
+  CodeBlockFenced,          // ``` code block content
+  MathInlineDelimiter,      // $ for inline math
+  MathBlockDelimiter,       // $$ for block math
 
   // Stage 3: Inline formatting tokens
   AsteriskToken,            // *

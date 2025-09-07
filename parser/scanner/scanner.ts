@@ -750,6 +750,19 @@ export function createScanner(): Scanner {
     }
   }
 
+  function scanDollar(start: number): void {
+    // Check for double dollar (block math)
+    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.dollar) {
+      // This is $$ - emit MathBlockDelimiter token
+      emitToken(SyntaxKind.MathBlockDelimiter, start, start + 2, TokenFlags.None);
+      updatePosition(start + 2);
+    } else {
+      // Single dollar - emit MathInlineDelimiter token
+      emitToken(SyntaxKind.MathInlineDelimiter, start, start + 1, TokenFlags.None);
+      updatePosition(start + 1);
+    }
+  }
+
   /**
    * Stage 4: HTML scanning functions
    */
@@ -1346,6 +1359,7 @@ export function createScanner(): Scanner {
         // Check for special characters, but handle intraword underscores specially
         if (ch === CharacterCodes.asterisk ||
           ch === CharacterCodes.backtick ||
+          ch === CharacterCodes.dollar ||
           ch === CharacterCodes.greaterThan ||
           ch === CharacterCodes.ampersand ||
           ch === CharacterCodes.equals) {
@@ -2072,6 +2086,8 @@ export function createScanner(): Scanner {
       scanBacktick(start);
     } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
       scanTilde(start);
+    } else if (ch === CharacterCodes.dollar) {
+      scanDollar(start);
     } else {
       // Regular text content - scan until next special character
       emitTextRun(start);

@@ -364,6 +364,9 @@ enum SyntaxKindShadow {
   PipeToken = SyntaxKind.PipeToken,
   ColonToken = SyntaxKind.ColonToken,
   MinusToken = SyntaxKind.MinusToken,
+  CodeBlockFenced = SyntaxKind.CodeBlockFenced,
+  MathInlineDelimiter = SyntaxKind.MathInlineDelimiter,
+  MathBlockDelimiter = SyntaxKind.MathBlockDelimiter,
 
   AsteriskToken = SyntaxKind.AsteriskToken,
   AsteriskAsterisk = SyntaxKind.AsteriskAsterisk,
