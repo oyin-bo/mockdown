@@ -1737,6 +1737,8 @@ export function createScanner(): Scanner {
     // If at the start of a line, classify it first.
     if (contextFlags & ContextFlags.AtLineStart) {
       currentLineFlags = classifyLine(pos);
+    } else {
+      currentLineFlags = LineClassification.None; // Reset line classification when not at line start
     }
 
     // Delegate to the appropriate line-level scanner
