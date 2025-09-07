@@ -1802,7 +1802,7 @@ export function createScanner(): Scanner {
       i++;
     }
     emitToken(SyntaxKind.CodeFence, pos, i);
-    scanParagraphContent(); // Scan newline
+    // The newline will be handled in the next scan() call
   }
 
   /**
@@ -1814,7 +1814,7 @@ export function createScanner(): Scanner {
       i++;
     }
     emitToken(SyntaxKind.ThematicBreak, pos, i);
-    scanParagraphContent(); // Scan newline
+    // The newline will be handled in the next scan() call
   }
 
   /**

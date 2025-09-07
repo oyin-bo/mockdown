@@ -354,6 +354,11 @@ enum SyntaxKindShadow {
   HardLineBreak = SyntaxKind.HardLineBreak,
   NewLineTrivia = SyntaxKind.NewLineTrivia,
 
+  // Block-level tokens from line classification
+  HashToken = SyntaxKind.HashToken,
+  CodeFence = SyntaxKind.CodeFence,
+  ThematicBreak = SyntaxKind.ThematicBreak,
+
   AsteriskToken = SyntaxKind.AsteriskToken,
   AsteriskAsterisk = SyntaxKind.AsteriskAsterisk,
   UnderscoreToken = SyntaxKind.UnderscoreToken,
@@ -370,6 +375,7 @@ enum SyntaxKindShadow {
   HtmlTagCloseName = SyntaxKind.HtmlTagCloseName,
   HtmlAttributeName = SyntaxKind.HtmlAttributeName,
   HtmlAttributeValue = SyntaxKind.HtmlAttributeValue,
+  HtmlTagWhitespace = SyntaxKind.HtmlTagWhitespace,
   HtmlEntity = SyntaxKind.HtmlEntity,
   HtmlComment = SyntaxKind.HtmlComment,
   HtmlCdata = SyntaxKind.HtmlCdata,
