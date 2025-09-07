@@ -134,7 +134,7 @@ _ _ _
       const tokenTest = `
     ---
 1
-@1 StringLiteral "    ---"`;
+@1 StringLiteral "---"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 

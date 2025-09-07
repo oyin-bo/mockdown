@@ -1760,6 +1760,8 @@ export function createScanner(): Scanner {
       scanFenceLine();
     } else if (currentLineFlags & LineClassification.THEMATIC_BREAK) {
       scanThematicBreakLine();
+    } else if (currentLineFlags & LineClassification.INDENTED_CODE) {
+      scanIndentedCodeLine();
     } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
       // Fallback to detailed inline parsing for anything that looks like a paragraph
       scanParagraphContent();
@@ -1816,6 +1818,27 @@ export function createScanner(): Scanner {
       i++;
     }
     emitToken(SyntaxKind.ThematicBreak, pos, i);
+    // The newline will be handled in the next scan() call
+  }
+
+  /**
+   * Scans a line that is indented code (4+ spaces).
+   */
+  function scanIndentedCodeLine(): void {
+    // Find the start of the current line
+    let lineStart = pos;
+    while (lineStart > 0 && !isLineBreak(source.charCodeAt(lineStart - 1))) {
+      lineStart--;
+    }
+    
+    // Find the end of the current line
+    let i = pos;
+    while (i < end && !isLineBreak(source.charCodeAt(i))) {
+      i++;
+    }
+    
+    // Emit the entire line content including leading spaces
+    emitStringLiteralToken(lineStart, i, TokenFlags.None);
     // The newline will be handled in the next scan() call
   }
 
