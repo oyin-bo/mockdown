@@ -156,3 +156,34 @@ The core infrastructure is complete and ready for **Phase 2: Core Parsing Engine
 - **Production-ready** core infrastructure for Phase 2 development
 
 The foundation provides sufficient base for multiple concurrent development lines as intended by the "Less is More" philosophy while maintaining high quality and comprehensive testing coverage.
+
+## Parsing considerations: construct-targeted scanning, accumulation, and recursion
+
+This implementation log records a few important parsing considerations that guided the Phase 1 design and that should be followed during Phase 2 parser implementation. They reflect the project constraint that the scanner normalises and materialises token text where necessary, while the parser performs higher-level, coarse-grained allocation only for AST nodes.
+
+- Parser-driven, construct-targeted scanning
+	- Parsing is implemented as a collection of small, focused functions each targeting a single syntactic construct (for example: `parseHeading`, `parseCodeBlock`, `parseParagraph`, `parseInlineRun`, `parseListItem`, etc.).
+	- Each construct-targeting function repeatedly invokes the scanner (one or more `scan()` calls) to gather the pieces required to decide how to produce an AST node. These calls are local to the function and do not require the scanner to produce long-lived token objects.
+	- The function collects only the minimal, necessary information from the scanner calls (primitive fields and, when the scanner already provides them, short normalized token text values). The function then proceeds to allocate the final AST node for the construct.
+
+- Accumulation model for inline and complex nodes
+	- Inline runs (paragraph text, emphasis, links, code spans, HTML fragments) are parsed by accumulating small, ephemeral fragments while scanning the run. A fragment holds primitive metadata (kind, start/end offsets, and any small delim metadata) and optionally references the scanner-provided normalized text for that fragment.
+	- The parser merges contiguous text fragments by extending offsets rather than concatenating strings repeatedly. When a final InlineText node must be materialised, the parser concatenates the minimal number of normalized token text pieces (prefer `pieces.length === 1 ? pieces[0] : pieces.join('')`) so that only one string allocation is made per finalized inline node.
+	- Delimiter runs for emphasis/strong are resolved with a dedicated delimiter-matching phase that operates on the accumulated fragment list. Matches produce composite fragments (no intermediate AST allocations) which are finalised only once the inline run ends.
+
+- Text collection rules
+	- The scanner remains authoritative for normalized small strings: if the scanner provides token text for a lexeme, the parser consumes that string rather than re-slicing the source buffer. The parser should copy token text into a node at finalisation when the node must own its string payload.
+	- The parser must avoid creating per-token temporary strings during scanning. Accumulate references to token text pieces and materialise the final node text once per node.
+
+- Recursive and nested parsing
+	- Many construct-targeting functions are naturally recursive or mutually recursive (for example `parseListItem` may call  `parseInlineRun`; `parseBlockQuote` may call block-level parsers inside it). The design expects these recursive calls and keeps fragment/stack state local to each invocation to avoid cross-contamination.
+	- When recursion is used, allocate ephemeral fragment arrays or stacks on the parser stack (or reuse parser-local pools) and finalise/commit node data before returning to the caller.
+
+- Diagnostics and recovery
+	- If a construct cannot be completed (unterminated fence, unmatched delimiter run, malformed link), the construct-targeting function should produce a diagnostic and either produce a best-effort partial node (with diagnostics attached) or fall back to treating its pieces as plain text, according to the best judgement in specific case.
+
+These considerations keep scanning and parsing responsibilities separate, preserve the scanner's normalized text guarantees, and ensure parser allocations remain coarse-grained and tied to AST nodes rather than individual tokens.
+
+```
+
+The foundation provides sufficient base for multiple concurrent development lines as intended by the "Less is More" philosophy while maintaining high quality and comprehensive testing coverage.
