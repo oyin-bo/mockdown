@@ -62,7 +62,7 @@ $incomplete
     test('empty inline math', () => {
       const tokenTest = `
 $$
-12
+1 2
 @1 MathInlineDelimiter "$"
 @2 MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
