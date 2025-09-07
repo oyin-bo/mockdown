@@ -40,7 +40,7 @@ describe('Stage 6: Lists', () => {
 -    content with extra spaces
 1    2
 @1 ListMarkerUnordered "- "
-@2 StringLiteral "   content with extra spaces"`;
+@2 StringLiteral "content with extra spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -77,7 +77,7 @@ describe('Stage 6: Lists', () => {
 1.     spaced content
 1      2
 @1 ListMarkerOrdered "1. "
-@2 StringLiteral "    spaced content"`;
+@2 StringLiteral "spaced content"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });

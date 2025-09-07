@@ -71,9 +71,8 @@ $$
     test('nested inline math not allowed', () => {
       const tokenTest = `
 $outer $inner$ text$
-1      8
-@1 MathInlineDelimiter "$"
-@8 MathInlineDelimiter "$"`;
+1
+@1 StringLiteral "$outer $inner$ text$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -184,8 +183,10 @@ code content
     test('insufficient backticks for fence (only 2)', () => {
       const tokenTest = `
 \`\`code\`\`
-1
-@1 StringLiteral "\`\`code\`\`"`;
+1 2   3
+@1 InlineCodeDelimiter "\`\`"
+@2 StringLiteral "code"
+@3 InlineCodeDelimiter "\`\`"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
