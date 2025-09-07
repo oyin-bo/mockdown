@@ -179,6 +179,9 @@ export function createScanner(): Scanner {
 
   // Line classification flags for the current line
   let currentLineFlags: LineClassification = LineClassification.None;
+  
+  // Track whether list marker has been consumed for current line
+  let listMarkerConsumed: boolean = false;
 
   // Scanner interface fields - these are the 4 public fields
   let token: SyntaxKind = SyntaxKind.Unknown;
@@ -1821,7 +1824,12 @@ export function createScanner(): Scanner {
     } else if (currentLineFlags & LineClassification.INDENTED_CODE) {
       scanIndentedCodeLine();
     } else if (currentLineFlags & (LineClassification.LIST_UNORDERED_MARKER | LineClassification.LIST_ORDERED_MARKER)) {
-      scanListMarkerLine();
+      if (!listMarkerConsumed) {
+        scanListMarkerLine();
+      } else {
+        // List marker already consumed, treat rest as paragraph content  
+        scanParagraphContent();
+      }
     } else if (currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE) {
       scanTableHeaderLine();
     } else if (currentLineFlags & LineClassification.TABLE_ALIGNMENT_ROW) {
@@ -1910,7 +1918,13 @@ export function createScanner(): Scanner {
   function scanListMarkerLine(): void {
     if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
       // Unordered list markers: -, *, +
-      emitToken(SyntaxKind.ListMarkerUnordered, pos, pos + 1);
+      // Include the following space as part of the marker token
+      let markerEnd = pos + 1;
+      if (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
+        markerEnd++; // Consume the space after the marker
+      }
+      emitToken(SyntaxKind.ListMarkerUnordered, pos, markerEnd);
+      listMarkerConsumed = true; // Mark marker as consumed
       // The rest of the line will be handled in the next scan() call
       // since emitToken advances pos and the content will be scanned as paragraph
     } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
@@ -1924,7 +1938,12 @@ export function createScanner(): Scanner {
       if (i < end && (source.charCodeAt(i) === CharacterCodes.dot || source.charCodeAt(i) === CharacterCodes.closeParen)) {
         i++;
       }
+      // Include the following space as part of the marker token
+      if (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
+        i++; // Consume the space after the marker
+      }
       emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
+      listMarkerConsumed = true; // Mark marker as consumed
       // The rest of the line will be handled in the next scan() call
     } else {
       // Fallback to paragraph content if classification was wrong

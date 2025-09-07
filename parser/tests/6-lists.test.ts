@@ -12,26 +12,26 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 - item
 1 2
-@1 ListMarkerUnordered "-"
-@2 StringLiteral " item"`;
+@1 ListMarkerUnordered "- "
+@2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('asterisk marker with text content', () => {
       const tokenTest = `
 * item
-1 2
-@1 ListMarkerUnordered "*"
-@2 StringLiteral " item"`;
+1 A
+@1 ListMarkerUnordered "* "
+@A StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('plus marker with text content', () => {
       const tokenTest = `
 + item
-1 2
-@1 ListMarkerUnordered "+"
-@2 StringLiteral " item"`;
+1 A
+@1 ListMarkerUnordered "+ "
+@A StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -39,8 +39,8 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 -    content with extra spaces
 1    A
-@1 ListMarkerUnordered "-"
-@A StringLiteral "    content with extra spaces"`;
+@1 ListMarkerUnordered "- "
+@A StringLiteral "   content with extra spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -50,8 +50,8 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 1. item
 1  A
-@1 ListMarkerOrdered "1."
-@A StringLiteral " item"`;
+@1 ListMarkerOrdered "1. "
+@A StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -59,8 +59,8 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 1) item
 1  A
-@1 ListMarkerOrdered "1)"
-@A StringLiteral " item"`;
+@1 ListMarkerOrdered "1) "
+@A StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -76,8 +76,8 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 1.     spaced content
 1      A
-@1 ListMarkerOrdered "1."
-@A StringLiteral "     spaced content"`;
+@1 ListMarkerOrdered "1. "
+@A StringLiteral "    spaced content"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -127,10 +127,11 @@ describe('Stage 6: Lists', () => {
 
     test('mixed list markers', () => {
       const tokenTest = `
-- first
-1 2
-@1 ListMarkerUnordered "-"
-@2 StringLiteral " first"`;
+- first item
++ second item  
+1      5
+@1 ListMarkerUnordered "- "
+@5 StringLiteral "+ second item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
