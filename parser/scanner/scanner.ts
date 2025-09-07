@@ -1889,11 +1889,8 @@ export function createScanner(): Scanner {
    * Scans a line that is indented code (4+ spaces).
    */
   function scanIndentedCodeLine(): void {
-    // Find the start of the current line
-    let lineStart = pos;
-    while (lineStart > 0 && !isLineBreak(source.charCodeAt(lineStart - 1))) {
-      lineStart--;
-    }
+    // Use lastLineStart instead of scanning backwards inefficiently
+    // The line classification already determined this is indented code
     
     // Find the end of the current line
     let i = pos;
@@ -1902,7 +1899,8 @@ export function createScanner(): Scanner {
     }
     
     // Emit the entire line content including leading spaces
-    emitStringLiteralToken(lineStart, i, TokenFlags.None);
+    // Use lastLineStart which is already tracked, avoiding backward scan
+    emitStringLiteralToken(lastLineStart, i, TokenFlags.None);
     // The newline will be handled in the next scan() call
   }
 
