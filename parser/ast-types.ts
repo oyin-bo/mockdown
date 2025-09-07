@@ -21,12 +21,13 @@ export enum NodeKind {
   CodeBlock,
   ThematicBreak,
   HtmlElement,
+  HtmlAttribute,
   HtmlComment,
   Table,
   MathBlock,
 
   // Inline-level nodes  
-  Text,
+  InlineText,
   Emphasis,
   Strong,
   InlineCode,
@@ -34,7 +35,7 @@ export enum NodeKind {
   Link,
   Image,
   MathInline,
-  Break,
+  InlineHardBreak,
 
   // Special nodes
   WhitespaceSeparation,
@@ -59,58 +60,18 @@ export enum NodeFlags {
 
 /**
  * Base interface for all AST nodes
- * Uses packed kind+flags for memory efficiency
  */
 export interface Node {
-  kindFlags: number;      // Lower 8 bits: NodeKind, upper 24 bits: NodeFlags
+  kind: NodeKind;        // Node type identifier
+  flags: NodeFlags;      // Node flags for metadata
   pos: number;           // Absolute byte offset start
   end: number;           // Absolute byte offset end
   parent?: Node;         // Optional parent linking (gated by option)
 }
 
-/**
- * Helper functions for kind/flags manipulation
- */
-export function getNodeKind(node: Node): NodeKind {
-  return node.kindFlags & 0xFF;
-}
 
-export function getNodeFlags(node: Node): NodeFlags {
-  return (node.kindFlags >> 8) & 0xFFFFFF;
-}
 
-export function setNodeFlags(node: Node, flags: NodeFlags): void {
-  node.kindFlags = (node.kindFlags & 0xFF) | (flags << 8);
-}
 
-export function addNodeFlag(node: Node, flag: NodeFlags): void {
-  const currentFlags = getNodeFlags(node);
-  setNodeFlags(node, currentFlags | flag);
-}
-
-export function hasNodeFlag(node: Node, flag: NodeFlags): boolean {
-  return (getNodeFlags(node) & flag) !== 0;
-}
-
-/**
- * Quote types for attribute values
- */
-export enum QuoteKind { 
-  None, 
-  Single, 
-  Double 
-}
-
-/**
- * Attribute slice for HTML elements
- */
-export interface AttributeSlice {
-  nameStart: number;
-  nameEnd: number;
-  valueStart?: number;
-  valueEnd?: number;
-  quoted?: QuoteKind;
-}
 
 // =============================================================================
 // Specific Node Interfaces
@@ -119,16 +80,16 @@ export interface AttributeSlice {
 /**
  * Document root node
  */
-export interface DocumentNode extends Node {
+export interface Document extends Node {
   children: BlockNode[];
   lineStarts: number[];           // Precomputed line starts for position mapping
 }
 
 /**
- * Text content node
+ * Inline text content node
  */
-export interface TextNode extends Node {
-  // Text content is materialized via pos/end slice
+export interface InlineTextNode extends Node {
+  text: string;                   // Text content materialized from scanner tokens
 }
 
 /**
@@ -177,17 +138,15 @@ export interface ListItemNode extends Node {
  */
 export interface CodeBlockNode extends Node {
   fenced: boolean;
-  infoString?: string;          // Language info for fenced blocks
-  fenceChar?: string;           // ` or ~ for fenced blocks
-  fenceLength?: number;         // Fence length for reconstruction
+  language?: string;            // Language info for fenced blocks
+  text: string;                 // Code content
 }
 
 /**
  * Thematic break node (---, ***, ___)
  */
 export interface ThematicBreakNode extends Node {
-  marker: string;               // Character used (-, *, _)
-  count: number;                // Number of marker characters
+  // Visual representation handled via pos/end scanning
 }
 
 /**
@@ -195,16 +154,24 @@ export interface ThematicBreakNode extends Node {
  */
 export interface HtmlElementNode extends Node {
   tagName: string;
-  attributes: AttributeSlice[];
+  attributes: HtmlAttributeNode[];
   children: (BlockNode | InlineNode)[];
   selfClosing: boolean;
+}
+
+/**
+ * HTML attribute node
+ */
+export interface HtmlAttributeNode extends Node {
+  name: string;
+  value?: string;
 }
 
 /**
  * HTML comment node
  */
 export interface HtmlCommentNode extends Node {
-  // Comment content via pos/end slice
+  text: string;                 // Comment content
 }
 
 /**
@@ -234,14 +201,13 @@ export interface TableCellNode extends Node {
  * Math block node
  */
 export interface MathBlockNode extends Node {
-  // Math content via pos/end slice
+  text: string;                 // Math content
 }
 
 /**
  * Emphasis node (* or _)
  */
 export interface EmphasisNode extends Node {
-  marker: string;               // * or _
   children: InlineNode[];
 }
 
@@ -249,7 +215,6 @@ export interface EmphasisNode extends Node {
  * Strong node (** or __)
  */
 export interface StrongNode extends Node {
-  marker: string;               // ** or __
   children: InlineNode[];
 }
 
@@ -257,7 +222,7 @@ export interface StrongNode extends Node {
  * Inline code node
  */
 export interface InlineCodeNode extends Node {
-  backtickCount: number;        // Number of backticks for reconstruction
+  text: string;                 // Code content
 }
 
 /**
@@ -291,14 +256,14 @@ export interface ImageNode extends Node {
  * Inline math node
  */
 export interface MathInlineNode extends Node {
-  // Math content via pos/end slice
+  text: string;                 // Math content
 }
 
 /**
- * Break node (soft/hard line break)
+ * Hard line break node (<br/> semantics)
  */
-export interface BreakNode extends Node {
-  hard: boolean;                // Hard break vs soft break
+export interface InlineHardBreak extends Node {
+  // Represents hard line breaks in inline content
 }
 
 /**
@@ -334,7 +299,7 @@ export type BlockNode =
  * Inline-level node types
  */
 export type InlineNode =
-  | TextNode 
+  | InlineTextNode 
   | EmphasisNode 
   | StrongNode 
   | InlineCodeNode 
@@ -342,7 +307,7 @@ export type InlineNode =
   | LinkNode 
   | ImageNode 
   | MathInlineNode
-  | BreakNode 
+  | InlineHardBreak 
   | HtmlElementNode;
 
 /**
@@ -355,4 +320,4 @@ export interface ContainerNode extends Node {
 /**
  * All possible node types
  */
-export type AnyNode = DocumentNode | BlockNode | InlineNode | TableCellNode;
+export type AnyNode = Document | BlockNode | InlineNode | TableCellNode | HtmlAttributeNode;

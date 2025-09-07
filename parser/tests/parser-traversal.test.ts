@@ -6,9 +6,9 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import {
   NodeKind,
-  DocumentNode,
+  Document,
   ParagraphNode,
-  TextNode
+  InlineTextNode
 } from '../ast-types.js';
 import {
   createDocumentNode,
@@ -34,7 +34,7 @@ import {
 } from '../ast-traversal.js';
 
 describe('AST Visitor Pattern', () => {
-  let sampleDocument: DocumentNode;
+  let sampleDocument: Document;
   
   beforeEach(() => {
     // Create a sample document structure:
@@ -45,11 +45,11 @@ describe('AST Visitor Pattern', () => {
     //   Heading [25-50]
     //     Text [27-47] "Chapter 1"
     
-    const text1 = createTextNode(0, 10);
-    const text2 = createTextNode(10, 25);
+    const text1 = createTextNode(0, 10, 'Hello ');
+    const text2 = createTextNode(10, 25, 'world!');
     const paragraph = createParagraphNode(0, 25, [text1, text2]);
     
-    const text3 = createTextNode(27, 47);
+    const text3 = createTextNode(27, 47, 'Chapter 1');
     const heading = createHeadingNode(25, 50, 1, [text3]);
     
     sampleDocument = createDocumentNode(0, 50, [paragraph, heading]);
@@ -60,7 +60,7 @@ describe('AST Visitor Pattern', () => {
     
     const visitor: Visitor = {
       visitNode(node) {
-        visitedNodes.push(node.kindFlags & 0xFF);
+        visitedNodes.push(node.kind);
         return VisitResult.Continue;
       }
     };
@@ -70,10 +70,10 @@ describe('AST Visitor Pattern', () => {
     expect(visitedNodes).toEqual([
       NodeKind.Document,
       NodeKind.Paragraph,
-      NodeKind.Text,
-      NodeKind.Text,
+      NodeKind.InlineText,
+      NodeKind.InlineText,
       NodeKind.Heading,
-      NodeKind.Text
+      NodeKind.InlineText
     ]);
   });
 
@@ -117,7 +117,7 @@ describe('AST Visitor Pattern', () => {
     
     const visitor: Visitor = {
       visitNode(node) {
-        const kind = node.kindFlags & 0xFF;
+        const kind = node.kind;
         visitedKinds.push(kind);
         
         // Skip paragraph children
@@ -135,7 +135,7 @@ describe('AST Visitor Pattern', () => {
       NodeKind.Document,
       NodeKind.Paragraph, // Visited but children skipped
       NodeKind.Heading,
-      NodeKind.Text       // Only heading's text child
+      NodeKind.InlineText       // Only heading's text child
     ]);
   });
 
@@ -144,11 +144,11 @@ describe('AST Visitor Pattern', () => {
     
     const visitor: Visitor = {
       visitNode(node) {
-        const kind = node.kindFlags & 0xFF;
+        const kind = node.kind;
         visitedKinds.push(kind);
         
         // Stop at first text node
-        if (kind === NodeKind.Text) {
+        if (kind === NodeKind.InlineText) {
           return VisitResult.Stop;
         }
         
@@ -161,7 +161,7 @@ describe('AST Visitor Pattern', () => {
     expect(visitedKinds).toEqual([
       NodeKind.Document,
       NodeKind.Paragraph,
-      NodeKind.Text       // Stop here
+      NodeKind.InlineText       // Stop here
     ]);
   });
 
@@ -170,7 +170,7 @@ describe('AST Visitor Pattern', () => {
     
     const visitor: Visitor = {
       visitNode(node) {
-        visitedKinds.push(node.kindFlags & 0xFF);
+        visitedKinds.push(node.kind);
         return VisitResult.Continue;
       }
     };
@@ -178,10 +178,10 @@ describe('AST Visitor Pattern', () => {
     walkASTBottomUp(sampleDocument, visitor);
     
     expect(visitedKinds).toEqual([
-      NodeKind.Text,      // First text in paragraph
-      NodeKind.Text,      // Second text in paragraph
+      NodeKind.InlineText,      // First text in paragraph
+      NodeKind.InlineText,      // Second text in paragraph
       NodeKind.Paragraph, // Paragraph after its children
-      NodeKind.Text,      // Text in heading
+      NodeKind.InlineText,      // Text in heading
       NodeKind.Heading,   // Heading after its children
       NodeKind.Document   // Document last
     ]);
@@ -189,15 +189,15 @@ describe('AST Visitor Pattern', () => {
 });
 
 describe('Position-based Queries', () => {
-  let sampleDocument: DocumentNode;
+  let sampleDocument: Document;
   
   beforeEach(() => {
     // Same sample document as above
-    const text1 = createTextNode(0, 10);
-    const text2 = createTextNode(10, 25);
+    const text1 = createTextNode(0, 10, 'Hello ');
+    const text2 = createTextNode(10, 25, 'world!');
     const paragraph = createParagraphNode(0, 25, [text1, text2]);
     
-    const text3 = createTextNode(27, 47);
+    const text3 = createTextNode(27, 47, 'Chapter 1');
     const heading = createHeadingNode(25, 50, 1, [text3]);
     
     sampleDocument = createDocumentNode(0, 50, [paragraph, heading]);
@@ -245,19 +245,19 @@ describe('Position-based Queries', () => {
 });
 
 describe('Node Relationship Queries', () => {
-  let sampleDocument: DocumentNode;
+  let sampleDocument: Document;
   let paragraph: ParagraphNode;
   let heading: any;
-  let text1: TextNode;
-  let text2: TextNode;
-  let text3: TextNode;
+  let text1: InlineTextNode;
+  let text2: InlineTextNode;
+  let text3: InlineTextNode;
   
   beforeEach(() => {
-    text1 = createTextNode(0, 10);
-    text2 = createTextNode(10, 25);
+    text1 = createTextNode(0, 10, 'Hello ');
+    text2 = createTextNode(10, 25, 'world!');
     paragraph = createParagraphNode(0, 25, [text1, text2]);
     
-    text3 = createTextNode(27, 47);
+    text3 = createTextNode(27, 47, 'Chapter 1');
     heading = createHeadingNode(25, 50, 1, [text3]);
     
     sampleDocument = createDocumentNode(0, 50, [paragraph, heading]);

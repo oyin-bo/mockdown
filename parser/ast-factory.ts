@@ -9,8 +9,8 @@ import {
   Node, 
   NodeKind, 
   NodeFlags, 
-  DocumentNode, 
-  TextNode, 
+  Document, 
+  InlineTextNode, 
   ParagraphNode, 
   HeadingNode, 
   BlockquoteNode,
@@ -19,6 +19,7 @@ import {
   CodeBlockNode,
   ThematicBreakNode,
   HtmlElementNode, 
+  HtmlAttributeNode,
   HtmlCommentNode,
   TableNode,
   TableRowNode,
@@ -31,13 +32,10 @@ import {
   LinkNode,
   ImageNode,
   MathInlineNode,
-  BreakNode,
+  InlineHardBreak,
   WhitespaceSeparationNode,
-  AttributeSlice,
   BlockNode,
-  InlineNode,
-  setNodeFlags,
-  addNodeFlag
+  InlineNode
 } from './ast-types.js';
 
 /**
@@ -45,7 +43,8 @@ import {
  */
 export function createNode(kind: NodeKind, pos: number, end: number): Node {
   return {
-    kindFlags: kind,
+    kind,
+    flags: NodeFlags.None,
     pos,
     end
   };
@@ -75,7 +74,7 @@ export function finishNode<T extends Node>(node: T, end: number): T {
  */
 export function createMissingNode(kind: NodeKind, pos: number): Node {
   const node = createNode(kind, pos, pos);
-  setNodeFlags(node, NodeFlags.Missing | NodeFlags.Synthetic);
+  node.flags = NodeFlags.Missing | NodeFlags.Synthetic;
   return node;
 }
 
@@ -147,7 +146,7 @@ export function createDocumentNode(
   end: number, 
   children: BlockNode[] = [],
   lineStarts: number[] = []
-): DocumentNode {
+): Document {
   return {
     ...createNode(NodeKind.Document, pos, end),
     children,
@@ -158,9 +157,10 @@ export function createDocumentNode(
 /**
  * Creates a text node
  */
-export function createTextNode(pos: number, end: number): TextNode {
+export function createTextNode(pos: number, end: number, text: string): InlineTextNode {
   return {
-    ...createNode(NodeKind.Text, pos, end)
+    ...createNode(NodeKind.InlineText, pos, end),
+    text
   };
 }
 

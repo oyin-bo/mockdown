@@ -5,7 +5,7 @@
  * Following Phase 1 specification from parser/docs/11-parser-layer.md
  */
 
-import { DocumentNode } from './ast-types.js';
+import { Document } from './ast-types.js';
 
 /**
  * Parser configuration options
@@ -19,9 +19,6 @@ export interface ParseOptions {
   
   /** Enable graceful error recovery (default: true) */
   enableErrorRecovery?: boolean;
-  
-  /** HTML parsing strategy (default: 'native') */
-  htmlMode?: 'native' | 'passthrough';
   
   /** Maximum heading level (default: 6) */
   maxHeadingLevel?: number;
@@ -138,7 +135,7 @@ export interface ReuseStatistics {
  */
 export interface ParseResult {
   /** Root document node */
-  document: DocumentNode;
+  document: Document;
   
   /** Parse diagnostics (errors, warnings, info) */
   diagnostics: ParseDiagnostic[];
@@ -166,7 +163,7 @@ export interface Parser {
    * Parse incrementally by applying changes to existing document
    */
   parseIncremental(
-    document: DocumentNode, 
+    document: Document, 
     changes: TextChange[], 
     sourceText: string,
     options?: ParseOptions
@@ -187,13 +184,7 @@ export interface ParserOptions {
   maxDocumentSize?: number;
 }
 
-/**
- * Parser factory function
- */
-export function createParser(options?: ParserOptions): Parser {
-  // Implementation will be added in Phase 2
-  throw new Error('Parser implementation not yet available - Phase 1 interfaces only');
-}
+
 
 /**
  * Position mapping utilities for editor integration
@@ -212,22 +203,7 @@ export interface PositionMapper {
   getLineCount(): number;
 }
 
-/**
- * Recovery strategies for error handling
- */
-export enum RecoveryStrategy {
-  /** Convert problematic construct to plain text */
-  ConvertToText = 'convert-to-text',
-  
-  /** Create synthetic missing elements */
-  CreateMissing = 'create-missing',
-  
-  /** Skip to next safe parsing boundary */
-  SkipToNext = 'skip-to-next',
-  
-  /** Stop parsing at error location */
-  StopParsing = 'stop-parsing'
-}
+
 
 /**
  * Parse mode enumeration
@@ -243,8 +219,5 @@ export enum ParseMode {
   Inline = 'inline',
   
   /** Content inside HTML elements */
-  HtmlContent = 'html-content',
-  
-  /** Raw text content (script, style) */
-  RawText = 'raw-text'
+  HtmlContent = 'html-content'
 }

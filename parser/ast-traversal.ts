@@ -8,10 +8,9 @@
 import { 
   Node, 
   NodeKind, 
-  DocumentNode,
+  Document,
   BlockNode,
   InlineNode,
-  getNodeKind,
   ContainerNode
 } from './ast-types.js';
 
@@ -37,7 +36,7 @@ export interface Visitor {
   visitNode?(node: Node, parent?: Node): VisitResult;
   
   /** Document node visitor */
-  visitDocument?(node: DocumentNode, parent?: Node): VisitResult;
+  visitDocument?(node: Document, parent?: Node): VisitResult;
   
   /** Block node visitors */
   visitParagraph?(node: Node, parent?: Node): VisitResult;
@@ -136,11 +135,11 @@ function walkASTBottomUpRecursive(node: Node, visitor: Visitor, parent?: Node): 
  * Call the appropriate visitor method based on node kind
  */
 function callVisitorMethod(node: Node, visitor: Visitor, parent?: Node): VisitResult {
-  const kind = getNodeKind(node);
+  const kind = node.kind;
   
   switch (kind) {
     case NodeKind.Document:
-      return visitor.visitDocument?.(node as DocumentNode, parent) ?? 
+      return visitor.visitDocument?.(node as Document, parent) ?? 
              visitor.visitNode?.(node, parent) ?? 
              VisitResult.Continue;
              
@@ -204,7 +203,7 @@ function callVisitorMethod(node: Node, visitor: Visitor, parent?: Node): VisitRe
              visitor.visitNode?.(node, parent) ?? 
              VisitResult.Continue;
              
-    case NodeKind.Text:
+    case NodeKind.InlineText:
       return visitor.visitText?.(node, parent) ?? 
              visitor.visitNode?.(node, parent) ?? 
              VisitResult.Continue;
@@ -244,7 +243,7 @@ function callVisitorMethod(node: Node, visitor: Visitor, parent?: Node): VisitRe
              visitor.visitNode?.(node, parent) ?? 
              VisitResult.Continue;
              
-    case NodeKind.Break:
+    case NodeKind.InlineHardBreak:
       return visitor.visitBreak?.(node, parent) ?? 
              visitor.visitNode?.(node, parent) ?? 
              VisitResult.Continue;
