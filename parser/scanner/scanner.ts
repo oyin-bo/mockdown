@@ -1403,7 +1403,12 @@ export function createScanner(): Scanner {
           // Single tilde - include it in text
         }
 
-        // Note: Dollars are handled by dispatch logic, not here
+        // Special handling for dollars - only break if they can be math delimiters
+        if (ch === CharacterCodes.dollar) {
+          if (canDollarBeDelimiter(textEnd)) {
+            break;
+          }
+        }
 
         textEnd++;
       }
@@ -1447,28 +1452,50 @@ export function createScanner(): Scanner {
       return true; // $$ is always a math delimiter
     }
 
-    // Single dollar - check if it has a matching closing dollar on the same line
-    let i = pos + 1;
-    while (i < end) {
-      const ch = source.charCodeAt(i);
-      
-      // Stop at line break - math cannot span multiple lines
-      if (isLineBreak(ch)) {
-        return false;
-      }
-      
-      // Found potential closing dollar
-      if (ch === CharacterCodes.dollar) {
-        // Make sure it's not escaped
-        if (i > 0 && source.charCodeAt(i - 1) !== CharacterCodes.backslash) {
-          return true; // Found matching closing dollar
-        }
-      }
-      
-      i++;
+    // For single dollar, find the line boundaries
+    let lineStart = pos;
+    while (lineStart > 0 && !isLineBreak(source.charCodeAt(lineStart - 1))) {
+      lineStart--;
     }
     
-    return false; // No matching dollar found on same line
+    let lineEnd = pos;
+    while (lineEnd < end && !isLineBreak(source.charCodeAt(lineEnd))) {
+      lineEnd++;
+    }
+    
+    // Find all unescaped dollar positions on this line
+    const dollarPositions: number[] = [];
+    for (let i = lineStart; i < lineEnd; i++) {
+      if (source.charCodeAt(i) === CharacterCodes.dollar) {
+        // Check if this dollar is escaped
+        if (i > 0 && source.charCodeAt(i - 1) === CharacterCodes.backslash) {
+          continue; // Skip escaped dollars
+        }
+        dollarPositions.push(i);
+      }
+    }
+    
+    // If there are more than 2 unescaped dollars, special logic:
+    // - If there are exactly 3 dollars, the first 2 can be delimiters
+    // - If there are 4 or more dollars, treat as all text (nested case)
+    if (dollarPositions.length > 2) {
+      if (dollarPositions.length === 3) {
+        // Allow first pair to be delimiters: positions 0 and 1 in the array
+        const currentIndex = dollarPositions.indexOf(pos);
+        return currentIndex === 0 || currentIndex === 1;
+      } else {
+        // 4+ dollars: treat all as text (nested/complex case)
+        return false;
+      }
+    }
+    
+    // If exactly 2 dollars, both can be delimiters
+    if (dollarPositions.length === 2) {
+      return true;
+    }
+    
+    // If only 1 dollar (odd number), cannot be delimiter
+    return false;
   }
 
   function canUnderscoreBeDelimiter(pos: number): boolean {

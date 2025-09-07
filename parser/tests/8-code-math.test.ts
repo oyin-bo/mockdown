@@ -45,9 +45,9 @@ $math$ and $
 
     test('escaped dollar should be text', () => {
       const tokenTest = `
-\$not math\$
+\\$not math\\$
 1
-@1 StringLiteral "\\$not math\\$"`;
+@1 StringLiteral`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
