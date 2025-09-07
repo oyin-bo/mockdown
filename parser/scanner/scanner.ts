@@ -1935,41 +1935,34 @@ export function createScanner(): Scanner {
 
   /**
    * Scans a table header line (contains pipe characters).
+   * According to speculatives.md, isolated pipe lines should be treated as paragraphs
+   * unless confirmed by a valid table structure (header + alignment row).
+   * 
+   * For now, we treat TABLE_PIPE_HEADER_CANDIDATE lines as paragraphs until
+   * proper table disambiguation is implemented.
    */
   function scanTableHeaderLine(): void {
-    const ch = source.charCodeAt(pos);
-    
-    if (ch === CharacterCodes.bar) {
-      // Emit pipe token
-      emitToken(SyntaxKind.PipeToken, pos, pos + 1);
-      return;
-    }
-    
-    // For non-pipe characters in table header, scan as paragraph content
+    // TODO: Implement proper table disambiguation per speculatives.md
+    // Lines with pipes should only be parsed as table tokens when there's
+    // a confirmed table structure (header + alignment row).
+    // For now, treat as paragraph content.
     scanParagraphContent();
   }
 
   /**
    * Scans a table alignment line (contains :, -, |).
+   * According to speculatives.md, isolated alignment rows should be treated as paragraphs
+   * unless they're part of a confirmed table structure.
+   * 
+   * For now, we treat TABLE_ALIGNMENT_ROW lines as paragraphs until
+   * proper table disambiguation is implemented.
    */
   function scanTableAlignmentLine(): void {
-    const ch = source.charCodeAt(pos);
-    
-    switch (ch) {
-      case CharacterCodes.bar:
-        emitToken(SyntaxKind.PipeToken, pos, pos + 1);
-        return;
-      case CharacterCodes.colon:
-        emitToken(SyntaxKind.ColonToken, pos, pos + 1);
-        return;
-      case CharacterCodes.minus:
-        emitToken(SyntaxKind.MinusToken, pos, pos + 1);
-        return;
-      default:
-        // For whitespace and other characters, scan as paragraph content
-        scanParagraphContent();
-        return;
-    }
+    // TODO: Implement proper table disambiguation per speculatives.md
+    // Alignment rows should only be parsed as table tokens when they're
+    // part of a confirmed table structure (header + alignment row + content).
+    // For now, treat as paragraph content.
+    scanParagraphContent();
   }
 
   /**
