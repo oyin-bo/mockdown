@@ -750,9 +750,27 @@ export function createScanner(): Scanner {
   }
 
   function scanDollar(start: number): void {
-    // Temporarily disable math delimiter processing to debug position issue
-    // Just emit the dollar as a single-character text token
-    emitStringLiteralToken(start, start + 1, TokenFlags.None);
+    // Check for double dollar (block math)
+    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.dollar) {
+      // Count consecutive dollars to handle edge cases like $$$
+      let dollarCount = 0;
+      let i = start;
+      while (i < end && source.charCodeAt(i) === CharacterCodes.dollar) {
+        dollarCount++;
+        i++;
+      }
+      
+      // If exactly 2 dollars, emit block math delimiter
+      if (dollarCount === 2) {
+        emitToken(SyntaxKind.MathBlockDelimiter, start, start + 2, TokenFlags.None);
+      } else {
+        // Wrong number of dollars (3+), emit as text (this should rarely happen due to canDollarBeDelimiter check)
+        emitStringLiteralToken(start, start + dollarCount, TokenFlags.None);
+      }
+    } else {
+      // Single dollar - emit inline math delimiter
+      emitToken(SyntaxKind.MathInlineDelimiter, start, start + 1, TokenFlags.None);
+    }
   }
 
 
@@ -1350,10 +1368,9 @@ export function createScanner(): Scanner {
           break;
         }
 
-        // Check for special characters, but handle intraword underscores specially
+        // Check for special characters, but handle some specially
         if (ch === CharacterCodes.asterisk ||
           ch === CharacterCodes.backtick ||
-          ch === CharacterCodes.dollar ||
           ch === CharacterCodes.greaterThan ||
           ch === CharacterCodes.ampersand ||
           ch === CharacterCodes.equals) {
@@ -1386,6 +1403,8 @@ export function createScanner(): Scanner {
           // Single tilde - include it in text
         }
 
+        // Note: Dollars are handled by dispatch logic, not here
+
         textEnd++;
       }
     }
@@ -1415,6 +1434,41 @@ export function createScanner(): Scanner {
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
     }
+  }
+
+  function canDollarBeDelimiter(pos: number): boolean {
+    // Check for escaped dollar
+    if (pos > 0 && source.charCodeAt(pos - 1) === CharacterCodes.backslash) {
+      return false;
+    }
+
+    // Check for double dollar (block math)
+    if (pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.dollar) {
+      return true; // $$ is always a math delimiter
+    }
+
+    // Single dollar - check if it has a matching closing dollar on the same line
+    let i = pos + 1;
+    while (i < end) {
+      const ch = source.charCodeAt(i);
+      
+      // Stop at line break - math cannot span multiple lines
+      if (isLineBreak(ch)) {
+        return false;
+      }
+      
+      // Found potential closing dollar
+      if (ch === CharacterCodes.dollar) {
+        // Make sure it's not escaped
+        if (i > 0 && source.charCodeAt(i - 1) !== CharacterCodes.backslash) {
+          return true; // Found matching closing dollar
+        }
+      }
+      
+      i++;
+    }
+    
+    return false; // No matching dollar found on same line
   }
 
   function canUnderscoreBeDelimiter(pos: number): boolean {
@@ -2129,7 +2183,7 @@ export function createScanner(): Scanner {
       scanBacktick(start);
     } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
       scanTilde(start);
-    } else if (ch === CharacterCodes.dollar) {
+    } else if (ch === CharacterCodes.dollar && canDollarBeDelimiter(start)) {
       scanDollar(start);
     } else {
       // Regular text content - scan until next special character
