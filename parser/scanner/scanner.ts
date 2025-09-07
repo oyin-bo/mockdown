@@ -750,15 +750,12 @@ export function createScanner(): Scanner {
   }
 
   function scanDollar(start: number): void {
-    // Check for double dollar (block math)
-    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.dollar) {
-      // This is $$ - emit MathBlockDelimiter token
-      emitToken(SyntaxKind.MathBlockDelimiter, start, start + 2, TokenFlags.None);
-    } else {
-      // Single dollar - emit MathInlineDelimiter token
-      emitToken(SyntaxKind.MathInlineDelimiter, start, start + 1, TokenFlags.None);
-    }
+    // Temporarily disable math delimiter processing to debug position issue
+    // Just emit the dollar as a single-character text token
+    emitStringLiteralToken(start, start + 1, TokenFlags.None);
   }
+
+
 
   /**
    * Stage 4: HTML scanning functions
