@@ -22,6 +22,12 @@ export const enum SyntaxKind {
   HashToken,                // #, ##, etc. for ATX headings
   CodeFence,                // ``` or ~~~
   ThematicBreak,            // ---, ***, ___
+  IndentedCodeBlock,        // Indented code content (4+ spaces)
+  ListMarkerUnordered,      // -, *, + list markers
+  ListMarkerOrdered,        // 1., 2), etc. list markers
+  PipeToken,                // | for tables
+  ColonToken,               // : for table alignment
+  MinusToken,               // - for table alignment
 
   // Stage 3: Inline formatting tokens
   AsteriskToken,            // *

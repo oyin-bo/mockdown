@@ -1571,6 +1571,14 @@ export function createScanner(): Scanner {
       case CharacterCodes.greaterThan:
         return LineClassification.BLOCKQUOTE_MARKER;
 
+      case CharacterCodes.plus: {
+        // Check for unordered list with + marker
+        if (i + 1 < end && isWhiteSpace(source.charCodeAt(i + 1))) {
+          return LineClassification.LIST_UNORDERED_MARKER;
+        }
+        break;
+      }
+
       case CharacterCodes.backtick:
       case CharacterCodes.tilde: {
         const fenceChar = firstChar;
@@ -1589,6 +1597,25 @@ export function createScanner(): Scanner {
       case CharacterCodes.asterisk:
       case CharacterCodes.underscore: {
         const markerChar = firstChar;
+        
+        // First check for simple list marker (single character followed by space)
+        if ((markerChar === CharacterCodes.minus || markerChar === CharacterCodes.asterisk) &&
+            i + 1 < end && isWhiteSpace(source.charCodeAt(i + 1))) {
+          // Quick check: if there are 3+ marker characters total on this line, it's a thematic break
+          let totalMarkers = 0;
+          let p = i;
+          while (p < end && !isLineBreak(source.charCodeAt(p))) {
+            if (source.charCodeAt(p) === markerChar) totalMarkers++;
+            p++;
+          }
+          if (totalMarkers >= 3) {
+            // This is actually a thematic break like "- - -", continue to thematic break check
+          } else {
+            return LineClassification.LIST_UNORDERED_MARKER;
+          }
+        }
+        
+        // Then check for thematic break (3+ characters of same type)
         let markerCount = 0;
         let p = i;
         while (p < end && !isLineBreak(source.charCodeAt(p))) {
@@ -1602,8 +1629,25 @@ export function createScanner(): Scanner {
           p++;
         }
         if (markerCount >= 3) return LineClassification.THEMATIC_BREAK;
-        // Could also be a list marker, fall through for now
         break;
+      }
+    }
+
+    // 4.5. Check for ordered list markers (digits followed by . or ))
+    if (firstChar >= CharacterCodes._0 && firstChar <= CharacterCodes._9) {
+      let p = i;
+      let digitCount = 0;
+      while (p < end && source.charCodeAt(p) >= CharacterCodes._0 && source.charCodeAt(p) <= CharacterCodes._9) {
+        digitCount++;
+        p++;
+        if (digitCount > 9) break; // CommonMark limits to 9 digits
+      }
+      if (digitCount > 0 && digitCount <= 9 && p < end) {
+        const nextChar = source.charCodeAt(p);
+        if ((nextChar === CharacterCodes.dot || nextChar === CharacterCodes.closeParen) && 
+            p + 1 < end && isWhiteSpace(source.charCodeAt(p + 1))) {
+          return LineClassification.LIST_ORDERED_MARKER;
+        }
       }
     }
 
@@ -1762,7 +1806,13 @@ export function createScanner(): Scanner {
       scanThematicBreakLine();
     } else if (currentLineFlags & LineClassification.INDENTED_CODE) {
       scanIndentedCodeLine();
-    } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
+    } else if (currentLineFlags & (LineClassification.LIST_UNORDERED_MARKER | LineClassification.LIST_ORDERED_MARKER)) {
+      scanListMarkerLine();
+    } else if (currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE) {
+      scanTableHeaderLine();
+    } else if (currentLineFlags & LineClassification.TABLE_ALIGNMENT_ROW) {
+      scanTableAlignmentLine();
+    } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
       // Fallback to detailed inline parsing for anything that looks like a paragraph
       scanParagraphContent();
     } else {
@@ -1840,6 +1890,74 @@ export function createScanner(): Scanner {
     // Emit the entire line content including leading spaces
     emitStringLiteralToken(lineStart, i, TokenFlags.None);
     // The newline will be handled in the next scan() call
+  }
+
+  /**
+   * Scans a line that starts with a list marker.
+   */
+  function scanListMarkerLine(): void {
+    const ch = source.charCodeAt(pos);
+    
+    if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
+      // Unordered list markers: -, *, +
+      emitToken(SyntaxKind.ListMarkerUnordered, pos, pos + 1);
+      return;
+    } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
+      // Ordered list markers: 1., 2), etc.
+      let i = pos;
+      // Skip digits
+      while (i < end && source.charCodeAt(i) >= CharacterCodes._0 && source.charCodeAt(i) <= CharacterCodes._9) {
+        i++;
+      }
+      // Skip the . or )
+      if (i < end && (source.charCodeAt(i) === CharacterCodes.dot || source.charCodeAt(i) === CharacterCodes.closeParen)) {
+        i++;
+      }
+      emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
+      return;
+    }
+    
+    // Fallback to paragraph content if classification was wrong
+    scanParagraphContent();
+  }
+
+  /**
+   * Scans a table header line (contains pipe characters).
+   */
+  function scanTableHeaderLine(): void {
+    const ch = source.charCodeAt(pos);
+    
+    if (ch === CharacterCodes.bar) {
+      // Emit pipe token
+      emitToken(SyntaxKind.PipeToken, pos, pos + 1);
+      return;
+    }
+    
+    // For non-pipe characters in table header, scan as paragraph content
+    scanParagraphContent();
+  }
+
+  /**
+   * Scans a table alignment line (contains :, -, |).
+   */
+  function scanTableAlignmentLine(): void {
+    const ch = source.charCodeAt(pos);
+    
+    switch (ch) {
+      case CharacterCodes.bar:
+        emitToken(SyntaxKind.PipeToken, pos, pos + 1);
+        return;
+      case CharacterCodes.colon:
+        emitToken(SyntaxKind.ColonToken, pos, pos + 1);
+        return;
+      case CharacterCodes.minus:
+        emitToken(SyntaxKind.MinusToken, pos, pos + 1);
+        return;
+      default:
+        // For whitespace and other characters, scan as paragraph content
+        scanParagraphContent();
+        return;
+    }
   }
 
   /**

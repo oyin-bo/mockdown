@@ -358,6 +358,12 @@ enum SyntaxKindShadow {
   HashToken = SyntaxKind.HashToken,
   CodeFence = SyntaxKind.CodeFence,
   ThematicBreak = SyntaxKind.ThematicBreak,
+  IndentedCodeBlock = SyntaxKind.IndentedCodeBlock,
+  ListMarkerUnordered = SyntaxKind.ListMarkerUnordered,
+  ListMarkerOrdered = SyntaxKind.ListMarkerOrdered,
+  PipeToken = SyntaxKind.PipeToken,
+  ColonToken = SyntaxKind.ColonToken,
+  MinusToken = SyntaxKind.MinusToken,
 
   AsteriskToken = SyntaxKind.AsteriskToken,
   AsteriskAsterisk = SyntaxKind.AsteriskAsterisk,
