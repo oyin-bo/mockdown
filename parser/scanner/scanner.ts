@@ -1901,15 +1901,24 @@ export function createScanner(): Scanner {
     // Use lastLineStart instead of scanning backwards inefficiently
     // The line classification already determined this is indented code
     
+    // Check if we're already at or past the line content (e.g., at the newline)
+    if (pos >= end || isLineBreak(source.charCodeAt(pos))) {
+      // We're at a line break, handle it as a newline token
+      emitNewline(pos);
+      return;
+    }
+    
     // Find the end of the current line
     let i = pos;
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
       i++;
     }
     
-    // Emit the entire line content including leading spaces
-    // Use lastLineStart which is already tracked, avoiding backward scan
-    emitStringLiteralToken(lastLineStart, i, TokenFlags.None);
+    // If pos is already beyond the start of the line, only emit remaining content
+    const contentStart = Math.max(pos, lastLineStart);
+    
+    // Emit the line content
+    emitStringLiteralToken(contentStart, i, TokenFlags.None);
     // The newline will be handled in the next scan() call
   }
 
