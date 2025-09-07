@@ -111,7 +111,7 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
     1. indented list
 1
-@1 StringLiteral "    1. indented list"`;
+@1 StringLiteral "1. indented list"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -120,8 +120,10 @@ describe('Stage 6: Lists', () => {
     test('nested unordered list with indentation', () => {
       const tokenTest = `
   - nested item
-1
-@1 StringLiteral "  - nested item"`;
+1 2 3
+@1 WhitespaceTrivia "  "
+@2 ListMarkerUnordered "- "
+@3 StringLiteral "nested item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 

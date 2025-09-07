@@ -1919,13 +1919,21 @@ export function createScanner(): Scanner {
   function scanListMarkerLine(): void {
     if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
       // Unordered list markers: -, *, +
-      // Include the following space as part of the marker token
+      // Include only the marker and the required single space
       let markerEnd = pos + 1;
       if (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
         markerEnd++; // Consume the space after the marker
       }
+      
       emitToken(SyntaxKind.ListMarkerUnordered, pos, markerEnd);
       listMarkerConsumed = true; // Mark marker as consumed
+      
+      // Skip additional leading whitespace before content for proper normalization
+      while (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
+        markerEnd++;
+      }
+      pos = markerEnd; // Advance position to skip extra whitespace
+      
       // The rest of the line will be handled in the next scan() call
       // since emitToken advances pos and the content will be scanned as paragraph
     } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
@@ -1939,12 +1947,20 @@ export function createScanner(): Scanner {
       if (i < end && (source.charCodeAt(i) === CharacterCodes.dot || source.charCodeAt(i) === CharacterCodes.closeParen)) {
         i++;
       }
-      // Include the following space as part of the marker token
+      // Include only the marker and the required single space
       if (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
         i++; // Consume the space after the marker
       }
+      
       emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
       listMarkerConsumed = true; // Mark marker as consumed
+      
+      // Skip additional leading whitespace before content for proper normalization
+      while (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
+        i++;
+      }
+      pos = i; // Advance position to skip extra whitespace
+      
       // The rest of the line will be handled in the next scan() call
     } else {
       // Fallback to paragraph content if classification was wrong
