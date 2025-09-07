@@ -20,27 +20,27 @@ describe('Stage 6: Lists', () => {
     test('asterisk marker with text content', () => {
       const tokenTest = `
 * item
-1 A
+1 2
 @1 ListMarkerUnordered "* "
-@A StringLiteral "item"`;
+@2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('plus marker with text content', () => {
       const tokenTest = `
 + item
-1 A
+1 2
 @1 ListMarkerUnordered "+ "
-@A StringLiteral "item"`;
+@2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('list marker with multiple spaces before text', () => {
       const tokenTest = `
 -    content with extra spaces
-1    A
+1    2
 @1 ListMarkerUnordered "- "
-@A StringLiteral "   content with extra spaces"`;
+@2 StringLiteral "   content with extra spaces"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -49,18 +49,18 @@ describe('Stage 6: Lists', () => {
     test('numbered with dot and text', () => {
       const tokenTest = `
 1. item
-1  A
+1  2
 @1 ListMarkerOrdered "1. "
-@A StringLiteral "item"`;
+@2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('numbered with parenthesis and text', () => {
       const tokenTest = `
 1) item
-1  A
+1  2
 @1 ListMarkerOrdered "1) "
-@A StringLiteral "item"`;
+@2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -75,9 +75,9 @@ describe('Stage 6: Lists', () => {
     test('ordered list with extra whitespace after marker', () => {
       const tokenTest = `
 1.     spaced content
-1      A
+1      2
 @1 ListMarkerOrdered "1. "
-@A StringLiteral "    spaced content"`;
+@2 StringLiteral "    spaced content"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
@@ -129,9 +129,11 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 - first item
 + second item  
-1      5
+1 2      3 4
 @1 ListMarkerUnordered "- "
-@5 StringLiteral "+ second item"`;
+@2 StringLiteral "first item"
+@3 ListMarkerUnordered "+ "
+@4 StringLiteral "second item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });

@@ -1798,6 +1798,7 @@ export function createScanner(): Scanner {
     // If at the start of a line, classify it first.
     if (contextFlags & ContextFlags.AtLineStart) {
       currentLineFlags = classifyLine(pos);
+      listMarkerConsumed = false; // Reset list marker flag for new line
     }
     // Note: currentLineFlags should persist for the entire line duration
     // and only be reset when we reach the start of a new line

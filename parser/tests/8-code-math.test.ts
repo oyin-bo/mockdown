@@ -20,9 +20,9 @@ $x$
     test('math with text content', () => {
       const tokenTest = `
 Text $E = mc^2$ more text
-     6         15
-@6 MathInlineDelimiter "$"
-@15 MathInlineDelimiter "$"`;
+     1         2
+@1 MathInlineDelimiter "$"
+@2 MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -90,9 +90,9 @@ $$
     test('block math delimiters on same line', () => {
       const tokenTest = `
 $$ E = mc^2 $$
-1          13
+1          2
 @1 MathBlockDelimiter "$$"
-@14 MathBlockDelimiter "$$"`;
+@2 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -116,9 +116,9 @@ $$$
     test('block math with extra whitespace', () => {
       const tokenTest = `
 $$    math content    $$
-1                    23
+1                    2
 @1 MathBlockDelimiter "$$"
-@24 MathBlockDelimiter "$$"`;
+@2 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 

@@ -139,9 +139,29 @@ Before any commit:
 4. **Performance Matters**: Single-pass efficiency is a hard requirement, not a nice-to-have
 5. **Standards Compliance**: Coding standards exist for good reasons and must be followed
 
+## Additional Critical Issues Discovered
+
+### 7. **Infinite Loop in Tests (Critical)**
+**Issue**: Invalid position marker format in tests (e.g., `1 A` instead of `1 2`) causing position marker validation to fail and infinite loops in the test infrastructure.
+
+**Root Cause**: Misunderstanding of the annotated markdown testing position marker requirements. Position markers must be strictly increasing ordinals starting from 1.
+
+**Impact**: Tests timeout with heap memory errors, preventing any validation of implementations.
+
+### 8. **listMarkerConsumed Flag Never Reset (Critical)**
+**Issue**: The `listMarkerConsumed` flag is set to true when a list marker is processed but never reset at the start of a new line, causing the scanner to never process list markers again.
+
+**Root Cause**: Missing reset logic when transitioning to a new line (`AtLineStart` context).
+
+**Impact**: Scanner gets stuck in infinite loops or produces incorrect token sequences for multi-line list content.
+
 ## Recovery Plan
 
-1. **Immediate**: Remove debug files, fix performance regression
+1. **Critical Immediate Fixes**:
+   - Fix `listMarkerConsumed` flag reset at line start ✅
+   - Fix all invalid position markers in tests (1 A → 1 2, etc.)
+   - Verify no infinite loops in test infrastructure
+
 2. **Short-term**: Complete one feature properly with full test coverage
 3. **Medium-term**: Apply lessons learned to remaining features
 4. **Long-term**: Establish better quality gates and review processes
