@@ -38,6 +38,7 @@ export const enum SyntaxKind {
   UnderscoreToken,          // _
   UnderscoreUnderscore,     // __
   BacktickToken,            // `
+  InlineCodeDelimiter,      // `` for inline code
   TildeTilde,               // ~~
 
   // Stage 4: HTML and entities

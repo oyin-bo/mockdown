@@ -373,6 +373,7 @@ enum SyntaxKindShadow {
   UnderscoreToken = SyntaxKind.UnderscoreToken,
   UnderscoreUnderscore = SyntaxKind.UnderscoreUnderscore,
   BacktickToken = SyntaxKind.BacktickToken,
+  InlineCodeDelimiter = SyntaxKind.InlineCodeDelimiter,
   TildeTilde = SyntaxKind.TildeTilde,
 
   // Stage 4: HTML tokens

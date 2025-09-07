@@ -37,9 +37,9 @@ Just a $ sign
     test('odd number of dollars - should parse first pair and leave remainder as text', () => {
       const tokenTest = `
 $math$ and $
-1    6     A
+1    2
 @1 MathInlineDelimiter "$"
-@6 MathInlineDelimiter "$"`;
+@2 MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -88,17 +88,17 @@ $$
     test('block math delimiters on same line', () => {
       const tokenTest = `
 $$ E = mc^2 $$
-1           A
+1           2
 @1 MathBlockDelimiter "$$"
-@A MathBlockDelimiter "$$"`;
+@2 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('unmatched opening block math delimiter', () => {
       const tokenTest = `
 $$
-incomplete block
 1
+incomplete block
 @1 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
@@ -114,9 +114,9 @@ $$$
     test('block math with extra whitespace', () => {
       const tokenTest = `
 $$  content  $$
-1            E
+1            2
 @1 MathBlockDelimiter "$$"
-@E MathBlockDelimiter "$$"`;
+@2 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -165,8 +165,8 @@ $$
     test('unmatched opening code fence', () => {
       const tokenTest = `
 \`\`\`
-code content
 1
+code content
 @1 CodeFence "\`\`\`"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
@@ -182,19 +182,19 @@ code content
     test('insufficient backticks for fence (only 2)', () => {
       const tokenTest = `
 \`\`code\`\`
-1 3   7
+1 2   3
 @1 InlineCodeDelimiter "\`\`"
-@3 StringLiteral "code"
-@7 InlineCodeDelimiter "\`\`"`;
+@2 StringLiteral "code"
+@3 InlineCodeDelimiter "\`\`"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('tildes and backticks cannot be mixed', () => {
       const tokenTest = `
 ~~~
+1
 code
 \`\`\`
-1
 @1 CodeFence "~~~"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
@@ -203,7 +203,7 @@ code
       const tokenTest = `
    \`\`\`
 1
-@1 StringLiteral "   \`\`\`"`;
+@1 CodeFence "   \`\`\`"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });

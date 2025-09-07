@@ -727,14 +727,16 @@ export function createScanner(): Scanner {
       runEnd++;
     }
 
-    // For backticks, we always emit BacktickToken regardless of run length
-    // The run length will be encoded in flags for parser use
     const runLength = runEnd - start;
     let flags = TokenFlags.None;
 
-    // TODO: Add run length encoding to flags when needed for parser
-
-    emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
+    // For runs of 2 or more backticks, emit InlineCodeDelimiter  
+    if (runLength >= 2) {
+      emitToken(SyntaxKind.InlineCodeDelimiter, start, runEnd, flags);
+    } else {
+      // Single backtick - emit BacktickToken
+      emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
+    }
   }
 
   function scanTilde(start: number): void {
