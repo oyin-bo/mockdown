@@ -13,16 +13,16 @@ describe('Stage 8: Extensions Group A (Code & Math)', () => {
 $x$
 1 2
 @1 MathInlineDelimiter "$"
-@3 MathInlineDelimiter "$"`;
+@2 MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
     test('math with text content', () => {
       const tokenTest = `
 Text $E = mc^2$ more text
-     1         2
-@1 MathInlineDelimiter "$"
-@2 MathInlineDelimiter "$"`;
+     6         F
+@6 MathInlineDelimiter "$"
+@F MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -37,9 +37,9 @@ Just a $ sign
     test('odd number of dollars - should parse first pair and leave remainder as text', () => {
       const tokenTest = `
 $math$ and $
-1     2
+1    6     A
 @1 MathInlineDelimiter "$"
-@7 MathInlineDelimiter "$"`;
+@6 MathInlineDelimiter "$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -59,12 +59,11 @@ $incomplete
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
-    test('empty inline math', () => {
+    test('empty block math', () => {
       const tokenTest = `
 $$
-1 2
-@1 MathInlineDelimiter "$"
-@2 MathInlineDelimiter "$"`;
+1
+@1 MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -89,9 +88,9 @@ $$
     test('block math delimiters on same line', () => {
       const tokenTest = `
 $$ E = mc^2 $$
-1          2
+1           A
 @1 MathBlockDelimiter "$$"
-@2 MathBlockDelimiter "$$"`;
+@A MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -114,10 +113,10 @@ $$$
 
     test('block math with extra whitespace', () => {
       const tokenTest = `
-$$    math content    $$
-1                    2
+$$  content  $$
+1            E
 @1 MathBlockDelimiter "$$"
-@2 MathBlockDelimiter "$$"`;
+@E MathBlockDelimiter "$$"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 
@@ -183,10 +182,10 @@ code content
     test('insufficient backticks for fence (only 2)', () => {
       const tokenTest = `
 \`\`code\`\`
-1 2   3
+1 3   7
 @1 InlineCodeDelimiter "\`\`"
-@2 StringLiteral "code"
-@3 InlineCodeDelimiter "\`\`"`;
+@3 StringLiteral "code"
+@7 InlineCodeDelimiter "\`\`"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
 

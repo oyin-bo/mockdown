@@ -690,7 +690,6 @@ export function createScanner(): Scanner {
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.asterisk);
 
     emitToken(tokenType, start, runEnd, flags);
-    updatePosition(runEnd);
   }
 
   function scanUnderscore(start: number): void {
@@ -718,7 +717,6 @@ export function createScanner(): Scanner {
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.underscore);
 
     emitToken(tokenType, start, runEnd, flags);
-    updatePosition(runEnd);
   }
 
   function scanBacktick(start: number): void {
@@ -737,7 +735,6 @@ export function createScanner(): Scanner {
     // TODO: Add run length encoding to flags when needed for parser
 
     emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
-    updatePosition(runEnd);
   }
 
   function scanTilde(start: number): void {
@@ -746,7 +743,6 @@ export function createScanner(): Scanner {
     if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.tilde) {
       // This is a double tilde - emit TildeTilde token
       emitToken(SyntaxKind.TildeTilde, start, start + 2, TokenFlags.None);
-      updatePosition(start + 2);
     } else {
       // This shouldn't happen now, but fallback to text
       emitTextRun(start);
@@ -758,11 +754,9 @@ export function createScanner(): Scanner {
     if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.dollar) {
       // This is $$ - emit MathBlockDelimiter token
       emitToken(SyntaxKind.MathBlockDelimiter, start, start + 2, TokenFlags.None);
-      updatePosition(start + 2);
     } else {
       // Single dollar - emit MathInlineDelimiter token
       emitToken(SyntaxKind.MathInlineDelimiter, start, start + 1, TokenFlags.None);
-      updatePosition(start + 1);
     }
   }
 
@@ -1875,10 +1869,26 @@ export function createScanner(): Scanner {
    */
   function scanFenceLine(): void {
     let i = pos;
+    
+    // If we're already at a newline or end of file, emit newline token instead
+    if (i >= end || isLineBreak(source.charCodeAt(i))) {
+      if (i < end) {
+        emitNewline(i);
+      } else {
+        emitToken(SyntaxKind.EndOfFileToken, i, i);
+      }
+      return;
+    }
+    
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
       i++;
     }
+    
     emitToken(SyntaxKind.CodeFence, pos, i);
+    
+    // Clear AtLineStart flag to prevent re-classification
+    contextFlags &= ~ContextFlags.AtLineStart;
+    
     // The newline will be handled in the next scan() call
   }
 
@@ -2102,6 +2112,7 @@ export function createScanner(): Scanner {
     } else if (ch === CharacterCodes.slash && pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
       // This is /> - check if this could be a self-closing tag
       emitToken(SyntaxKind.SlashGreaterThanToken, start, start + 2);
+      return;
     } else if (isLetter(ch)) {
       // Check if this could be an HTML tag name (only at appropriate positions)
       if (pos > 0 && (source.charCodeAt(pos - 1) === CharacterCodes.lessThan ||
