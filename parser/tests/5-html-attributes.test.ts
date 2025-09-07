@@ -144,7 +144,7 @@ describe('HTML Attributes - Stage 4', () => {
 @1 HtmlTagOpenName "p"
 @2 HtmlAttributeName "title"
 @3 EqualsToken
-@4 HtmlAttributeValue "Line 1\nLine 2"
+@4 HtmlAttributeValue "Line 1\\nLine 2"
 @5 GreaterThanToken
 `;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
