@@ -17,11 +17,21 @@ export const enum SyntaxKind {
   StringLiteral,            // Text content (normalized, one per line)
   HardLineBreak,            // Hard line break (two or more trailing spaces before newline or trailing backslash)
   NewLineTrivia,            // Line breaks (LF, CRLF, CR)
+  WhitespaceTrivia,         // Leading whitespace/indentation
 
   // Block-level tokens from line classification
   HashToken,                // #, ##, etc. for ATX headings
   CodeFence,                // ``` or ~~~
   ThematicBreak,            // ---, ***, ___
+  IndentedCodeBlock,        // Indented code content (4+ spaces)
+  ListMarkerUnordered,      // -, *, + list markers
+  ListMarkerOrdered,        // 1., 2), etc. list markers
+  PipeToken,                // | for tables
+  ColonToken,               // : for table alignment
+  MinusToken,               // - for table alignment
+  CodeBlockFenced,          // ``` code block content
+  MathInlineDelimiter,      // $ for inline math
+  MathBlockDelimiter,       // $$ for block math
 
   // Stage 3: Inline formatting tokens
   AsteriskToken,            // *
@@ -29,6 +39,7 @@ export const enum SyntaxKind {
   UnderscoreToken,          // _
   UnderscoreUnderscore,     // __
   BacktickToken,            // `
+  InlineCodeDelimiter,      // `` for inline code
   TildeTilde,               // ~~
 
   // Stage 4: HTML and entities

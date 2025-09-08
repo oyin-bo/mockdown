@@ -335,7 +335,10 @@ function parseAssertLine(assertLine: string) {
 }
 
 function syntaxKindToString(kind: SyntaxKind): string {
-  return SyntaxKindShadow[kind] || '0x' + kind.toFixed(16).toUpperCase();
+  if (kind === undefined) return 'undefined';
+  else if (kind === null) return 'null';
+
+  return SyntaxKindShadow[kind] || '0x' + kind.toString(16).toUpperCase();
 }
 
 function convertSyntaxKind(encoded: string): SyntaxKind {
@@ -353,12 +356,28 @@ enum SyntaxKindShadow {
   StringLiteral = SyntaxKind.StringLiteral,
   HardLineBreak = SyntaxKind.HardLineBreak,
   NewLineTrivia = SyntaxKind.NewLineTrivia,
+  WhitespaceTrivia = SyntaxKind.WhitespaceTrivia,
+
+  // Block-level tokens from line classification
+  HashToken = SyntaxKind.HashToken,
+  CodeFence = SyntaxKind.CodeFence,
+  ThematicBreak = SyntaxKind.ThematicBreak,
+  IndentedCodeBlock = SyntaxKind.IndentedCodeBlock,
+  ListMarkerUnordered = SyntaxKind.ListMarkerUnordered,
+  ListMarkerOrdered = SyntaxKind.ListMarkerOrdered,
+  PipeToken = SyntaxKind.PipeToken,
+  ColonToken = SyntaxKind.ColonToken,
+  MinusToken = SyntaxKind.MinusToken,
+  CodeBlockFenced = SyntaxKind.CodeBlockFenced,
+  MathInlineDelimiter = SyntaxKind.MathInlineDelimiter,
+  MathBlockDelimiter = SyntaxKind.MathBlockDelimiter,
 
   AsteriskToken = SyntaxKind.AsteriskToken,
   AsteriskAsterisk = SyntaxKind.AsteriskAsterisk,
   UnderscoreToken = SyntaxKind.UnderscoreToken,
   UnderscoreUnderscore = SyntaxKind.UnderscoreUnderscore,
   BacktickToken = SyntaxKind.BacktickToken,
+  InlineCodeDelimiter = SyntaxKind.InlineCodeDelimiter,
   TildeTilde = SyntaxKind.TildeTilde,
 
   // Stage 4: HTML tokens
@@ -370,6 +389,7 @@ enum SyntaxKindShadow {
   HtmlTagCloseName = SyntaxKind.HtmlTagCloseName,
   HtmlAttributeName = SyntaxKind.HtmlAttributeName,
   HtmlAttributeValue = SyntaxKind.HtmlAttributeValue,
+  HtmlTagWhitespace = SyntaxKind.HtmlTagWhitespace,
   HtmlEntity = SyntaxKind.HtmlEntity,
   HtmlComment = SyntaxKind.HtmlComment,
   HtmlCdata = SyntaxKind.HtmlCdata,

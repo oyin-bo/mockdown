@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+
 import { verifyTokens } from './verify-tokens';
 
 describe('DOCTYPE Declarations - Stage 4 (Post-implementation)', () => {
@@ -39,7 +40,7 @@ NextLineAfterDoctype
   });
 
   test('unterminated DOCTYPE fast-breaks at end of line and continues scanning', () => {
-  const tokenTest = `
+    const tokenTest = `
 <!DOCTYPE mydoc never closed here
 1
 @1 HtmlDoctype Unterminated
@@ -51,7 +52,7 @@ NextLineContent
   });
 
   test('unterminated DOCTYPE fast-breaks at next \u003c (less-than) char', () => {
-  const tokenTest = `
+    const tokenTest = `
 <!DOCTYPE abc missing but has <
 1                             2
 @1 HtmlDoctype Unterminated

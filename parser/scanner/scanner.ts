@@ -1,17 +1,17 @@
 import {
   CharacterCodes,
+  isAttributeNameCharacter,
+  isAttributeNameStart,
   isLineBreak,
   isWhiteSpace,
-  isWhiteSpaceSingleLine,
-  isAttributeNameCharacter,
-  isAttributeNameStart
+  isWhiteSpaceSingleLine
 } from './character-codes';
 import {
+  Diagnostics,
   RollbackType,
   ScannerErrorCode,
   SyntaxKind,
   TokenFlags
-  , Diagnostics
 } from './token-types';
 
 export interface Scanner {
@@ -180,6 +180,9 @@ export function createScanner(): Scanner {
   // Line classification flags for the current line
   let currentLineFlags: LineClassification = LineClassification.None;
 
+  // Track whether list marker has been consumed for current line
+  let listMarkerConsumed: boolean = false;
+
   // Scanner interface fields - these are the 4 public fields
   let token: SyntaxKind = SyntaxKind.Unknown;
   let tokenText: string = '';
@@ -279,7 +282,7 @@ export function createScanner(): Scanner {
       // Normalize any whitespace-only run to a single space for consistent
       // inline formatting behavior. Do not return an empty string for
       // whitespace-only inputs.
-  return ' ';
+      return ' ';
     }
 
     for (let i = start; i < endPos; i++) {
@@ -447,7 +450,7 @@ export function createScanner(): Scanner {
         tokenText = TokenTextCache.ASTERISK_ASTERISK;
       } else if (kind === SyntaxKind.UnderscoreUnderscore) {
         tokenText = TokenTextCache.UNDERSCORE_UNDERSCORE;
-  } else if (kind === SyntaxKind.SlashGreaterThanToken) {
+      } else if (kind === SyntaxKind.SlashGreaterThanToken) {
         tokenText = TokenTextCache.SLASH_GREATER_THAN;
       } else if (start + 1 < source.length &&
         source.charCodeAt(start) === CharacterCodes.carriageReturn &&
@@ -687,7 +690,6 @@ export function createScanner(): Scanner {
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.asterisk);
 
     emitToken(tokenType, start, runEnd, flags);
-    updatePosition(runEnd);
   }
 
   function scanUnderscore(start: number): void {
@@ -715,7 +717,6 @@ export function createScanner(): Scanner {
     flags |= computeFlankingFlags(start, runEnd, CharacterCodes.underscore);
 
     emitToken(tokenType, start, runEnd, flags);
-    updatePosition(runEnd);
   }
 
   function scanBacktick(start: number): void {
@@ -726,15 +727,16 @@ export function createScanner(): Scanner {
       runEnd++;
     }
 
-    // For backticks, we always emit BacktickToken regardless of run length
-    // The run length will be encoded in flags for parser use
     const runLength = runEnd - start;
     let flags = TokenFlags.None;
 
-    // TODO: Add run length encoding to flags when needed for parser
-
-    emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
-    updatePosition(runEnd);
+    // For runs of 2 or more backticks, emit InlineCodeDelimiter  
+    if (runLength >= 2) {
+      emitToken(SyntaxKind.InlineCodeDelimiter, start, runEnd, flags);
+    } else {
+      // Single backtick - emit BacktickToken
+      emitToken(SyntaxKind.BacktickToken, start, runEnd, flags);
+    }
   }
 
   function scanTilde(start: number): void {
@@ -743,12 +745,37 @@ export function createScanner(): Scanner {
     if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.tilde) {
       // This is a double tilde - emit TildeTilde token
       emitToken(SyntaxKind.TildeTilde, start, start + 2, TokenFlags.None);
-      updatePosition(start + 2);
     } else {
       // This shouldn't happen now, but fallback to text
       emitTextRun(start);
     }
   }
+
+  function scanDollar(start: number): void {
+    // Check for double dollar (block math)
+    if (start + 1 < end && source.charCodeAt(start + 1) === CharacterCodes.dollar) {
+      // Count consecutive dollars to handle edge cases like $$$
+      let dollarCount = 0;
+      let i = start;
+      while (i < end && source.charCodeAt(i) === CharacterCodes.dollar) {
+        dollarCount++;
+        i++;
+      }
+
+      // If exactly 2 dollars, emit block math delimiter
+      if (dollarCount === 2) {
+        emitToken(SyntaxKind.MathBlockDelimiter, start, start + 2, TokenFlags.None);
+      } else {
+        // Wrong number of dollars (3+), emit as text (this should rarely happen due to canDollarBeDelimiter check)
+        emitStringLiteralToken(start, start + dollarCount, TokenFlags.None);
+      }
+    } else {
+      // Single dollar - emit inline math delimiter
+      emitToken(SyntaxKind.MathInlineDelimiter, start, start + 1, TokenFlags.None);
+    }
+  }
+
+
 
   /**
    * Stage 4: HTML scanning functions
@@ -818,8 +845,8 @@ export function createScanner(): Scanner {
       return;
     }
 
-  // Regular '<' for anything else (including malformed tags like <1bad>) - emit as text
-  emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
+    // Regular '<' for anything else (including malformed tags like <1bad>) - emit as text
+    emitStringLiteralToken(start, Math.min(start + 1, end), TokenFlags.None);
   }
 
   function scanGreaterThan(start: number): void {
@@ -922,7 +949,7 @@ export function createScanner(): Scanner {
       }
     }
 
-  if (nameEnd > i) {
+    if (nameEnd > i) {
       // Emit a coarsened token that contains only the tag name text (callers only need the name).
       const nameStart = i;
       const nameEndPos = nameEnd; // do not include following whitespace/attributes or angle brackets
@@ -1343,7 +1370,7 @@ export function createScanner(): Scanner {
           break;
         }
 
-        // Check for special characters, but handle intraword underscores specially
+        // Check for special characters, but handle some specially
         if (ch === CharacterCodes.asterisk ||
           ch === CharacterCodes.backtick ||
           ch === CharacterCodes.greaterThan ||
@@ -1378,6 +1405,13 @@ export function createScanner(): Scanner {
           // Single tilde - include it in text
         }
 
+        // Special handling for dollars - only break if they can be math delimiters
+        if (ch === CharacterCodes.dollar) {
+          if (canDollarBeDelimiter(textEnd)) {
+            break;
+          }
+        }
+
         textEnd++;
       }
     }
@@ -1407,6 +1441,63 @@ export function createScanner(): Scanner {
       // Reset line start flag after emitting text
       contextFlags &= ~ContextFlags.AtLineStart;
     }
+  }
+
+  function canDollarBeDelimiter(pos: number): boolean {
+    // Check for escaped dollar
+    if (pos > 0 && source.charCodeAt(pos - 1) === CharacterCodes.backslash) {
+      return false;
+    }
+
+    // Check for double dollar (block math)
+    if (pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.dollar) {
+      return true; // $$ is always a math delimiter
+    }
+
+    // For single dollar, find the line boundaries
+    let lineStart = pos;
+    while (lineStart > 0 && !isLineBreak(source.charCodeAt(lineStart - 1))) {
+      lineStart--;
+    }
+
+    let lineEnd = pos;
+    while (lineEnd < end && !isLineBreak(source.charCodeAt(lineEnd))) {
+      lineEnd++;
+    }
+
+    // Find all unescaped dollar positions on this line
+    const dollarPositions: number[] = [];
+    for (let i = lineStart; i < lineEnd; i++) {
+      if (source.charCodeAt(i) === CharacterCodes.dollar) {
+        // Check if this dollar is escaped
+        if (i > 0 && source.charCodeAt(i - 1) === CharacterCodes.backslash) {
+          continue; // Skip escaped dollars
+        }
+        dollarPositions.push(i);
+      }
+    }
+
+    // If there are more than 2 unescaped dollars, special logic:
+    // - If there are exactly 3 dollars, the first 2 can be delimiters
+    // - If there are 4 or more dollars, treat as all text (nested case)
+    if (dollarPositions.length > 2) {
+      if (dollarPositions.length === 3) {
+        // Allow first pair to be delimiters: positions 0 and 1 in the array
+        const currentIndex = dollarPositions.indexOf(pos);
+        return currentIndex === 0 || currentIndex === 1;
+      } else {
+        // 4+ dollars: treat all as text (nested/complex case)
+        return false;
+      }
+    }
+
+    // If exactly 2 dollars, both can be delimiters
+    if (dollarPositions.length === 2) {
+      return true;
+    }
+
+    // If only 1 dollar (odd number), cannot be delimiter
+    return false;
   }
 
   function canUnderscoreBeDelimiter(pos: number): boolean {
@@ -1571,6 +1662,14 @@ export function createScanner(): Scanner {
       case CharacterCodes.greaterThan:
         return LineClassification.BLOCKQUOTE_MARKER;
 
+      case CharacterCodes.plus: {
+        // Check for unordered list with + marker
+        if (i + 1 < end && isWhiteSpace(source.charCodeAt(i + 1))) {
+          return LineClassification.LIST_UNORDERED_MARKER;
+        }
+        break;
+      }
+
       case CharacterCodes.backtick:
       case CharacterCodes.tilde: {
         const fenceChar = firstChar;
@@ -1589,6 +1688,25 @@ export function createScanner(): Scanner {
       case CharacterCodes.asterisk:
       case CharacterCodes.underscore: {
         const markerChar = firstChar;
+
+        // First check for simple list marker (single character followed by space)
+        if ((markerChar === CharacterCodes.minus || markerChar === CharacterCodes.asterisk) &&
+          i + 1 < end && isWhiteSpace(source.charCodeAt(i + 1))) {
+          // Quick check: if there are 3+ marker characters total on this line, it's a thematic break
+          let totalMarkers = 0;
+          let p = i;
+          while (p < end && !isLineBreak(source.charCodeAt(p))) {
+            if (source.charCodeAt(p) === markerChar) totalMarkers++;
+            p++;
+          }
+          if (totalMarkers >= 3) {
+            // This is actually a thematic break like "- - -", continue to thematic break check
+          } else {
+            return LineClassification.LIST_UNORDERED_MARKER;
+          }
+        }
+
+        // Then check for thematic break (3+ characters of same type)
         let markerCount = 0;
         let p = i;
         while (p < end && !isLineBreak(source.charCodeAt(p))) {
@@ -1602,8 +1720,25 @@ export function createScanner(): Scanner {
           p++;
         }
         if (markerCount >= 3) return LineClassification.THEMATIC_BREAK;
-        // Could also be a list marker, fall through for now
         break;
+      }
+    }
+
+    // 4.5. Check for ordered list markers (digits followed by . or ))
+    if (firstChar >= CharacterCodes._0 && firstChar <= CharacterCodes._9) {
+      let p = i;
+      let digitCount = 0;
+      while (p < end && source.charCodeAt(p) >= CharacterCodes._0 && source.charCodeAt(p) <= CharacterCodes._9) {
+        digitCount++;
+        p++;
+        if (digitCount > 9) break; // CommonMark limits to 9 digits
+      }
+      if (digitCount > 0 && digitCount <= 9 && p < end) {
+        const nextChar = source.charCodeAt(p);
+        if ((nextChar === CharacterCodes.dot || nextChar === CharacterCodes.closeParen) &&
+          p + 1 < end && isWhiteSpace(source.charCodeAt(p + 1))) {
+          return LineClassification.LIST_ORDERED_MARKER;
+        }
       }
     }
 
@@ -1730,14 +1865,23 @@ export function createScanner(): Scanner {
    */
   function scanImpl(): void {
     if (pos >= end) {
-      emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      // Don't emit another EOF if we are already at the end.
+      if (token !== SyntaxKind.EndOfFileToken) {
+        emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      }
       return;
     }
 
     // If at the start of a line, classify it first.
     if (contextFlags & ContextFlags.AtLineStart) {
       currentLineFlags = classifyLine(pos);
+      // Only reset list marker flag if we're actually at the start of a new line
+      if (pos == lastLineStart) {
+        listMarkerConsumed = false; // Reset list marker flag for new line
+      }
     }
+    // Note: currentLineFlags should persist for the entire line duration
+    // and only be reset when we reach the start of a new line
 
     // Delegate to the appropriate line-level scanner
     scanCurrentLine();
@@ -1758,7 +1902,20 @@ export function createScanner(): Scanner {
       scanFenceLine();
     } else if (currentLineFlags & LineClassification.THEMATIC_BREAK) {
       scanThematicBreakLine();
-    } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
+    } else if (currentLineFlags & LineClassification.INDENTED_CODE) {
+      scanIndentedCodeLine();
+    } else if (currentLineFlags & (LineClassification.LIST_UNORDERED_MARKER | LineClassification.LIST_ORDERED_MARKER)) {
+      if (!listMarkerConsumed) {
+        scanListMarkerLine();
+      } else {
+        // List marker already consumed, treat rest as paragraph content  
+        scanParagraphContent();
+      }
+    } else if (currentLineFlags & LineClassification.TABLE_PIPE_HEADER_CANDIDATE) {
+      scanTableHeaderLine();
+    } else if (currentLineFlags & LineClassification.TABLE_ALIGNMENT_ROW) {
+      scanTableAlignmentLine();
+    } else if (currentLineFlags & LineClassification.PARAGRAPH_PLAIN || currentLineFlags & LineClassification.SETEXT_UNDERLINE_CANDIDATE) {
       // Fallback to detailed inline parsing for anything that looks like a paragraph
       scanParagraphContent();
     } else {
@@ -1798,11 +1955,30 @@ export function createScanner(): Scanner {
    */
   function scanFenceLine(): void {
     let i = pos;
+
+    // If we're already at a newline or end of file, emit newline token instead
+    if (i >= end || isLineBreak(source.charCodeAt(i))) {
+      if (i < end) {
+        emitNewline(i);
+      } else {
+        // Don't emit another EOF if we are already at the end.
+        if (token !== SyntaxKind.EndOfFileToken) {
+          emitToken(SyntaxKind.EndOfFileToken, i, i);
+        }
+      }
+      return;
+    }
+
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
       i++;
     }
+
     emitToken(SyntaxKind.CodeFence, pos, i);
-    scanParagraphContent(); // Scan newline
+
+    // Clear AtLineStart flag to prevent re-classification
+    contextFlags &= ~ContextFlags.AtLineStart;
+
+    // The newline will be handled in the next scan() call
   }
 
   /**
@@ -1810,11 +1986,155 @@ export function createScanner(): Scanner {
    */
   function scanThematicBreakLine(): void {
     let i = pos;
+
+    // If we're already at a newline or end of file, this shouldn't be a thematic break
+    if (i >= end || isLineBreak(source.charCodeAt(i))) {
+      // Delegate to paragraph scanner to handle the newline properly
+      scanParagraphContent();
+      return;
+    }
+
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
       i++;
     }
     emitToken(SyntaxKind.ThematicBreak, pos, i);
-    scanParagraphContent(); // Scan newline
+    // The newline will be handled in the next scan() call
+  }
+
+  /**
+   * Scans a line that is indented code (4+ spaces).
+   */
+  function scanIndentedCodeLine(): void {
+    // Use lastLineStart instead of scanning backwards inefficiently
+    // The line classification already determined this is indented code
+
+    // Check if we're already at or past the line content (e.g., at the newline)
+    if (pos >= end || isLineBreak(source.charCodeAt(pos))) {
+      // We're at a line break, handle it as a newline token
+      emitNewline(pos);
+      return;
+    }
+
+    // Find the end of the current line
+    let i = pos;
+    while (i < end && !isLineBreak(source.charCodeAt(i))) {
+      i++;
+    }
+
+    // If pos is already beyond the start of the line, only emit remaining content
+    const contentStart = Math.max(pos, lastLineStart);
+
+    // Emit the line content
+    emitStringLiteralToken(contentStart, i, TokenFlags.None);
+    // The newline will be handled in the next scan() call
+  }
+
+  /**
+   * Scans a line that starts with a list marker.
+   */
+  function scanListMarkerLine(): void {
+    // Check if we have leading whitespace that should be emitted first
+    if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+      // Find the end of the leading whitespace
+      let whitespaceEnd = pos;
+      while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
+        whitespaceEnd++;
+      }
+      emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
+      return; // The marker will be handled in the next scan() call
+    }
+
+    if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
+      // Unordered list markers: -, *, +
+      // Include only the marker and the required single space
+      let markerEnd = pos + 1;
+      if (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
+        markerEnd++; // Consume the space after the marker
+      }
+
+      emitToken(SyntaxKind.ListMarkerUnordered, pos, markerEnd);
+      listMarkerConsumed = true; // Mark marker as consumed
+
+      // Skip additional leading whitespace before content for proper normalization
+      while (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
+        markerEnd++;
+      }
+      pos = markerEnd; // Advance position to skip extra whitespace
+
+      // The rest of the line will be handled in the next scan() call
+      // since emitToken advances pos and the content will be scanned as paragraph
+    } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
+      // First check if we have leading whitespace 
+      if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+        let whitespaceEnd = pos;
+        while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
+          whitespaceEnd++;
+        }
+        emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
+        return; // The marker will be handled in the next scan() call
+      }
+
+      // Ordered list markers: 1., 2), etc.
+      let i = pos;
+      // Skip digits
+      while (i < end && source.charCodeAt(i) >= CharacterCodes._0 && source.charCodeAt(i) <= CharacterCodes._9) {
+        i++;
+      }
+      // Skip the . or )
+      if (i < end && (source.charCodeAt(i) === CharacterCodes.dot || source.charCodeAt(i) === CharacterCodes.closeParen)) {
+        i++;
+      }
+      // Include only the marker and the required single space
+      if (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
+        i++; // Consume the space after the marker
+      }
+
+      emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
+      listMarkerConsumed = true; // Mark marker as consumed
+
+      // Skip additional leading whitespace before content for proper normalization
+      while (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
+        i++;
+      }
+      pos = i; // Advance position to skip extra whitespace
+
+      // The rest of the line will be handled in the next scan() call
+    } else {
+      // Fallback to paragraph content if classification was wrong
+      scanParagraphContent();
+    }
+  }
+
+  /**
+   * Scans a table header line (contains pipe characters).
+   * According to speculatives.md, isolated pipe lines should be treated as paragraphs
+   * unless confirmed by a valid table structure (header + alignment row).
+   * 
+   * For now, we treat TABLE_PIPE_HEADER_CANDIDATE lines as paragraphs until
+   * proper table disambiguation is implemented.
+   */
+  function scanTableHeaderLine(): void {
+    // TODO: Implement proper table disambiguation per speculatives.md
+    // Lines with pipes should only be parsed as table tokens when there's
+    // a confirmed table structure (header + alignment row).
+    // For now, treat as paragraph content.
+    scanParagraphContent();
+  }
+
+  /**
+   * Scans a table alignment line (contains :, -, |).
+   * According to speculatives.md, isolated alignment rows should be treated as paragraphs
+   * unless they're part of a confirmed table structure.
+   * 
+   * For now, we treat TABLE_ALIGNMENT_ROW lines as paragraphs until
+   * proper table disambiguation is implemented.
+   */
+  function scanTableAlignmentLine(): void {
+    // TODO: Implement proper table disambiguation per speculatives.md
+    // Alignment rows should only be parsed as table tokens when they're
+    // part of a confirmed table structure (header + alignment row + content).
+    // For now, treat as paragraph content.
+    scanParagraphContent();
   }
 
   /**
@@ -1910,6 +2230,7 @@ export function createScanner(): Scanner {
     } else if (ch === CharacterCodes.slash && pos + 1 < end && source.charCodeAt(pos + 1) === CharacterCodes.greaterThan) {
       // This is /> - check if this could be a self-closing tag
       emitToken(SyntaxKind.SlashGreaterThanToken, start, start + 2);
+      return;
     } else if (isLetter(ch)) {
       // Check if this could be an HTML tag name (only at appropriate positions)
       if (pos > 0 && (source.charCodeAt(pos - 1) === CharacterCodes.lessThan ||
@@ -1929,6 +2250,8 @@ export function createScanner(): Scanner {
       scanBacktick(start);
     } else if (ch === CharacterCodes.tilde && isDoubleTilde(start)) {
       scanTilde(start);
+    } else if (ch === CharacterCodes.dollar && canDollarBeDelimiter(start)) {
+      scanDollar(start);
     } else {
       // Regular text content - scan until next special character
       emitTextRun(start);
@@ -1948,11 +2271,14 @@ export function createScanner(): Scanner {
       return;
     }
 
-  // Ensure p is synced
-  p = pos;
+    // Ensure p is synced
+    p = pos;
 
     if (p >= end) {
-      emitToken(SyntaxKind.EndOfFileToken, p, p);
+      // Don't emit another EOF if we are already at the end.
+      if (token !== SyntaxKind.EndOfFileToken) {
+        emitToken(SyntaxKind.EndOfFileToken, p, p);
+      }
       return;
     }
 
@@ -2013,44 +2339,44 @@ export function createScanner(): Scanner {
 
     // Self-closing '/>'
     if (ch === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan) {
-  inTagScanning = false;
-  emitToken(SyntaxKind.SlashGreaterThanToken, p, p + 2);
-  pos = p + 2;
+      inTagScanning = false;
+      emitToken(SyntaxKind.SlashGreaterThanToken, p, p + 2);
+      pos = p + 2;
       return;
     }
 
-  // Otherwise proceed to name/equals/end handling
+    // Otherwise proceed to name/equals/end handling
 
-  // Attribute name (use start-specific check)
-  if (isAttributeNameStart(ch)) {
+    // Attribute name (use start-specific check)
+    if (isAttributeNameStart(ch)) {
       const nameStart = p;
       p++;
       while (p < end && isAttributeNameCharacter(source.charCodeAt(p))) p++;
-  emitToken(SyntaxKind.HtmlAttributeName, nameStart, p);
-  // Move to next non-whitespace meaningful char
-  while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
-  // If the next char is '=' and after optional whitespace we hit '>' or '/>' or EOF,
-  // treat this as malformed (missing value). Do not emit '='; instead advance to the
-  // terminator so the next scan emits the correct GreaterThanToken at its own column.
-  if (p < end && source.charCodeAt(p) === CharacterCodes.equals) {
-    let peek = p + 1;
-    while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
-    const peekCh = peek < end ? source.charCodeAt(peek) : -1;
-    if (peekCh === CharacterCodes.greaterThan) {
-      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-      pos = peek; offsetNext = peek; return;
-    }
-    if (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) {
-      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-      pos = peek; offsetNext = peek; return;
-    }
-    if (peekCh === -1) {
-      diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
-      pos = end; offsetNext = end; return;
-    }
-  }
-  pos = p;
-  offsetNext = p;
+      emitToken(SyntaxKind.HtmlAttributeName, nameStart, p);
+      // Move to next non-whitespace meaningful char
+      while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+      // If the next char is '=' and after optional whitespace we hit '>' or '/>' or EOF,
+      // treat this as malformed (missing value). Do not emit '='; instead advance to the
+      // terminator so the next scan emits the correct GreaterThanToken at its own column.
+      if (p < end && source.charCodeAt(p) === CharacterCodes.equals) {
+        let peek = p + 1;
+        while (peek < end && isWhiteSpaceSingleLine(source.charCodeAt(peek))) peek++;
+        const peekCh = peek < end ? source.charCodeAt(peek) : -1;
+        if (peekCh === CharacterCodes.greaterThan) {
+          diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+          pos = peek; offsetNext = peek; return;
+        }
+        if (peekCh === CharacterCodes.slash && peek + 1 < end && source.charCodeAt(peek + 1) === CharacterCodes.greaterThan) {
+          diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+          pos = peek; offsetNext = peek; return;
+        }
+        if (peekCh === -1) {
+          diagnostics.push({ code: Diagnostics.InvalidHtmlAttribute, start: p, length: 1 });
+          pos = end; offsetNext = end; return;
+        }
+      }
+      pos = p;
+      offsetNext = p;
       return;
     }
 
@@ -2080,34 +2406,37 @@ export function createScanner(): Scanner {
           return;
         }
         // EOF-ish
-        emitToken(SyntaxKind.EndOfFileToken, peek, peek);
+        // Don't emit another EOF if we are already at the end.
+        if (token !== SyntaxKind.EndOfFileToken) {
+          emitToken(SyntaxKind.EndOfFileToken, peek, peek);
+        }
         pos = peek;
         return;
       }
 
       // Normal '=' that introduces a value - emit equals token
-  emitToken(SyntaxKind.EqualsToken, p, p + 1);
-  // Skip any whitespace after '=' so next scan hits value immediately
-  p = p + 1;
-  while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
-  pos = p;
-  offsetNext = p;
+      emitToken(SyntaxKind.EqualsToken, p, p + 1);
+      // Skip any whitespace after '=' so next scan hits value immediately
+      p = p + 1;
+      while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+      pos = p;
+      offsetNext = p;
       return;
     }
 
-  // Quoted value
-  if (ch === CharacterCodes.doubleQuote || ch === CharacterCodes.singleQuote) {
+    // Quoted value
+    if (ch === CharacterCodes.doubleQuote || ch === CharacterCodes.singleQuote) {
       const quote = ch;
       const valStart = p;
       p++;
       while (p < end && source.charCodeAt(p) !== quote) p++;
       if (p < end && source.charCodeAt(p) === quote) {
         p++; // include closing quote
-  emitAttributeValueToken(valStart, p, /*isQuoted*/true);
-  // After closing quote, advance to next non-whitespace so '>' or next attr aligns
-  while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
-  pos = p;
-  offsetNext = p;
+        emitAttributeValueToken(valStart, p, /*isQuoted*/true);
+        // After closing quote, advance to next non-whitespace so '>' or next attr aligns
+        while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+        pos = p;
+        offsetNext = p;
         return;
       } else {
         // Unterminated quoted value: emit until first '>' or line break with flag
@@ -2117,12 +2446,12 @@ export function createScanner(): Scanner {
           if (c === CharacterCodes.greaterThan || isLineBreak(c)) break;
           scanTo++;
         }
-  emitAttributeValueToken(valStart, scanTo, /*isQuoted*/true, TokenFlags.Unterminated);
-  // Do not exit tag scanning; let next scan emit '>' if present
-  while (scanTo < end && isWhiteSpaceSingleLine(source.charCodeAt(scanTo))) scanTo++;
-  pos = scanTo;
-  offsetNext = scanTo;
-    // Keep inTagScanning so caller can still receive the '>' token next
+        emitAttributeValueToken(valStart, scanTo, /*isQuoted*/true, TokenFlags.Unterminated);
+        // Do not exit tag scanning; let next scan emit '>' if present
+        while (scanTo < end && isWhiteSpaceSingleLine(source.charCodeAt(scanTo))) scanTo++;
+        pos = scanTo;
+        offsetNext = scanTo;
+        // Keep inTagScanning so caller can still receive the '>' token next
         return;
       }
     }
@@ -2135,10 +2464,10 @@ export function createScanner(): Scanner {
         if (isWhiteSpaceSingleLine(c) || c === CharacterCodes.greaterThan || (c === CharacterCodes.slash && p + 1 < end && source.charCodeAt(p + 1) === CharacterCodes.greaterThan)) break;
         p++;
       }
-  emitAttributeValueToken(valStart, p, /*isQuoted*/false);
-  while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
-  pos = p;
-  offsetNext = p;
+      emitAttributeValueToken(valStart, p, /*isQuoted*/false);
+      while (p < end && isWhiteSpaceSingleLine(source.charCodeAt(p))) p++;
+      pos = p;
+      offsetNext = p;
       return;
     }
 
