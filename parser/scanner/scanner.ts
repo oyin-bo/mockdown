@@ -2033,71 +2033,69 @@ export function createScanner(): Scanner {
    * Scans a line that starts with a list marker.
    */
   function scanListMarkerLine(): void {
-    // Check if we have leading whitespace that should be emitted first
-    if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
-      // Find the end of the leading whitespace
-      let whitespaceEnd = pos;
-      while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
-        whitespaceEnd++;
-      }
-      emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
-      return; // The marker will be handled in the next scan() call
+    let tokenStart = pos;
+
+    // Find any leading whitespace indentation
+    while (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+      pos++;
     }
 
     if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
       // Unordered list markers: -, *, +
-      // Include only the marker and the required single space
+      // Include the marker and the required single space
       let markerEnd = pos + 1;
       if (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
         markerEnd++; // Consume the space after the marker
       }
 
-      emitToken(SyntaxKind.ListMarkerUnordered, pos, markerEnd);
-      listMarkerConsumed = true; // Mark marker as consumed
-
-      // Skip additional leading whitespace before content for proper normalization
+      // Include any additional whitespace after the marker in the token 
       while (markerEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(markerEnd))) {
         markerEnd++;
       }
-      pos = markerEnd; // Advance position to skip extra whitespace
 
+      // Determine logical marker text (just the bullet character) while still
+      // emitting a token whose span covers leading/trailing whitespace.
+      const bulletChar = source.substring(pos, pos + 1);
+
+      // Emit token that includes leading whitespace and trailing whitespace in both text and position range
+      emitToken(SyntaxKind.ListMarkerUnordered, tokenStart, markerEnd);
+      // Override tokenText with the logical marker (no surrounding whitespace)
+      tokenText = bulletChar;
+      listMarkerConsumed = true; // Mark marker as consumed
+
+      // Position is already at the end of all whitespace, no need for additional advancement
       // The rest of the line will be handled in the next scan() call
-      // since emitToken advances pos and the content will be scanned as paragraph
     } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
-      // First check if we have leading whitespace 
-      if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
-        let whitespaceEnd = pos;
-        while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
-          whitespaceEnd++;
-        }
-        emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
-        return; // The marker will be handled in the next scan() call
-      }
-
       // Ordered list markers: 1., 2), etc.
       let i = pos;
       // Skip digits
       while (i < end && source.charCodeAt(i) >= CharacterCodes._0 && source.charCodeAt(i) <= CharacterCodes._9) {
         i++;
       }
+      // Capture numeric text (digits only) as logical marker
+      const numberText = source.substring(pos, i);
+
       // Skip the . or )
       if (i < end && (source.charCodeAt(i) === CharacterCodes.dot || source.charCodeAt(i) === CharacterCodes.closeParen)) {
         i++;
       }
-      // Include only the marker and the required single space
+      // Include the marker and the required single space
       if (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
         i++; // Consume the space after the marker
       }
 
-      emitToken(SyntaxKind.ListMarkerOrdered, pos, i);
-      listMarkerConsumed = true; // Mark marker as consumed
-
-      // Skip additional leading whitespace before content for proper normalization
+      // Include any additional whitespace after the marker in the token
       while (i < end && isWhiteSpaceSingleLine(source.charCodeAt(i))) {
         i++;
       }
-      pos = i; // Advance position to skip extra whitespace
 
+      // Emit token that includes leading whitespace and trailing whitespace in both text and position range
+      emitToken(SyntaxKind.ListMarkerOrdered, tokenStart, i);
+      // Override tokenText with numeric logical marker (digits only)
+      tokenText = numberText;
+      listMarkerConsumed = true; // Mark marker as consumed
+
+      // Position is already at the end of all whitespace, no need for additional advancement
       // The rest of the line will be handled in the next scan() call
     } else {
       // Fallback to paragraph content if classification was wrong
