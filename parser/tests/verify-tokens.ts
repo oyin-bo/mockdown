@@ -335,9 +335,9 @@ function parseAssertLine(assertLine: string) {
 }
 
 function syntaxKindToString(kind: SyntaxKind): string {
-  if (kind === undefined || kind === null) {
-    return 'UNDEFINED_TOKEN';
-  }
+  if (kind === undefined) return 'undefined';
+  else if (kind === null) return 'null';
+
   return SyntaxKindShadow[kind] || '0x' + kind.toString(16).toUpperCase();
 }
 

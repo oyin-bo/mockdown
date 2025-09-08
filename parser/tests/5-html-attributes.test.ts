@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+
 import { verifyTokens } from './verify-tokens';
 
 describe('HTML Attributes - Stage 4', () => {

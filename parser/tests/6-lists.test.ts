@@ -1,9 +1,5 @@
-/**
- * Tests for Stage 6: Lists
- * Following the annotated markdown testing approach used in other test files
- */
-
 import { describe, test, expect } from 'vitest';
+
 import { verifyTokens } from './verify-tokens.js';
 
 describe('Stage 6: Lists', () => {
