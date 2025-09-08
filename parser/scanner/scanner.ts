@@ -1865,14 +1865,20 @@ export function createScanner(): Scanner {
    */
   function scanImpl(): void {
     if (pos >= end) {
-      emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      // Don't emit another EOF if we are already at the end.
+      if (token !== SyntaxKind.EndOfFileToken) {
+        emitToken(SyntaxKind.EndOfFileToken, pos, pos);
+      }
       return;
     }
 
     // If at the start of a line, classify it first.
     if (contextFlags & ContextFlags.AtLineStart) {
       currentLineFlags = classifyLine(pos);
-      listMarkerConsumed = false; // Reset list marker flag for new line
+      // Only reset list marker flag if we're actually at the start of a new line
+      if (pos == lastLineStart) {
+        listMarkerConsumed = false; // Reset list marker flag for new line
+      }
     }
     // Note: currentLineFlags should persist for the entire line duration
     // and only be reset when we reach the start of a new line
@@ -1955,7 +1961,10 @@ export function createScanner(): Scanner {
       if (i < end) {
         emitNewline(i);
       } else {
-        emitToken(SyntaxKind.EndOfFileToken, i, i);
+        // Don't emit another EOF if we are already at the end.
+        if (token !== SyntaxKind.EndOfFileToken) {
+          emitToken(SyntaxKind.EndOfFileToken, i, i);
+        }
       }
       return;
     }
@@ -1977,6 +1986,14 @@ export function createScanner(): Scanner {
    */
   function scanThematicBreakLine(): void {
     let i = pos;
+    
+    // If we're already at a newline or end of file, this shouldn't be a thematic break
+    if (i >= end || isLineBreak(source.charCodeAt(i))) {
+      // Delegate to paragraph scanner to handle the newline properly
+      scanParagraphContent();
+      return;
+    }
+    
     while (i < end && !isLineBreak(source.charCodeAt(i))) {
       i++;
     }
@@ -2016,6 +2033,17 @@ export function createScanner(): Scanner {
    * Scans a line that starts with a list marker.
    */
   function scanListMarkerLine(): void {
+    // Check if we have leading whitespace that should be emitted first
+    if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+      // Find the end of the leading whitespace
+      let whitespaceEnd = pos;
+      while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
+        whitespaceEnd++;
+      }
+      emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
+      return; // The marker will be handled in the next scan() call
+    }
+    
     if (currentLineFlags & LineClassification.LIST_UNORDERED_MARKER) {
       // Unordered list markers: -, *, +
       // Include only the marker and the required single space
@@ -2036,6 +2064,16 @@ export function createScanner(): Scanner {
       // The rest of the line will be handled in the next scan() call
       // since emitToken advances pos and the content will be scanned as paragraph
     } else if (currentLineFlags & LineClassification.LIST_ORDERED_MARKER) {
+      // First check if we have leading whitespace 
+      if (pos < end && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+        let whitespaceEnd = pos;
+        while (whitespaceEnd < end && isWhiteSpaceSingleLine(source.charCodeAt(whitespaceEnd))) {
+          whitespaceEnd++;
+        }
+        emitToken(SyntaxKind.WhitespaceTrivia, pos, whitespaceEnd);
+        return; // The marker will be handled in the next scan() call
+      }
+      
       // Ordered list markers: 1., 2), etc.
       let i = pos;
       // Skip digits
@@ -2237,7 +2275,10 @@ export function createScanner(): Scanner {
   p = pos;
 
     if (p >= end) {
-      emitToken(SyntaxKind.EndOfFileToken, p, p);
+      // Don't emit another EOF if we are already at the end.
+      if (token !== SyntaxKind.EndOfFileToken) {
+        emitToken(SyntaxKind.EndOfFileToken, p, p);
+      }
       return;
     }
 
@@ -2365,7 +2406,10 @@ export function createScanner(): Scanner {
           return;
         }
         // EOF-ish
-        emitToken(SyntaxKind.EndOfFileToken, peek, peek);
+        // Don't emit another EOF if we are already at the end.
+        if (token !== SyntaxKind.EndOfFileToken) {
+          emitToken(SyntaxKind.EndOfFileToken, peek, peek);
+        }
         pos = peek;
         return;
       }

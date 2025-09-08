@@ -17,6 +17,7 @@ export const enum SyntaxKind {
   StringLiteral,            // Text content (normalized, one per line)
   HardLineBreak,            // Hard line break (two or more trailing spaces before newline or trailing backslash)
   NewLineTrivia,            // Line breaks (LF, CRLF, CR)
+  WhitespaceTrivia,         // Leading whitespace/indentation
 
   // Block-level tokens from line classification
   HashToken,                // #, ##, etc. for ATX headings

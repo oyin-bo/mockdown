@@ -67,7 +67,7 @@ describe('Stage 6: Lists', () => {
     test('multi-digit number with text', () => {
       const tokenTest = `
 123. item
-1 2
+1    2
 @1 ListMarkerOrdered "123. "
 @2 StringLiteral "item"`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
@@ -132,7 +132,8 @@ describe('Stage 6: Lists', () => {
       const tokenTest = `
 - first item
 + second item  
-1 2      3 4
+1  2
+3  4
 @1 ListMarkerUnordered "- "
 @2 StringLiteral "first item"
 @3 ListMarkerUnordered "+ "

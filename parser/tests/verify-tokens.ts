@@ -335,7 +335,10 @@ function parseAssertLine(assertLine: string) {
 }
 
 function syntaxKindToString(kind: SyntaxKind): string {
-  return SyntaxKindShadow[kind] || '0x' + kind.toFixed(16).toUpperCase();
+  if (kind === undefined || kind === null) {
+    return 'UNDEFINED_TOKEN';
+  }
+  return SyntaxKindShadow[kind] || '0x' + kind.toString(16).toUpperCase();
 }
 
 function convertSyntaxKind(encoded: string): SyntaxKind {
@@ -353,6 +356,7 @@ enum SyntaxKindShadow {
   StringLiteral = SyntaxKind.StringLiteral,
   HardLineBreak = SyntaxKind.HardLineBreak,
   NewLineTrivia = SyntaxKind.NewLineTrivia,
+  WhitespaceTrivia = SyntaxKind.WhitespaceTrivia,
 
   // Block-level tokens from line classification
   HashToken = SyntaxKind.HashToken,
