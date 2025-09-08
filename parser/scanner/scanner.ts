@@ -510,67 +510,6 @@ export function createScanner(): Scanner {
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
 
-  // Decode entities (&amp;), numeric entities (&#DD; &#xHH;), percent-escapes (%20),
-  // and normalize whitespace/newlines depending on quoted flag.
-  function decodeAttributeLogicalValue(raw: string, quoted: boolean): string {
-    if (!raw) return '';
-
-    // Single pass decode into parts array for performance
-    const out: string[] = [];
-    let i = 0;
-    const n = raw.length;
-    while (i < n) {
-      const ch = raw.charCodeAt(i);
-      if (ch === CharacterCodes.ampersand) {
-        // Try entity decoding
-        const ent = tryDecodeEntity(raw, i);
-        if (ent) {
-          out.push(ent.value);
-          i = ent.next;
-          continue;
-        }
-        // Not a valid entity -> keep literal '&'
-        out.push('&');
-        i++;
-        continue;
-      }
-      if (ch === CharacterCodes.percent) {
-        // Percent-decoding: %HH
-        if (i + 2 < n) {
-          const h1 = raw.charCodeAt(i + 1);
-          const h2 = raw.charCodeAt(i + 2);
-          if (isHexDigit(h1) && isHexDigit(h2)) {
-            const hex = raw.substring(i + 1, i + 3);
-            const code = parseInt(hex, 16);
-            out.push(String.fromCharCode(code));
-            i += 3;
-            continue;
-          }
-        }
-        // Invalid percent sequence -> keep '%'
-        out.push('%');
-        i++;
-        continue;
-      }
-      // Regular character
-      out.push(raw[i]);
-      i++;
-    }
-
-    let joined = out.join('');
-
-    if (quoted) {
-      // Normalize newlines inside quoted values: CRLF/CR -> LF
-      joined = joined.replace(/\r\n?|\n/g, '\n');
-      return joined;
-    }
-
-    // Unquoted: trim and collapse internal whitespace to single spaces
-    // Treat any run of space/tab as a single space; drop leading/trailing whitespace
-    joined = joined.replace(/[\t ]+/g, ' ').trim();
-    return joined;
-  }
-
   // Optimized version that works directly on source span
   function decodeAttributeLogicalValueFromSpan(start: number, end: number, quoted: boolean): string {
     if (start >= end) return '';
