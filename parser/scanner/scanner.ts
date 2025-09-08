@@ -510,48 +510,44 @@ export function createScanner(): Scanner {
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
 
-  // Optimized version that works directly on source span
+  // Optimized version that works directly on source span using run-based slicing
   function decodeAttributeLogicalValueFromSpan(start: number, end: number, quoted: boolean): string {
     if (start >= end) return '';
 
-    // First pass: check if any processing is needed
-    let needsProcessing = false;
-    for (let i = start; i < end; i++) {
-      const ch = source.charCodeAt(i);
-      if (ch === CharacterCodes.ampersand || ch === CharacterCodes.percent || 
-          (!quoted && (ch === CharacterCodes.tab || ch === CharacterCodes.space)) ||
-          (quoted && (ch === CharacterCodes.carriageReturn || ch === CharacterCodes.lineFeed))) {
-        needsProcessing = true;
-        break;
-      }
-    }
-
-    // If no processing needed, return direct substring (optimal path)
-    if (!needsProcessing) {
-      return source.substring(start, end);
-    }
-
-    // Processing needed: build result character by character
+    // Single-pass processing with run collection for optimal performance
     let result = '';
     let i = start;
+    let runStart = start; // Start of current normal character run
+    
     while (i < end) {
       const ch = source.charCodeAt(i);
       
       if (ch === CharacterCodes.ampersand) {
+        // Slice any accumulated normal run before processing entity
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         // Try entity decoding
         const entityResult = tryDecodeEntityFromSpan(i, end);
         if (entityResult) {
           result += entityResult.value;
           i = entityResult.next;
-          continue;
+        } else {
+          // Not a valid entity -> keep literal '&'
+          result += '&';
+          i++;
         }
-        // Not a valid entity -> keep literal '&'
-        result += '&';
-        i++;
+        runStart = i; // Reset run start after special processing
         continue;
       }
       
       if (ch === CharacterCodes.percent) {
+        // Slice any accumulated normal run before processing percent encoding
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         // Percent-decoding: %HH
         if (i + 2 < end) {
           const h1 = source.charCodeAt(i + 1);
@@ -566,17 +562,27 @@ export function createScanner(): Scanner {
                          h2 - CharacterCodes.a + 10);
             result += String.fromCharCode(code);
             i += 3;
-            continue;
+          } else {
+            // Invalid percent sequence -> keep '%'
+            result += '%';
+            i++;
           }
+        } else {
+          // Invalid percent sequence -> keep '%'
+          result += '%';
+          i++;
         }
-        // Invalid percent sequence -> keep '%'
-        result += '%';
-        i++;
+        runStart = i; // Reset run start after special processing
         continue;
       }
       
       // Handle whitespace normalization for unquoted values
       if (!quoted && (ch === CharacterCodes.tab || ch === CharacterCodes.space)) {
+        // Slice any accumulated normal run before processing whitespace
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         // Collapse whitespace: skip consecutive whitespace and add single space
         result += ' ';
         i++;
@@ -588,29 +594,46 @@ export function createScanner(): Scanner {
             break;
           }
         }
+        runStart = i; // Reset run start after whitespace processing
         continue;
       }
       
       // Handle newline normalization for quoted values
       if (quoted && ch === CharacterCodes.carriageReturn) {
+        // Slice any accumulated normal run before processing newline
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         // CR or CRLF -> LF
         result += '\n';
         i++;
         if (i < end && source.charCodeAt(i) === CharacterCodes.lineFeed) {
           i++; // Skip LF in CRLF
         }
+        runStart = i; // Reset run start after newline processing
         continue;
       }
       
       if (quoted && ch === CharacterCodes.lineFeed) {
+        // Slice any accumulated normal run before processing newline
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         result += '\n';
         i++;
+        runStart = i; // Reset run start after newline processing
         continue;
       }
       
-      // Regular character
-      result += source.charAt(i);
+      // Regular character - just advance, will be included in the next run slice
       i++;
+    }
+    
+    // Slice any remaining normal run at the end
+    if (runStart < i) {
+      result += source.substring(runStart, i);
     }
 
     // Final trimming for unquoted values
