@@ -498,11 +498,8 @@ export function createScanner(): Scanner {
       innerEnd = hasClosing ? spanEnd - 1 : spanEnd; // Unterminated doesn't have a closing quote
     }
 
-    const rawInner = innerStart <= innerEnd ? source.substring(innerStart, innerEnd) : '';
-
-    const decoded = decodeAttributeLogicalValue(rawInner, isQuoted);
-
-    tokenText = decoded;
+    // Optimized: decode directly from source span without intermediate string allocation
+    tokenText = decodeAttributeLogicalValueFromSpan(innerStart, innerEnd, isQuoted);
     tokenFlags = flags;
     offsetNext = spanEnd;
 
@@ -513,65 +510,138 @@ export function createScanner(): Scanner {
     contextFlags &= ~ContextFlags.PrecedingLineBreak;
   }
 
-  // Decode entities (&amp;), numeric entities (&#DD; &#xHH;), percent-escapes (%20),
-  // and normalize whitespace/newlines depending on quoted flag.
-  function decodeAttributeLogicalValue(raw: string, quoted: boolean): string {
-    if (!raw) return '';
+  // Optimized version that works directly on source span using run-based slicing
+  function decodeAttributeLogicalValueFromSpan(start: number, end: number, quoted: boolean): string {
+    if (start >= end) return '';
 
-    // Single pass decode into parts array for performance
-    const out: string[] = [];
-    let i = 0;
-    const n = raw.length;
-    while (i < n) {
-      const ch = raw.charCodeAt(i);
+    // Single-pass processing with run collection for optimal performance
+    let result = '';
+    let i = start;
+    let runStart = start; // Start of current normal character run
+    
+    while (i < end) {
+      const ch = source.charCodeAt(i);
+      
       if (ch === CharacterCodes.ampersand) {
-        // Try entity decoding
-        const ent = tryDecodeEntity(raw, i);
-        if (ent) {
-          out.push(ent.value);
-          i = ent.next;
-          continue;
+        // Slice any accumulated normal run before processing entity
+        if (runStart < i) {
+          result += source.substring(runStart, i);
         }
-        // Not a valid entity -> keep literal '&'
-        out.push('&');
-        i++;
+        
+        // Try entity decoding
+        const entityResult = tryDecodeEntityFromSpan(i, end);
+        if (entityResult) {
+          result += entityResult.value;
+          i = entityResult.next;
+        } else {
+          // Not a valid entity -> keep literal '&'
+          result += '&';
+          i++;
+        }
+        runStart = i; // Reset run start after special processing
         continue;
       }
+      
       if (ch === CharacterCodes.percent) {
+        // Slice any accumulated normal run before processing percent encoding
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
         // Percent-decoding: %HH
-        if (i + 2 < n) {
-          const h1 = raw.charCodeAt(i + 1);
-          const h2 = raw.charCodeAt(i + 2);
+        if (i + 2 < end) {
+          const h1 = source.charCodeAt(i + 1);
+          const h2 = source.charCodeAt(i + 2);
           if (isHexDigit(h1) && isHexDigit(h2)) {
-            const hex = raw.substring(i + 1, i + 3);
-            const code = parseInt(hex, 16);
-            out.push(String.fromCharCode(code));
+            // Parse hex directly without substring
+            const code = (h1 >= CharacterCodes._0 && h1 <= CharacterCodes._9 ? h1 - CharacterCodes._0 :
+                         h1 >= CharacterCodes.A && h1 <= CharacterCodes.F ? h1 - CharacterCodes.A + 10 :
+                         h1 - CharacterCodes.a + 10) * 16 +
+                        (h2 >= CharacterCodes._0 && h2 <= CharacterCodes._9 ? h2 - CharacterCodes._0 :
+                         h2 >= CharacterCodes.A && h2 <= CharacterCodes.F ? h2 - CharacterCodes.A + 10 :
+                         h2 - CharacterCodes.a + 10);
+            result += String.fromCharCode(code);
             i += 3;
-            continue;
+          } else {
+            // Invalid percent sequence -> keep '%'
+            result += '%';
+            i++;
+          }
+        } else {
+          // Invalid percent sequence -> keep '%'
+          result += '%';
+          i++;
+        }
+        runStart = i; // Reset run start after special processing
+        continue;
+      }
+      
+      // Handle whitespace normalization for unquoted values
+      if (!quoted && (ch === CharacterCodes.tab || ch === CharacterCodes.space)) {
+        // Slice any accumulated normal run before processing whitespace
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
+        // Collapse whitespace: skip consecutive whitespace and add single space
+        result += ' ';
+        i++;
+        while (i < end) {
+          const nextCh = source.charCodeAt(i);
+          if (nextCh === CharacterCodes.tab || nextCh === CharacterCodes.space) {
+            i++;
+          } else {
+            break;
           }
         }
-        // Invalid percent sequence -> keep '%'
-        out.push('%');
-        i++;
+        runStart = i; // Reset run start after whitespace processing
         continue;
       }
-      // Regular character
-      out.push(raw[i]);
+      
+      // Handle newline normalization for quoted values
+      if (quoted && ch === CharacterCodes.carriageReturn) {
+        // Slice any accumulated normal run before processing newline
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
+        // CR or CRLF -> LF
+        result += '\n';
+        i++;
+        if (i < end && source.charCodeAt(i) === CharacterCodes.lineFeed) {
+          i++; // Skip LF in CRLF
+        }
+        runStart = i; // Reset run start after newline processing
+        continue;
+      }
+      
+      if (quoted && ch === CharacterCodes.lineFeed) {
+        // Slice any accumulated normal run before processing newline
+        if (runStart < i) {
+          result += source.substring(runStart, i);
+        }
+        
+        result += '\n';
+        i++;
+        runStart = i; // Reset run start after newline processing
+        continue;
+      }
+      
+      // Regular character - just advance, will be included in the next run slice
       i++;
     }
-
-    let joined = out.join('');
-
-    if (quoted) {
-      // Normalize newlines inside quoted values: CRLF/CR -> LF
-      joined = joined.replace(/\r\n?|\n/g, '\n');
-      return joined;
+    
+    // Slice any remaining normal run at the end
+    if (runStart < i) {
+      result += source.substring(runStart, i);
     }
 
-    // Unquoted: trim and collapse internal whitespace to single spaces
-    // Treat any run of space/tab as a single space; drop leading/trailing whitespace
-    joined = joined.replace(/[\t ]+/g, ' ').trim();
-    return joined;
+    // Final trimming for unquoted values
+    if (!quoted) {
+      result = result.trim();
+    }
+    
+    return result;
   }
 
   function tryDecodeEntity(text: string, startIndex: number): { value: string, next: number } | null {
@@ -595,7 +665,23 @@ export function createScanner(): Scanner {
       if (i >= len || text.charCodeAt(i) !== CharacterCodes.semicolon) return null; // require ';'
       const digits = text.substring(digitsStart, i);
       i++; // consume ';'
-      const codePoint = isHexNum ? parseInt(digits, 16) : parseInt(digits, 10);
+      
+      // Parse the numeric value directly without substring
+      let codePoint = 0;
+      if (isHexNum) {
+        for (let j = digitsStart; j < i - 1; j++) {
+          const c = text.charCodeAt(j);
+          codePoint = codePoint * 16 + (
+            c >= CharacterCodes._0 && c <= CharacterCodes._9 ? c - CharacterCodes._0 :
+            c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
+            c - CharacterCodes.a + 10
+          );
+        }
+      } else {
+        for (let j = digitsStart; j < i - 1; j++) {
+          codePoint = codePoint * 10 + (text.charCodeAt(j) - CharacterCodes._0);
+        }
+      }
       if (!Number.isFinite(codePoint)) return null;
       try {
         return { value: String.fromCodePoint(codePoint), next: i };
@@ -612,11 +698,82 @@ export function createScanner(): Scanner {
       }
       if (i === nameStart) return null;
       if (i >= len || text.charCodeAt(i) !== CharacterCodes.semicolon) return null;
-      const name = text.substring(nameStart, i);
-      i++;
-      const value = decodeNamedEntity(name);
+      
+      // Use span-based comparison instead of substring
+      const value = decodeNamedEntityFromSpan(text, nameStart, i);
       if (value == null) return null; // unknown -> literal
+      i++;
       return { value, next: i };
+    }
+  }
+
+  // Optimized version that works directly on source span
+  function tryDecodeEntityFromSpan(startIndex: number, endIndex: number): { value: string, next: number } | null {
+    let i = startIndex + 1; // after '&'
+    if (i >= endIndex) return null;
+
+    if (source.charCodeAt(i) === CharacterCodes.hash) {
+      // Numeric: decimal or hex
+      i++;
+      let isHexNum = false;
+      if (i < endIndex && (source.charCodeAt(i) === CharacterCodes.x || source.charCodeAt(i) === CharacterCodes.X)) {
+        isHexNum = true; i++;
+      }
+      const digitsStart = i;
+      while (i < endIndex) {
+        const c = source.charCodeAt(i);
+        if (isHexNum ? isHexDigit(c) : isDigit(c)) i++; else break;
+      }
+      if (i === digitsStart) return null; // no digits
+      if (i >= endIndex || source.charCodeAt(i) !== CharacterCodes.semicolon) return null; // require ';'
+      
+      // Parse the numeric value directly without substring
+      let codePoint = 0;
+      if (isHexNum) {
+        for (let j = digitsStart; j < i; j++) {
+          const c = source.charCodeAt(j);
+          codePoint = codePoint * 16 + (
+            c >= CharacterCodes._0 && c <= CharacterCodes._9 ? c - CharacterCodes._0 :
+            c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
+            c - CharacterCodes.a + 10
+          );
+        }
+      } else {
+        for (let j = digitsStart; j < i; j++) {
+          codePoint = codePoint * 10 + (source.charCodeAt(j) - CharacterCodes._0);
+        }
+      }
+      
+      i++; // consume ';'
+      if (!Number.isFinite(codePoint)) return null;
+      try {
+        return { value: String.fromCharCode(codePoint), next: i };
+      } catch {
+        return { value: '\uFFFD', next: i }; // replacement character
+      }
+    } else {
+      // Named entity
+      const nameStart = i;
+      while (i < endIndex && i - nameStart < 32) { // Max length 32
+        const ch = source.charCodeAt(i);
+        if (isLetter(ch)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+      
+      if (i === nameStart || i >= endIndex || source.charCodeAt(i) !== CharacterCodes.semicolon) {
+        return null;
+      }
+      
+      // Check if it's a known entity by comparing spans directly
+      const decoded = decodeNamedEntityFromSourceSpan(nameStart, i);
+      if (decoded !== null) {
+        return { value: decoded, next: i + 1 }; // +1 for semicolon
+      }
+      
+      return null;
     }
   }
 
@@ -629,6 +786,86 @@ export function createScanner(): Scanner {
       case 'apos': return "'";
       case 'nbsp': return '\u00A0';
       default: return null;
+    }
+  }
+
+  // Optimized version that works on text span without substring
+  function decodeNamedEntityFromSpan(text: string, start: number, end: number): string | null {
+    const length = end - start;
+    
+    // Check each known entity by length and character comparison
+    switch (length) {
+      case 2: // 'lt', 'gt'
+        if (text.charCodeAt(start) === CharacterCodes.l && text.charCodeAt(start + 1) === CharacterCodes.t) return '<';
+        if (text.charCodeAt(start) === CharacterCodes.g && text.charCodeAt(start + 1) === CharacterCodes.t) return '>';
+        return null;
+      
+      case 3: // 'amp'
+        if (text.charCodeAt(start) === CharacterCodes.a && 
+            text.charCodeAt(start + 1) === CharacterCodes.m && 
+            text.charCodeAt(start + 2) === CharacterCodes.p) return '&';
+        return null;
+      
+      case 4: // 'quot', 'apos', 'nbsp'
+        if (text.charCodeAt(start) === CharacterCodes.q && 
+            text.charCodeAt(start + 1) === CharacterCodes.u && 
+            text.charCodeAt(start + 2) === CharacterCodes.o && 
+            text.charCodeAt(start + 3) === CharacterCodes.t) return '"';
+            
+        if (text.charCodeAt(start) === CharacterCodes.a && 
+            text.charCodeAt(start + 1) === CharacterCodes.p && 
+            text.charCodeAt(start + 2) === CharacterCodes.o && 
+            text.charCodeAt(start + 3) === CharacterCodes.s) return "'";
+            
+        if (text.charCodeAt(start) === CharacterCodes.n && 
+            text.charCodeAt(start + 1) === CharacterCodes.b && 
+            text.charCodeAt(start + 2) === CharacterCodes.s && 
+            text.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
+            
+        return null;
+        
+      default:
+        return null;
+    }
+  }
+
+  // Helper function for source span entity decoding  
+  function decodeNamedEntityFromSourceSpan(start: number, end: number): string | null {
+    const length = end - start;
+    
+    // Check each known entity by length and character comparison
+    switch (length) {
+      case 2: // 'lt', 'gt'
+        if (source.charCodeAt(start) === CharacterCodes.l && source.charCodeAt(start + 1) === CharacterCodes.t) return '<';
+        if (source.charCodeAt(start) === CharacterCodes.g && source.charCodeAt(start + 1) === CharacterCodes.t) return '>';
+        return null;
+      
+      case 3: // 'amp'
+        if (source.charCodeAt(start) === CharacterCodes.a && 
+            source.charCodeAt(start + 1) === CharacterCodes.m && 
+            source.charCodeAt(start + 2) === CharacterCodes.p) return '&';
+        return null;
+      
+      case 4: // 'quot', 'apos', 'nbsp'
+        if (source.charCodeAt(start) === CharacterCodes.q && 
+            source.charCodeAt(start + 1) === CharacterCodes.u && 
+            source.charCodeAt(start + 2) === CharacterCodes.o && 
+            source.charCodeAt(start + 3) === CharacterCodes.t) return '"';
+            
+        if (source.charCodeAt(start) === CharacterCodes.a && 
+            source.charCodeAt(start + 1) === CharacterCodes.p && 
+            source.charCodeAt(start + 2) === CharacterCodes.o && 
+            source.charCodeAt(start + 3) === CharacterCodes.s) return "'";
+            
+        if (source.charCodeAt(start) === CharacterCodes.n && 
+            source.charCodeAt(start + 1) === CharacterCodes.b && 
+            source.charCodeAt(start + 2) === CharacterCodes.s && 
+            source.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
+            
+        return null;
+        
+      default:
+        return null;
     }
   }
 
@@ -1140,9 +1377,8 @@ export function createScanner(): Scanner {
       return false;
     }
 
-    // Check if it's a known entity
-    const entityName = source.substring(nameStart, pos);
-    if (isValidEntityName(entityName)) {
+    // Check if it's a known entity by comparing spans directly
+    if (isValidEntityNameFromSpan(nameStart, pos)) {
       emitToken(SyntaxKind.HtmlEntity, start, pos + 1);
       return true;
     }
@@ -1326,6 +1562,44 @@ export function createScanner(): Scanner {
     return NAMED_ENTITIES.has(name);
   }
 
+  // Optimized version that works directly on source span
+  function isValidEntityNameFromSpan(start: number, end: number): boolean {
+    const length = end - start;
+    
+    // Check each known entity by length and character comparison
+    switch (length) {
+      case 2: // 'lt', 'gt'
+        return (source.charCodeAt(start) === CharacterCodes.l && source.charCodeAt(start + 1) === CharacterCodes.t) ||
+               (source.charCodeAt(start) === CharacterCodes.g && source.charCodeAt(start + 1) === CharacterCodes.t);
+      
+      case 3: // 'amp'
+        return source.charCodeAt(start) === CharacterCodes.a && 
+               source.charCodeAt(start + 1) === CharacterCodes.m && 
+               source.charCodeAt(start + 2) === CharacterCodes.p;
+      
+      case 4: // 'quot', 'apos', 'nbsp'
+        if (source.charCodeAt(start) === CharacterCodes.q && 
+            source.charCodeAt(start + 1) === CharacterCodes.u && 
+            source.charCodeAt(start + 2) === CharacterCodes.o && 
+            source.charCodeAt(start + 3) === CharacterCodes.t) return true;
+            
+        if (source.charCodeAt(start) === CharacterCodes.a && 
+            source.charCodeAt(start + 1) === CharacterCodes.p && 
+            source.charCodeAt(start + 2) === CharacterCodes.o && 
+            source.charCodeAt(start + 3) === CharacterCodes.s) return true;
+            
+        if (source.charCodeAt(start) === CharacterCodes.n && 
+            source.charCodeAt(start + 1) === CharacterCodes.b && 
+            source.charCodeAt(start + 2) === CharacterCodes.s && 
+            source.charCodeAt(start + 3) === CharacterCodes.p) return true;
+            
+        return false;
+        
+      default:
+        return false;
+    }
+  }
+
   function isLetter(ch: number): boolean {
     return (ch >= CharacterCodes.A && ch <= CharacterCodes.Z) ||
       (ch >= CharacterCodes.a && ch <= CharacterCodes.z);
@@ -1359,8 +1633,6 @@ export function createScanner(): Scanner {
           break;
         }
       }
-      // DEBUG
-      // console.error(`[DBG] HtmlAttributeValue ${valStart}-${p} -> "${source.substring(valStart,p)}"`);
     } else {
       // Regular text scanning
       while (textEnd < end) {
@@ -1377,8 +1649,6 @@ export function createScanner(): Scanner {
           ch === CharacterCodes.ampersand ||
           ch === CharacterCodes.equals) {
           break;
-          // DEBUG
-          // console.error(`[DBG] HtmlAttributeValue(unquoted) ${valStart}-${p} -> "${source.substring(valStart,p)}"`);
         }
 
         // Special handling for < - only break if it starts a valid HTML construct
