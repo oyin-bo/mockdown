@@ -193,13 +193,20 @@ export function createScanner(): Scanner {
   let currentIndentLevel = 0;
   let lastBlankLinePos = -1;
 
+  // Phase 0.1: Unified Span Buffer Infrastructure
+  // Reusable span buffer for both normalization and cross-line accumulation
+  let spanBuffer: number[] = [];           // Reusable array: [start1, len1, start2, len2, ...]
+  let spanCount: number = 0;               // Number of text spans in buffer
+  let pendingStringStart: number = -1;     // Start position of spanning token (-1 = none)
+  let pendingStringFlags: TokenFlags = TokenFlags.None; // Original token context flags
+
   /**
    * Helper functions reused from existing scanner
    */
 
   function updatePosition(newPos: number): void {
     while (pos < newPos) {
-      const ch = source.charCodeAt(pos);
+  const ch = source.charCodeAt(pos); // Read character at current position
       if (isLineBreak(ch)) {
         if (ch === CharacterCodes.carriageReturn &&
           pos + 1 < end &&
@@ -253,8 +260,288 @@ export function createScanner(): Scanner {
   }
 
   /**
-   * Single-pass string processing that returns either a clean substring or normalized string
-   * Optimized for the common case where no normalization is needed
+   * Phase 0.1: Unified Span Buffer Operations
+   * Core operations for both normalization and cross-line accumulation
+   */
+
+  function addSpanToPending(start: number, length: number): void {
+    // Ensure buffer capacity (grow but never shrink)
+    const neededSlots = (spanCount + 1) * 2;
+    if (spanBuffer.length < neededSlots) {
+      // Grow by doubling (amortized allocation)
+      spanBuffer.length = Math.max(neededSlots, spanBuffer.length * 2);
+    }
+    
+    spanBuffer[spanCount * 2] = start;
+    spanBuffer[spanCount * 2 + 1] = length;
+    spanCount++;
+  }
+
+  function materializePendingString(): string {
+    if (spanCount === 0) return '';
+    if (spanCount === 1) {
+      // Single span - direct substring (common case, same as current fast path)
+      const start = spanBuffer[0];
+      const length = spanBuffer[1];
+      return source.substr(start, length);
+    }
+    
+    // Multiple spans - join with spaces (handles both normalization AND line joining)
+    const parts: string[] = [];
+    for (let i = 0; i < spanCount; i++) {
+      const start = spanBuffer[i * 2];
+      const length = spanBuffer[i * 2 + 1];
+      if (i > 0) parts.push(' '); // Implied space between ALL spans
+      
+      // Apply normalization to each span individually
+      const spanText = processStringTokenLegacy(start, start + length);
+      parts.push(spanText);
+    }
+    return parts.join('');
+  }
+
+  function clearPendingString(): void {
+    spanCount = 0; // Don't shrink array - reuse it
+    pendingStringStart = -1;
+    pendingStringFlags = TokenFlags.None;
+  }
+
+  function startPendingString(start: number, flags: TokenFlags): void {
+    pendingStringStart = start;
+    pendingStringFlags = flags;
+    spanCount = 0; // Reset span count for new token
+  }
+
+  /**
+   * Unified string processing using span buffer approach.
+   * For Phase 0.1, maintains backward compatibility by calling existing logic.
+   */
+  function processStringTokenWithSpans(start: number, endPos: number): string {
+    // For Phase 0.1, just use the existing logic to maintain compatibility
+    // The span buffer infrastructure is ready for Phase 0.2
+    return processStringTokenLegacy(start, endPos);
+  }
+
+  /**
+   * Legacy string processing function (original implementation)
+   */
+  function processStringTokenLegacy(start: number, endPos: number): string {
+    // Fast path for very short strings (single-char only). Keep two-char runs
+    // going through the normal normalization path so that two-space runs get
+    // collapsed to a single space as expected by tests.
+    const length = endPos - start;
+    if (length <= 1) {
+      return source.substring(start, endPos);
+    }
+
+    // First pass - check if normalization is needed at all
+    let needsNormalization = false;
+    let hasTrailingSpace = false;
+
+    // If the substring contains only spaces/tabs, either preserve or normalize
+    let onlyWhitespace = true;
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+      if (ch !== CharacterCodes.space && ch !== CharacterCodes.tab) {
+        onlyWhitespace = false;
+        break;
+      }
+    }
+    if (onlyWhitespace) {
+      // Normalize any whitespace-only run to a single space for consistent
+      // inline formatting behavior. Do not return an empty string for
+      // whitespace-only inputs.
+      return ' ';
+    }
+
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+      if (ch === CharacterCodes.tab) {
+        needsNormalization = true;
+        break;
+      }
+      if (ch === CharacterCodes.space) {
+        // Check for multiple consecutive spaces
+        if (i + 1 < endPos && source.charCodeAt(i + 1) === CharacterCodes.space) {
+          needsNormalization = true;
+          break;
+        }
+        // Check for trailing space
+        if (i === endPos - 1) {
+          hasTrailingSpace = true;
+        }
+      }
+    }
+
+    // If no normalization needed and no trailing space, return clean substring
+    if (!needsNormalization && !hasTrailingSpace) {
+      return source.substring(start, endPos);
+    }
+
+    // If only trailing space needs to be handled, preserve it for inline content 
+    if (!needsNormalization && hasTrailingSpace) {
+      return source.substring(start, endPos); // Keep the trailing space
+    }
+
+    // Need normalization - build result with array
+    let result: string[] = [];
+    let lastCleanStart = start;
+    let inSpaceRun = false;
+
+    for (let i = start; i < endPos; i++) {
+      const ch = source.charCodeAt(i);
+
+      if (ch === CharacterCodes.tab || (ch === CharacterCodes.space && inSpaceRun)) {
+        // Need to normalize - flush clean content up to this point
+        if (i > lastCleanStart) {
+          result.push(source.substring(lastCleanStart, i));
+        }
+
+        // Add single space if not already in a space run
+        if (!inSpaceRun) {
+          result.push(' ');
+          inSpaceRun = true;
+        }
+
+        // Mark next clean start after this character
+        lastCleanStart = i + 1;
+      } else if (ch === CharacterCodes.space) {
+        // Single space - mark that we're in a space run but don't process yet
+        inSpaceRun = true;
+      } else {
+        // Regular character - if we were in a space run, it's over
+        if (inSpaceRun) {
+          // Include the space(s) in the clean span
+          inSpaceRun = false;
+        }
+      }
+    }
+
+    // Add any remaining clean content
+    if (lastCleanStart < endPos) {
+      result.push(source.substring(lastCleanStart, endPos));
+    }
+
+    // Join result and build final normalized string
+    const joined = result.join('');
+
+    // If the original substring was only whitespace we returned early above.
+    // For normalized inline content, trim by default but preserve a single
+    // leading/trailing space when the original text had whitespace that
+    // bordered a neighboring non-whitespace token. This keeps separation
+    // between adjacent elements (e.g. emphasis tokens and text).
+
+    // Detect original leading/trailing whitespace in the raw slice
+    const originalHasLeadingWhitespace = start < endPos &&
+      (source.charCodeAt(start) === CharacterCodes.space || source.charCodeAt(start) === CharacterCodes.tab);
+    const originalHasTrailingWhitespace = endPos - 1 >= start &&
+      (source.charCodeAt(endPos - 1) === CharacterCodes.space || source.charCodeAt(endPos - 1) === CharacterCodes.tab);
+
+    let preserveLeft = false;
+    let preserveRight = false;
+
+    // Preserve left whitespace only when there's a non-whitespace character immediately before
+    if (originalHasLeadingWhitespace && start > 0) {
+      const prev = source.charCodeAt(start - 1);
+      if (!isWhiteSpaceSingleLine(prev) && !isLineBreak(prev)) {
+        preserveLeft = true;
+      }
+    }
+
+    // Preserve right whitespace only when there's a non-whitespace character immediately after
+    if (originalHasTrailingWhitespace && endPos < end) {
+      const next = source.charCodeAt(endPos);
+      if (!isWhiteSpaceSingleLine(next) && !isLineBreak(next)) {
+        preserveRight = true;
+      }
+    }
+
+    // Default normalized content (trimmed)
+    let normalized = joined.trim();
+
+    if (preserveLeft) normalized = ' ' + normalized;
+    if (preserveRight) normalized = normalized + ' ';
+
+    return normalized;
+  }
+
+  /**
+   * Skip whitespace characters until we hit non-whitespace or endPos
+   */
+  function skipWhitespaceUntil(start: number, endPos: number): number {
+    let pos = start;
+    while (pos < endPos && isWhiteSpaceSingleLine(source.charCodeAt(pos))) {
+      pos++;
+    }
+    return pos;
+  }
+
+  /**
+   * Phase 0.2: Cross-Line Integration
+   * Determines if a StringLiteral should continue to the next line
+   */
+  function shouldContinueStringLiteral(lineFlags: LineClassification): boolean {
+    // Terminate on blank lines
+    if (lineFlags & LineClassification.BLANK_LINE) return false;
+    
+    // Terminate on structural block elements
+    if (lineFlags & (
+      LineClassification.ATX_HEADING |
+      LineClassification.THEMATIC_BREAK |
+      LineClassification.FENCED_CODE_OPEN |
+      LineClassification.BLOCKQUOTE_MARKER |
+      LineClassification.LIST_UNORDERED_MARKER |
+      LineClassification.LIST_ORDERED_MARKER |
+      LineClassification.INDENTED_CODE
+    )) return false;
+    
+    // Continue on paragraph-like content
+    if (lineFlags & LineClassification.PARAGRAPH_PLAIN) return true;
+    
+    // Default: terminate (conservative)
+    return false;
+  }
+
+  /**
+   * Emit accumulated cross-line StringLiteral token
+   */
+  function emitAccumulatedStringLiteral(): void {
+    if (pendingStringStart < 0 || spanCount === 0) return;
+
+    // Compute end position from last span so we advance the scanner correctly
+    const lastSpanIndex = spanCount - 1;
+    const lastSpanStart = spanBuffer[lastSpanIndex * 2];
+    const lastSpanLen = spanBuffer[lastSpanIndex * 2 + 1];
+    const endPos = lastSpanStart + lastSpanLen;
+
+    token = SyntaxKind.StringLiteral;
+    tokenText = materializePendingString(); // Unified materialization for both cases
+    tokenFlags = pendingStringFlags;
+    offsetNext = endPos; // Token ends at end of accumulated spans
+
+    // Add context-based flags from when the token was started
+    if (pendingStringFlags & TokenFlags.PrecedingLineBreak) {
+      tokenFlags |= TokenFlags.PrecedingLineBreak;
+    }
+    if (pendingStringFlags & TokenFlags.IsAtLineStart) {
+      tokenFlags |= TokenFlags.IsAtLineStart;
+    }
+
+    // Update position tracking to the end of the accumulated spans
+    updatePosition(endPos);
+    pos = endPos;
+
+    // Update paragraph state
+    if (tokenText.length > 0) {
+      contextFlags |= ContextFlags.InParagraph;
+    }
+
+    // Clear pending state after emission
+    clearPendingString();
+  }
+
+  /**
+   * Legacy function maintained for backward compatibility during transition
    */
   function processStringToken(start: number, endPos: number): string {
     // Fast path for very short strings (single-char only). Keep two-char runs
@@ -872,8 +1159,8 @@ export function createScanner(): Scanner {
   function emitStringLiteralToken(start: number, endPos: number, flags: TokenFlags = TokenFlags.None): void {
     token = SyntaxKind.StringLiteral;
 
-    // Single-pass string processing - eliminates double scanning
-    tokenText = processStringToken(start, endPos);
+    // Use unified span buffer approach for string processing to handle cross-line literals
+    tokenText = processStringTokenWithSpans(start, endPos);
 
     tokenFlags = flags;
     offsetNext = endPos;
@@ -1704,12 +1991,64 @@ export function createScanner(): Scanner {
         }
       }
 
-      // Always use normalized text for StringLiteral tokens regardless of position
-      // String manipulation only happens at token emission time
-      emitStringLiteralToken(start, textEnd, flags);
+      // Phase 0.2: When scanning reaches the end of a line, we may want to
+      // begin cross-line accumulation, but only if the following line looks
+      // like a paragraph continuation. Otherwise emit the single-line token
+      // immediately to preserve existing behavior for single-line inputs.
+      if (scannedToLineEnd) {
+        // Determine newline length (CRLF vs LF) so we can locate next line start
+        let nlLen = 0;
+        if (textEnd < end) {
+          const ch = source.charCodeAt(textEnd);
+          if (ch === CharacterCodes.carriageReturn) {
+            if (textEnd + 1 < end && source.charCodeAt(textEnd + 1) === CharacterCodes.lineFeed) nlLen = 2; else nlLen = 1;
+          } else if (isLineBreak(ch)) {
+            nlLen = 1;
+          }
+        }
 
-      // Reset line start flag after emitting text
-      contextFlags &= ~ContextFlags.AtLineStart;
+        const nextLineStart = Math.min(end, textEnd + nlLen);
+
+        // If there's more content after this line, classify the next line to
+        // decide whether to continue the StringLiteral across lines.
+        if (nextLineStart < end) {
+          const nextLineFlags = classifyLine(nextLineStart);
+          if (shouldContinueStringLiteral(nextLineFlags)) {
+            // Start pending spanning token with the context flags captured here
+            startPendingString(start, flags);
+
+            // Add the scanned segment into the span buffer for later materialization
+            scanTextSegmentsIntoSpansForCrossLine(start, textEnd);
+
+            // Advance scanner position to the start of the next line (consume newline)
+            updatePosition(nextLineStart);
+            pos = nextLineStart;
+
+            // At this point the next scan() will classify the new line and
+            // either continue accumulation or emit the accumulated token.
+            return;
+          }
+        }
+
+        // No continuation - emit single-line token as before
+        emitStringLiteralToken(start, textEnd, flags);
+        contextFlags &= ~ContextFlags.AtLineStart;
+      } else {
+        // Hit special character, EOF, or forced termination — emit as usual
+        emitStringLiteralToken(start, textEnd, flags);
+        contextFlags &= ~ContextFlags.AtLineStart;
+      }
+    }
+  }
+
+  /**
+   * Simple version for cross-line scanning that adds text segments to span buffer
+   */
+  function scanTextSegmentsIntoSpansForCrossLine(start: number, endPos: number): void {
+    // For Phase 0.2, simply add the raw text segment
+    // The normalization will happen in materializePendingString()
+    if (endPos > start) {
+      addSpanToPending(start, endPos - start);
     }
   }
 
@@ -2135,6 +2474,11 @@ export function createScanner(): Scanner {
    */
   function scanImpl(): void {
     if (pos >= end) {
+      // Emit any pending StringLiteral before EOF
+      if (pendingStringStart >= 0) {
+        emitAccumulatedStringLiteral();
+        return;
+      }
       // Don't emit another EOF if we are already at the end.
       if (token !== SyntaxKind.EndOfFileToken) {
         emitToken(SyntaxKind.EndOfFileToken, pos, pos);
@@ -2145,6 +2489,16 @@ export function createScanner(): Scanner {
     // If at the start of a line, classify it first.
     if (contextFlags & ContextFlags.AtLineStart) {
       currentLineFlags = classifyLine(pos);
+      
+      // Phase 0.2: Check continuation decision
+      if (pendingStringStart >= 0) {
+        if (!shouldContinueStringLiteral(currentLineFlags)) {
+          emitAccumulatedStringLiteral();
+          return; // Let next scan() call process the new line normally
+        }
+        // Continue accumulation - proceed to scanCurrentLine()
+      }
+      
       // Only reset list marker flag if we're actually at the start of a new line
       if (pos == lastLineStart) {
         listMarkerConsumed = false; // Reset list marker flag for new line
@@ -2766,6 +3120,11 @@ export function createScanner(): Scanner {
     contextFlags = ContextFlags.AtLineStart;
     currentIndentLevel = 0;
     lastBlankLinePos = -1;
+
+    // Reset span buffer state
+    spanCount = 0;
+    pendingStringStart = -1;
+    pendingStringFlags = TokenFlags.None;
 
     // Reset token fields
     token = SyntaxKind.Unknown;
