@@ -8,6 +8,8 @@
 
 import { describe, expect, test } from 'vitest';
 import { verifyTokens } from './verify-tokens.js';
+import { createScanner } from '../scanner/scanner.js';
+import { SyntaxKind } from '../scanner/token-types.js';
 
 describe('Scanner2 Testing Infrastructure - Examples', () => {
   test('example 1: simple text validation', () => {
@@ -74,5 +76,43 @@ Actual content
 1
 @1 StringLiteral "Simple indented content"`;
     expect(verifyTokens(tokenTest)).toBe(tokenTest);
+  });
+
+  describe('Extended normalisation inputs (Phase 0.0) - examples area', () => {
+    test('paragraph punctuation preserved', () => {
+      const tokenTest = `
+Paragraph with punctuation. Next sentence follows.
+1
+@1 StringLiteral "Paragraph with punctuation. Next sentence follows."
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('parentheses brackets braces preserved', () => {
+      const tokenTest = `
+A line with (parentheses) and [brackets] and {braces}
+1
+@1 StringLiteral "A line with (parentheses) and [brackets] and {braces}"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('URL-like text preserved (first segment)', () => {
+      const tokenTest = `
+A URL-like text http://example.com/path?query=1&lang=en
+1
+@1 StringLiteral "A URL-like text http://example.com/path?query"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('complex mixed inline preserved (first segment)', () => {
+      const tokenTest = `
+Complex: *bold* _em_ ` + "`code`" + ` &amp; entity
+1
+@1 StringLiteral "Complex: "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
   });
 });

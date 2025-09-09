@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { createScanner, type Scanner, type ScannerDebugState } from '../scanner/scanner.js';
 import { RollbackType, SyntaxKind, TokenFlags } from '../scanner/token-types.js';
+import { verifyTokens } from './verify-tokens.js';
 
 describe('Scanner2 Stage 1: Edge Cases', () => {
   let scanner: Scanner;
@@ -249,6 +250,87 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
     expect(debugState.column).toBe(1);
     expect(debugState.atLineStart).toBe(true);
     expect(debugState.currentToken).toBe(SyntaxKind.NewLineTrivia);
+  });
+
+  describe('Extended normalisation inputs (Phase 0.0) - edge cases', () => {
+    function firstStringLiteralFor(input: string) {
+      const scanner = createScanner();
+      scanner.initText(input);
+      while (scanner.token !== SyntaxKind.EndOfFileToken && scanner.token !== SyntaxKind.StringLiteral) scanner.scan();
+      return scanner.token === SyntaxKind.StringLiteral ? scanner.tokenText : '';
+    }
+
+    test('trailing two spaces for hard break preserved as trailing spaces', () => {
+      const tokenTest = `
+Trailing two spaces for hard break  
+1
+@1 StringLiteral "Trailing two spaces for hard break"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('single space followed by newline normalized', () => {
+      const tokenTest = `
+Single space followed by newline 
+1
+@1 StringLiteral "Single space followed by newline "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('only tabs normalized to single space or empty', () => {
+      const tokenTest = `
+Onlytabs\t\t\t
+1
+@1 StringLiteral "Onlytabs"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('mixed-leading tabs and spaces normalized', () => {
+      const tokenTest = `
+Mixed-leading tabs\t  and spaces  
+1
+@1 StringLiteral "Mixed-leading tabs and spaces"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('long run of whitespace collapses', () => {
+      const tokenTest = `
+Long run of whitespace:                    
+1
+@1 StringLiteral "Long run of whitespace:"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('tab at end trimmed', () => {
+      const tokenTest = `
+Tab at end\t
+1
+@1 StringLiteral "Tab at end"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('line with entity at end preserved', () => {
+      const tokenTest = `
+Line with entity at end &amp;
+1
+@1 StringLiteral "Line with entity at end "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('numeric and hex entities preserved', () => {
+      const tokenTest = `
+Line with numeric entity &#169; and hex &#x1F600;
+1
+@1 StringLiteral "Line with numeric entity "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
   });
 
   test('should handle rollback type parameter correctly', () => {

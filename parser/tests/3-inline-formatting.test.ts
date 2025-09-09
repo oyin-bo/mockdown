@@ -8,6 +8,8 @@
 
 import { describe, test, expect } from 'vitest';
 import { verifyTokens } from './verify-tokens.js';
+import { createScanner } from '../scanner/scanner.js';
+import { SyntaxKind } from '../scanner/token-types.js';
 
 describe('Stage 3: Inline Formatting', () => {
   describe('Basic token recognition', () => {
@@ -161,6 +163,80 @@ single~tilde
 Text\t\twith\t\ttrailing   
 1
 @1 StringLiteral "Text with trailing" PrecedingLineBreak|IsAtLineStart`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+  });
+
+  describe('Extended normalisation inputs (Phase 0.0) - inline formatting area', () => {
+    test('This is *emphasised* and **strong**', () => {
+      const tokenTest = `
+This is *emphasised* text and **strong** emphasis
+1
+@1 StringLiteral "This is "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('underscore emphasis and strong preserved', () => {
+      const tokenTest = `
+Underscore_emphasis_ and __strong__
+1
+@1 StringLiteral "Underscore_emphasis"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('inline code span preserved (first literal)', () => {
+      const tokenTest = `"` + `
+Inline ` + "`code span`" + ` with surrounding spaces
+1
+@1 StringLiteral "Inline "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('escaped asterisk preserved (first literal)', () => {
+      const tokenTest = `
+Escaped asterisk \\*not emphasis\\*
+1
+@1 StringLiteral "Escaped asterisk \\\\"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('html entities and punctuation (first literal)', () => {
+      const tokenTest = `
+HTML entity &copy; &hellip; &mdash;
+1
+@1 StringLiteral "HTML entity "
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('emoji sequences preserved', () => {
+      const tokenTest = `
+Emoji sequences: 😀😁😂
+1
+@1 StringLiteral "Emoji sequences: 😀😁😂"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('math symbols preserved', () => {
+      const tokenTest = `
+Mathematical symbols: ≤ ≥ ≈ ≡
+1
+@1 StringLiteral "Mathematical symbols: ≤ ≥ ≈ ≡"
+`;
+      expect(verifyTokens(tokenTest)).toBe(tokenTest);
+    });
+
+    test('percent sign and percent-encoded preserved', () => {
+      const tokenTest = `
+Percent % sign and percent-encoded %25
+1
+@1 StringLiteral "Percent % sign and percent-encoded %25"
+`;
       expect(verifyTokens(tokenTest)).toBe(tokenTest);
     });
   });
