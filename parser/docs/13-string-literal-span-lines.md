@@ -581,6 +581,17 @@ This section prescribes the Plan C big‑bang rollout: implement the unified spa
      - Edit `rollback(position: number, type: RollbackType)` to call `clearPendingString()` at the start. This prevents stale pending span state after parser rollbacks and is required before any larger change.
      - File/Function: `parser/scanner/scanner.ts` -> `rollback`
 
+  0.5) Immediate allocation-safety and stabilization (apply before big-bang)
+     - Rationale: the repository currently contains a partially-active span-buffer flow that can produce cross-line joins and, in places, creates temporary arrays during materialization. Before performing the full Plan C rollout, add an explicit, small safety step to either temporarily gate cross-line accumulation or fix the allocation hotspots so tests can be used as a reliable safety net.
+     - Actions (pick one safe option for an immediate preparatory PR):
+       - Option A (preferred short-term): Tighten `materializePendingString()` to avoid per-span temporary arrays by implementing a single-pass materialization that builds the final string without allocating a `parts: string[]` for each invocation (see guidance below). This preserves the active span path but removes the reckless allocation pattern that breaks the project's zero/low-allocation objectives.
+       - Option B (safer short-term): Add a conservative feature-flag or runtime guard (e.g., `spanBufferEnabled`) that defaults to `false` in CI/dev until Plan C completes. When disabled, `processStringTokenWithSpans()` should delegate to `processStringTokenLegacy()` as today. This prevents partial cross-line joins from happening in CI while allowing local testing of Plan C changes behind the flag.
+     - File/Functions: `parser/scanner/scanner.ts` -> `materializePendingString`, `processStringTokenWithSpans` (or a small runtime guard variable at top-level).
+     - Acceptance criteria for the preparatory PR:
+       - No new allocations from per-span temporary arrays in `materializePendingString()` (Option A), or
+       - Cross-line joining disabled by default and CI tests pass (Option B).
+       - Add a focused smoke test demonstrating no pending-span leaks after `rollback()`.
+
   1) Implement robust in-line segmentation into spans
      - Replace the stub `scanTextSegmentsIntoSpansForCrossLine(start,endPos)` with a full segmentation implementation that:
        - walks the scanned fragment, identifies meaningful text segments (non-whitespace runs),
@@ -596,6 +607,7 @@ This section prescribes the Plan C big‑bang rollout: implement the unified spa
        - preserve and apply `pendingStringFlags` (e.g. `PrecedingLineBreak`, `IsAtLineStart`, `Unterminated`).
      - Replace any call-sites that previously called the legacy normalizer path (where intended) so the unified path is exercised in all scanning contexts.
      - File/Function: `parser/scanner/scanner.ts` -> `processStringTokenWithSpans`
+  - Urgency note: because the repository already contains partial cross-line wiring, Step 2 must include immediate elimination of per-span temporary allocations (no per-span `string[]` allocations or repeated calls to `processStringTokenLegacy()` that allocate mini-arrays). Implement efficient materialization (see Step 0.5 guidance) before enabling the unified path globally.
 
   3) Integrate the unified scanning flow into `emitTextRun()` and scan loop
      - Ensure `emitTextRun()` uses `scanTextSegmentsIntoSpansForCrossLine()` to accumulate spans for the current fragment and sets `pos` correctly on line breaks, special chars and EOF.
@@ -669,3 +681,6 @@ This section prescribes the Plan C big‑bang rollout: implement the unified spa
 
 End of implementation log.
 
+# Notes to more fixes:
+
+* the logic inside processStringTokenWithSpans AGAIN uses memory allocation recklessly to create mini-arrays, which is against project policy and in breach of the plan

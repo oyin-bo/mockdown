@@ -6,6 +6,7 @@
 
 export interface SpanBuffer {
   addSpan(start: number, length: number): void;
+  addChar(ch: string): void;
   clear(): void;
   materialize(): string;
   fillDebugState(state: Partial<SpanBufferDebugState>): void;
@@ -23,6 +24,10 @@ export function createSpanBuffer({ source, delimiter }:
 
   let spans: number[] = [];
   let spanCount = 0;
+  // Registry for extraordinary single-character injections. Per-instance and
+  // deduplicated using indexOf/findIndex to avoid extra Map allocations on the
+  // hot path.
+  const extraordinaryChars: string[] = [];
 
   function addSpan(start: number, length: number): void {
     // Hot path: push two slots for the span. JS engines grow arrays efficiently
@@ -34,6 +39,23 @@ export function createSpanBuffer({ source, delimiter }:
     spanCount++;
   }
 
+  function addChar(ch: string): void {
+    if (spanCount >= MAX_SPANS)
+      throw new Error('SpanBuffer: exceeded maximum allowed spans');
+
+    let idx = extraordinaryChars.indexOf(ch);
+    if (idx < 0) {
+      idx = extraordinaryChars.length;
+      extraordinaryChars.push(ch);
+    }
+
+    // Encode extraordinary span: store negative start to mark extraordinary
+    // and keep the registry index in the second slot.
+    const encStart = -(idx + 1);
+    spans.push(encStart, idx);
+    spanCount++;
+  }
+
   function clear(): void {
     spanCount = 0;
     // Do not shrink backing - grow-only
@@ -41,31 +63,50 @@ export function createSpanBuffer({ source, delimiter }:
 
   function materialize(): string {
     if (spanCount === 0) return '';
+
+    // Fast path for single-span materialization (handle extraordinary too)
     if (spanCount === 1) {
-      const s = spans[0];
-      const l = spans[1];
-      return source.substring(s, s + l);
+      const start = spans[0];
+      const len = spans[1];
+      if (start >= 0) return source.substring(start, start + len);
+      return extraordinaryChars[len];
+    }
+
+    // Fast path for two normal spans only (most common case)
+    if (spanCount === 2 && spans[0] >= 0 && spans[2] >= 0) {
+      const start1 = spans[0];
+      const len1 = spans[1];
+      const start2 = spans[2];
+      const len2 = spans[3];
+      return source.substring(start1, start1 + len1) + delimiterChar +
+        source.substring(start2, start2 + len2);
     }
 
     // Reuse parts array
     stringParts.length = 0;
     for (let i = 0; i < spanCount; i++) {
-      const s = spans[i * 2];
-      const l = spans[i * 2 + 1];
-      stringParts.push(source.substring(s, s + l));
+      const start = spans[i * 2];
+      const len = spans[i * 2 + 1];
+      if (start >= 0) {
+        stringParts.push(source.substring(start, start + len));
+      } else {
+        stringParts.push(extraordinaryChars[len] ?? '');
+      }
     }
     // Join with delimiter
-    const joined = stringParts.join(delimiterChar);
-    return joined;
+    return stringParts.join(delimiterChar);
   }
 
   function fillDebugState(state: SpanBufferDebugState): void {
     state.spanCount = spanCount;
     state.spanCapacity = spans.length / 2;
+    state.extraordinaryCount = extraordinaryChars.length;
+    state.extraordinaryCapacity = extraordinaryChars.length;
   }
 
   return {
     addSpan,
+    addChar,
     clear,
     materialize,
     fillDebugState,
@@ -75,5 +116,7 @@ export function createSpanBuffer({ source, delimiter }:
 export interface SpanBufferDebugState {
   spanCount: number;
   spanCapacity: number;
+  extraordinaryCount: number;
+  extraordinaryCapacity: number;
 }
 
