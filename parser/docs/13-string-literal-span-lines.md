@@ -563,3 +563,58 @@ This approach **eliminates temporary allocations** for both normalization AND cr
 - **Reduced maintenance burden** through code unification
 
 The unified span buffer approach provides **both** cross-line functionality AND improved allocation efficiency for existing normalization, making it a win-win architectural change.
+
+
+# Further Implementation Log
+
+- Status summary
+  - Span buffer state and basic ops implemented: `spanBuffer`, `addSpanToPending()`, `materializePendingString()`, `clearPendingString()`.
+  - Continuation decision hooks implemented: `shouldContinueStringLiteral()` and integration points in `scanImpl()` and `emitTextRun()`.
+  - Emission of accumulated token implemented in `emitAccumulatedStringLiteral()`.
+  - Legacy normalizer `processStringTokenLegacy()` remains in use; `processStringTokenWithSpans()` currently forwards to legacy logic.
+
+- Outstanding work (concrete)
+  1. Implement in-line segmentation into spans. Replace the stub `scanTextSegmentsIntoSpansForCrossLine(start,endPos)` with logic that splits a scanned fragment into meaningful text segments (skip/collapse single-line whitespace, stop on special chars). File: `parser/scanner/scanner.ts` (function `scanTextSegmentsIntoSpansForCrossLine`).
+  2. Fully implement `processStringTokenWithSpans(start,endPos)` to use the span buffer for single-line normalization (or at least to materialize spans when present) instead of unconditionally calling `processStringTokenLegacy`.
+  3. Fix rollback semantics: clear pending span state in `rollback(position,type)` to avoid stale `pendingStringStart`/`spanCount` after parser rollbacks. File: `parser/scanner/scanner.ts`, function `rollback`.
+  4. Add unit tests that cover cross-line joining, termination rules, hard breaks, and rollback interactions. Tests live under `parser/tests/` per project conventions.
+  5. Run integration tests and benchmarks after changes. Verify no regressions in single-line normalization behavior.
+
+- Priority and immediate actions (apply now)
+  - HIGH: Edit `rollback()` to call `clearPendingString()` at start. Very small change; prevents correctness issues with rollbacks.
+    - Target: `parser/scanner/scanner.ts` -> `function rollback(position: number, type: RollbackType)`.
+  - HIGH: Implement `scanTextSegmentsIntoSpansForCrossLine()` segmentation logic. Reuse same special-char checks as `emitTextRun()` to know when to stop a segment.
+  - HIGH: Implement `processStringTokenWithSpans()` to adopt spans for single-line cases or to materialize spans when present.
+
+- Files and functions to edit (exact pointers)
+  - `parser/scanner/scanner.ts`
+    - `scanTextSegmentsIntoSpansForCrossLine(start: number, endPos: number)` (replace stub)
+    - `processStringTokenWithSpans(start: number, endPos: number)` (implement span-based path)
+    - `rollback(position: number, type: RollbackType)` (call `clearPendingString()`)
+    - `emitTextRun(start: number)` (already contains continuation decision; verify after segmentation change)
+    - `emitAccumulatedStringLiteral()` (already present; verify offset/flags correctness)
+
+- Tests to add (suggested names & cases)
+  - `parser/tests/5-crossline.test.ts` (or extend existing `5-crossline.test.ts`):
+    - Join across lines: "hello world\nthis is" => single `StringLiteral` text "hello world this is".
+    - Hard line break preserved: "hello  \nworld" => `StringLiteral` "hello", `HardLineBreak`, `StringLiteral` "world".
+    - Termination by ATX heading: "a\n# heading" => do not join 'a' with heading.
+    - Leading/trailing whitespace preservation across joins.
+    - Rollback scenario: emit pending accumulation, call `rollback()`, ensure no pending state remains and scanner can re-scan correctly.
+
+- Quick test/run commands
+  - Run unit tests: `npm test` (project `package.json` runs vitest for `parser/tests`).
+  - Run one file: `npx vitest run parser/tests/5-crossline.test.ts` (or the specific test file you add).
+
+- Notes and constraints
+  - Keep `processStringTokenLegacy()` untouched until tests pass. Use new span path guarded behind `processStringTokenWithSpans()` so roll-forward is incremental and reversible.
+  - Preserve existing flags: ensure `TokenFlags.PrecedingLineBreak` and `TokenFlags.IsAtLineStart` are carried from `pendingStringFlags` when materializing.
+  - Materialization must call `processStringTokenLegacy()` per-span as currently implemented in `materializePendingString()` to keep normalization behavior stable while moving to spans.
+
+- Follow-up tasks (after tests pass)
+  - Remove or minimize use of `processStringTokenLegacy()` once span path is fully validated.
+  - Add microbench harness to measure allocation profile and verify amortized zero-allocation behaviour.
+  - Audit large-file performance for pathological multi-line paragraphs.
+
+End of implementation log.
+
