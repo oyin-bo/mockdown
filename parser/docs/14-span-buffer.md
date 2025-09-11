@@ -112,3 +112,7 @@ Appendix: developer checklist when implementing
 - Implement the `parts` materializer using a module-level `stringParts: string[]` reused across calls.
 - Provide instrumentation hooks (tests) to assert that the backing arrays are reused between calls.
 - Ensure `clear()` leaves backing arrays intact.
+
+# Latter adjustments
+
+* Avoid manual growth doubling, rely on JS engine optimised push behaviour.
