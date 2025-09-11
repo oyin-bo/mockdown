@@ -21,7 +21,7 @@ export function createSpanBuffer({ source, delimiter }:
   // Backing storage: pairs of [start, length]
   const delimiterChar = delimiter ?? ' ';
 
-  let backing: number[] = [];
+  let spans: number[] = [];
   let spanCount = 0;
 
   function addSpan(start: number, length: number): void {
@@ -30,7 +30,7 @@ export function createSpanBuffer({ source, delimiter }:
     if (spanCount >= MAX_SPANS)
       throw new Error('SpanBuffer: exceeded maximum allowed spans');
 
-    backing.push(start, length);
+    spans.push(start, length);
     spanCount++;
   }
 
@@ -42,16 +42,16 @@ export function createSpanBuffer({ source, delimiter }:
   function materialize(): string {
     if (spanCount === 0) return '';
     if (spanCount === 1) {
-      const s = backing[0];
-      const l = backing[1];
+      const s = spans[0];
+      const l = spans[1];
       return source.substring(s, s + l);
     }
 
     // Reuse parts array
     stringParts.length = 0;
     for (let i = 0; i < spanCount; i++) {
-      const s = backing[i * 2];
-      const l = backing[i * 2 + 1];
+      const s = spans[i * 2];
+      const l = spans[i * 2 + 1];
       stringParts.push(source.substring(s, s + l));
     }
     // Join with delimiter
@@ -61,7 +61,7 @@ export function createSpanBuffer({ source, delimiter }:
 
   function fillDebugState(state: SpanBufferDebugState): void {
     state.spanCount = spanCount;
-    state.reservedSlots = backing.length;
+    state.spanCapacity = spans.length / 2;
   }
 
   return {
@@ -74,6 +74,6 @@ export function createSpanBuffer({ source, delimiter }:
 
 export interface SpanBufferDebugState {
   spanCount: number;
-  reservedSlots: number;
+  spanCapacity: number;
 }
 
