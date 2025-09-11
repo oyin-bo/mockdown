@@ -8,7 +8,7 @@ export interface SpanBuffer {
   addSpan(start: number, length: number): void;
   clear(): void;
   materialize(): string;
-  fillDebugState(state: SpanBufferDebugState): void;
+  fillDebugState(state: Partial<SpanBufferDebugState>): void;
 }
 
 const MAX_SPANS = 1 << 24; // safety cap (very large, 24 bit number)
