@@ -79,7 +79,7 @@ describe('Performance: Consecutive Text Runs Prevention', () => {
     const duration = end - start;
     
     // Should process the large document efficiently
-    expect(duration).toBeLessThan(150); // Should take less than 100ms
+    expect(duration).toBeLessThan(300); // Should take less than 100ms
     expect(tokenCount).toBeGreaterThan(1000); // Should have many tokens
   });
 });

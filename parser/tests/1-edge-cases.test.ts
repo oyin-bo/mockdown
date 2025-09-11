@@ -30,14 +30,11 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle only whitespace', () => {
-    scanner.initText('   \t   ');
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe(' ');
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    const tokenTest =
+      `   \t   ` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral " "`;
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should handle only newlines', () => {
@@ -120,56 +117,45 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle unicode characters', () => {
-    scanner.initText('Hello 世界\nBonjour 🌍');
+    const tokenTest =
+      `Hello 世界` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral "Hello 世界"` + '\n' +
+      `Bonjour 🌍` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral "Bonjour 🌍"`;
 
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Hello 世界');
-
-    scanner.scan(); // newline
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Bonjour 🌍');
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should handle line ending at EOF without newline', () => {
-    scanner.initText('Line 1\nLine 2 without newline');
+    const tokenTest =
+      `Line 1` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral "Line 1"` + '\n' +
+      `Line 2 without newline` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral "Line 2 without newline"`;
 
-    scanner.scan(); // Line 1
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
-
-    scanner.scan(); // newline
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-
-    scanner.scan(); // Line 2
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 2 without newline');
-
-    scanner.scan(); // EOF
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should handle multiple consecutive spaces and tabs', () => {
-    scanner.initText('  \t  \t  Text with\t\t\tspaces  \t  ');
+    const tokenTest =
+      `  \t  \t  Text with\t\t\tspaces  \t  ` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral "Text with spaces"`;
 
-    // Scanner now emits a single normalized StringLiteral for the whole run
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Text with spaces');
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should preserve exact whitespace in whitespace tokens', () => {
-    scanner.initText('\t  \t');
+    const tokenTest =
+      `\t  \t` + '\n' +
+      `1` + '\n' +
+      `@1 StringLiteral " "`;
 
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe(' '); // Normalization for whitespace tokens -> single space
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should handle rollback to various positions', () => {
@@ -259,13 +245,6 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   describe('Extended normalisation inputs (Phase 0.0) - edge cases', () => {
-    function firstStringLiteralFor(input: string) {
-      const scanner = createScanner();
-      scanner.initText(input);
-      while (scanner.token !== SyntaxKind.EndOfFileToken && scanner.token !== SyntaxKind.StringLiteral) scanner.scan();
-      return scanner.token === SyntaxKind.StringLiteral ? scanner.tokenText : '';
-    }
-
     test('trailing two spaces for hard break preserved as trailing spaces', () => {
       const tokenTest = `
 Trailing two spaces for hard break  
