@@ -206,7 +206,7 @@ export function createScanner(): Scanner {
 
   function updatePosition(newPos: number): void {
     while (pos < newPos) {
-  const ch = source.charCodeAt(pos); // Read character at current position
+      const ch = source.charCodeAt(pos); // Read character at current position
       if (isLineBreak(ch)) {
         if (ch === CharacterCodes.carriageReturn &&
           pos + 1 < end &&
@@ -271,7 +271,7 @@ export function createScanner(): Scanner {
       // Grow by doubling (amortized allocation)
       spanBuffer.length = Math.max(neededSlots, spanBuffer.length * 2);
     }
-    
+
     spanBuffer[spanCount * 2] = start;
     spanBuffer[spanCount * 2 + 1] = length;
     spanCount++;
@@ -285,14 +285,14 @@ export function createScanner(): Scanner {
       const length = spanBuffer[1];
       return source.substr(start, length);
     }
-    
+
     // Multiple spans - join with spaces (handles both normalization AND line joining)
     const parts: string[] = [];
     for (let i = 0; i < spanCount; i++) {
       const start = spanBuffer[i * 2];
       const length = spanBuffer[i * 2 + 1];
       if (i > 0) parts.push(' '); // Implied space between ALL spans
-      
+
       // Apply normalization to each span individually
       const spanText = processStringTokenLegacy(start, start + length);
       parts.push(spanText);
@@ -483,7 +483,7 @@ export function createScanner(): Scanner {
   function shouldContinueStringLiteral(lineFlags: LineClassification): boolean {
     // Terminate on blank lines
     if (lineFlags & LineClassification.BLANK_LINE) return false;
-    
+
     // Terminate on structural block elements
     if (lineFlags & (
       LineClassification.ATX_HEADING |
@@ -494,10 +494,10 @@ export function createScanner(): Scanner {
       LineClassification.LIST_ORDERED_MARKER |
       LineClassification.INDENTED_CODE
     )) return false;
-    
+
     // Continue on paragraph-like content
     if (lineFlags & LineClassification.PARAGRAPH_PLAIN) return true;
-    
+
     // Default: terminate (conservative)
     return false;
   }
@@ -805,16 +805,16 @@ export function createScanner(): Scanner {
     let result = '';
     let i = start;
     let runStart = start; // Start of current normal character run
-    
+
     while (i < end) {
       const ch = source.charCodeAt(i);
-      
+
       if (ch === CharacterCodes.ampersand) {
         // Slice any accumulated normal run before processing entity
         if (runStart < i) {
           result += source.substring(runStart, i);
         }
-        
+
         // Try entity decoding
         const entityResult = tryDecodeEntityFromSpan(i, end);
         if (entityResult) {
@@ -828,13 +828,13 @@ export function createScanner(): Scanner {
         runStart = i; // Reset run start after special processing
         continue;
       }
-      
+
       if (ch === CharacterCodes.percent) {
         // Slice any accumulated normal run before processing percent encoding
         if (runStart < i) {
           result += source.substring(runStart, i);
         }
-        
+
         // Percent-decoding: %HH
         if (i + 2 < end) {
           const h1 = source.charCodeAt(i + 1);
@@ -842,11 +842,11 @@ export function createScanner(): Scanner {
           if (isHexDigit(h1) && isHexDigit(h2)) {
             // Parse hex directly without substring
             const code = (h1 >= CharacterCodes._0 && h1 <= CharacterCodes._9 ? h1 - CharacterCodes._0 :
-                         h1 >= CharacterCodes.A && h1 <= CharacterCodes.F ? h1 - CharacterCodes.A + 10 :
-                         h1 - CharacterCodes.a + 10) * 16 +
-                        (h2 >= CharacterCodes._0 && h2 <= CharacterCodes._9 ? h2 - CharacterCodes._0 :
-                         h2 >= CharacterCodes.A && h2 <= CharacterCodes.F ? h2 - CharacterCodes.A + 10 :
-                         h2 - CharacterCodes.a + 10);
+              h1 >= CharacterCodes.A && h1 <= CharacterCodes.F ? h1 - CharacterCodes.A + 10 :
+                h1 - CharacterCodes.a + 10) * 16 +
+              (h2 >= CharacterCodes._0 && h2 <= CharacterCodes._9 ? h2 - CharacterCodes._0 :
+                h2 >= CharacterCodes.A && h2 <= CharacterCodes.F ? h2 - CharacterCodes.A + 10 :
+                  h2 - CharacterCodes.a + 10);
             result += String.fromCharCode(code);
             i += 3;
           } else {
@@ -862,14 +862,14 @@ export function createScanner(): Scanner {
         runStart = i; // Reset run start after special processing
         continue;
       }
-      
+
       // Handle whitespace normalization for unquoted values
       if (!quoted && (ch === CharacterCodes.tab || ch === CharacterCodes.space)) {
         // Slice any accumulated normal run before processing whitespace
         if (runStart < i) {
           result += source.substring(runStart, i);
         }
-        
+
         // Collapse whitespace: skip consecutive whitespace and add single space
         result += ' ';
         i++;
@@ -884,14 +884,14 @@ export function createScanner(): Scanner {
         runStart = i; // Reset run start after whitespace processing
         continue;
       }
-      
+
       // Handle newline normalization for quoted values
       if (quoted && ch === CharacterCodes.carriageReturn) {
         // Slice any accumulated normal run before processing newline
         if (runStart < i) {
           result += source.substring(runStart, i);
         }
-        
+
         // CR or CRLF -> LF
         result += '\n';
         i++;
@@ -901,23 +901,23 @@ export function createScanner(): Scanner {
         runStart = i; // Reset run start after newline processing
         continue;
       }
-      
+
       if (quoted && ch === CharacterCodes.lineFeed) {
         // Slice any accumulated normal run before processing newline
         if (runStart < i) {
           result += source.substring(runStart, i);
         }
-        
+
         result += '\n';
         i++;
         runStart = i; // Reset run start after newline processing
         continue;
       }
-      
+
       // Regular character - just advance, will be included in the next run slice
       i++;
     }
-    
+
     // Slice any remaining normal run at the end
     if (runStart < i) {
       result += source.substring(runStart, i);
@@ -927,7 +927,7 @@ export function createScanner(): Scanner {
     if (!quoted) {
       result = result.trim();
     }
-    
+
     return result;
   }
 
@@ -952,7 +952,7 @@ export function createScanner(): Scanner {
       if (i >= len || text.charCodeAt(i) !== CharacterCodes.semicolon) return null; // require ';'
       const digits = text.substring(digitsStart, i);
       i++; // consume ';'
-      
+
       // Parse the numeric value directly without substring
       let codePoint = 0;
       if (isHexNum) {
@@ -960,8 +960,8 @@ export function createScanner(): Scanner {
           const c = text.charCodeAt(j);
           codePoint = codePoint * 16 + (
             c >= CharacterCodes._0 && c <= CharacterCodes._9 ? c - CharacterCodes._0 :
-            c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
-            c - CharacterCodes.a + 10
+              c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
+                c - CharacterCodes.a + 10
           );
         }
       } else {
@@ -985,7 +985,7 @@ export function createScanner(): Scanner {
       }
       if (i === nameStart) return null;
       if (i >= len || text.charCodeAt(i) !== CharacterCodes.semicolon) return null;
-      
+
       // Use span-based comparison instead of substring
       const value = decodeNamedEntityFromSpan(text, nameStart, i);
       if (value == null) return null; // unknown -> literal
@@ -1013,7 +1013,7 @@ export function createScanner(): Scanner {
       }
       if (i === digitsStart) return null; // no digits
       if (i >= endIndex || source.charCodeAt(i) !== CharacterCodes.semicolon) return null; // require ';'
-      
+
       // Parse the numeric value directly without substring
       let codePoint = 0;
       if (isHexNum) {
@@ -1021,8 +1021,8 @@ export function createScanner(): Scanner {
           const c = source.charCodeAt(j);
           codePoint = codePoint * 16 + (
             c >= CharacterCodes._0 && c <= CharacterCodes._9 ? c - CharacterCodes._0 :
-            c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
-            c - CharacterCodes.a + 10
+              c >= CharacterCodes.A && c <= CharacterCodes.F ? c - CharacterCodes.A + 10 :
+                c - CharacterCodes.a + 10
           );
         }
       } else {
@@ -1030,7 +1030,7 @@ export function createScanner(): Scanner {
           codePoint = codePoint * 10 + (source.charCodeAt(j) - CharacterCodes._0);
         }
       }
-      
+
       i++; // consume ';'
       if (!Number.isFinite(codePoint)) return null;
       try {
@@ -1049,17 +1049,17 @@ export function createScanner(): Scanner {
           break;
         }
       }
-      
+
       if (i === nameStart || i >= endIndex || source.charCodeAt(i) !== CharacterCodes.semicolon) {
         return null;
       }
-      
+
       // Check if it's a known entity by comparing spans directly
       const decoded = decodeNamedEntityFromSourceSpan(nameStart, i);
       if (decoded !== null) {
         return { value: decoded, next: i + 1 }; // +1 for semicolon
       }
-      
+
       return null;
     }
   }
@@ -1079,38 +1079,38 @@ export function createScanner(): Scanner {
   // Optimized version that works on text span without substring
   function decodeNamedEntityFromSpan(text: string, start: number, end: number): string | null {
     const length = end - start;
-    
+
     // Check each known entity by length and character comparison
     switch (length) {
       case 2: // 'lt', 'gt'
         if (text.charCodeAt(start) === CharacterCodes.l && text.charCodeAt(start + 1) === CharacterCodes.t) return '<';
         if (text.charCodeAt(start) === CharacterCodes.g && text.charCodeAt(start + 1) === CharacterCodes.t) return '>';
         return null;
-      
+
       case 3: // 'amp'
-        if (text.charCodeAt(start) === CharacterCodes.a && 
-            text.charCodeAt(start + 1) === CharacterCodes.m && 
-            text.charCodeAt(start + 2) === CharacterCodes.p) return '&';
+        if (text.charCodeAt(start) === CharacterCodes.a &&
+          text.charCodeAt(start + 1) === CharacterCodes.m &&
+          text.charCodeAt(start + 2) === CharacterCodes.p) return '&';
         return null;
-      
+
       case 4: // 'quot', 'apos', 'nbsp'
-        if (text.charCodeAt(start) === CharacterCodes.q && 
-            text.charCodeAt(start + 1) === CharacterCodes.u && 
-            text.charCodeAt(start + 2) === CharacterCodes.o && 
-            text.charCodeAt(start + 3) === CharacterCodes.t) return '"';
-            
-        if (text.charCodeAt(start) === CharacterCodes.a && 
-            text.charCodeAt(start + 1) === CharacterCodes.p && 
-            text.charCodeAt(start + 2) === CharacterCodes.o && 
-            text.charCodeAt(start + 3) === CharacterCodes.s) return "'";
-            
-        if (text.charCodeAt(start) === CharacterCodes.n && 
-            text.charCodeAt(start + 1) === CharacterCodes.b && 
-            text.charCodeAt(start + 2) === CharacterCodes.s && 
-            text.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
-            
+        if (text.charCodeAt(start) === CharacterCodes.q &&
+          text.charCodeAt(start + 1) === CharacterCodes.u &&
+          text.charCodeAt(start + 2) === CharacterCodes.o &&
+          text.charCodeAt(start + 3) === CharacterCodes.t) return '"';
+
+        if (text.charCodeAt(start) === CharacterCodes.a &&
+          text.charCodeAt(start + 1) === CharacterCodes.p &&
+          text.charCodeAt(start + 2) === CharacterCodes.o &&
+          text.charCodeAt(start + 3) === CharacterCodes.s) return "'";
+
+        if (text.charCodeAt(start) === CharacterCodes.n &&
+          text.charCodeAt(start + 1) === CharacterCodes.b &&
+          text.charCodeAt(start + 2) === CharacterCodes.s &&
+          text.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
+
         return null;
-        
+
       default:
         return null;
     }
@@ -1119,38 +1119,38 @@ export function createScanner(): Scanner {
   // Helper function for source span entity decoding  
   function decodeNamedEntityFromSourceSpan(start: number, end: number): string | null {
     const length = end - start;
-    
+
     // Check each known entity by length and character comparison
     switch (length) {
       case 2: // 'lt', 'gt'
         if (source.charCodeAt(start) === CharacterCodes.l && source.charCodeAt(start + 1) === CharacterCodes.t) return '<';
         if (source.charCodeAt(start) === CharacterCodes.g && source.charCodeAt(start + 1) === CharacterCodes.t) return '>';
         return null;
-      
+
       case 3: // 'amp'
-        if (source.charCodeAt(start) === CharacterCodes.a && 
-            source.charCodeAt(start + 1) === CharacterCodes.m && 
-            source.charCodeAt(start + 2) === CharacterCodes.p) return '&';
+        if (source.charCodeAt(start) === CharacterCodes.a &&
+          source.charCodeAt(start + 1) === CharacterCodes.m &&
+          source.charCodeAt(start + 2) === CharacterCodes.p) return '&';
         return null;
-      
+
       case 4: // 'quot', 'apos', 'nbsp'
-        if (source.charCodeAt(start) === CharacterCodes.q && 
-            source.charCodeAt(start + 1) === CharacterCodes.u && 
-            source.charCodeAt(start + 2) === CharacterCodes.o && 
-            source.charCodeAt(start + 3) === CharacterCodes.t) return '"';
-            
-        if (source.charCodeAt(start) === CharacterCodes.a && 
-            source.charCodeAt(start + 1) === CharacterCodes.p && 
-            source.charCodeAt(start + 2) === CharacterCodes.o && 
-            source.charCodeAt(start + 3) === CharacterCodes.s) return "'";
-            
-        if (source.charCodeAt(start) === CharacterCodes.n && 
-            source.charCodeAt(start + 1) === CharacterCodes.b && 
-            source.charCodeAt(start + 2) === CharacterCodes.s && 
-            source.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
-            
+        if (source.charCodeAt(start) === CharacterCodes.q &&
+          source.charCodeAt(start + 1) === CharacterCodes.u &&
+          source.charCodeAt(start + 2) === CharacterCodes.o &&
+          source.charCodeAt(start + 3) === CharacterCodes.t) return '"';
+
+        if (source.charCodeAt(start) === CharacterCodes.a &&
+          source.charCodeAt(start + 1) === CharacterCodes.p &&
+          source.charCodeAt(start + 2) === CharacterCodes.o &&
+          source.charCodeAt(start + 3) === CharacterCodes.s) return "'";
+
+        if (source.charCodeAt(start) === CharacterCodes.n &&
+          source.charCodeAt(start + 1) === CharacterCodes.b &&
+          source.charCodeAt(start + 2) === CharacterCodes.s &&
+          source.charCodeAt(start + 3) === CharacterCodes.p) return '\u00A0';
+
         return null;
-        
+
       default:
         return null;
     }
@@ -1852,36 +1852,36 @@ export function createScanner(): Scanner {
   // Optimized version that works directly on source span
   function isValidEntityNameFromSpan(start: number, end: number): boolean {
     const length = end - start;
-    
+
     // Check each known entity by length and character comparison
     switch (length) {
       case 2: // 'lt', 'gt'
         return (source.charCodeAt(start) === CharacterCodes.l && source.charCodeAt(start + 1) === CharacterCodes.t) ||
-               (source.charCodeAt(start) === CharacterCodes.g && source.charCodeAt(start + 1) === CharacterCodes.t);
-      
+          (source.charCodeAt(start) === CharacterCodes.g && source.charCodeAt(start + 1) === CharacterCodes.t);
+
       case 3: // 'amp'
-        return source.charCodeAt(start) === CharacterCodes.a && 
-               source.charCodeAt(start + 1) === CharacterCodes.m && 
-               source.charCodeAt(start + 2) === CharacterCodes.p;
-      
+        return source.charCodeAt(start) === CharacterCodes.a &&
+          source.charCodeAt(start + 1) === CharacterCodes.m &&
+          source.charCodeAt(start + 2) === CharacterCodes.p;
+
       case 4: // 'quot', 'apos', 'nbsp'
-        if (source.charCodeAt(start) === CharacterCodes.q && 
-            source.charCodeAt(start + 1) === CharacterCodes.u && 
-            source.charCodeAt(start + 2) === CharacterCodes.o && 
-            source.charCodeAt(start + 3) === CharacterCodes.t) return true;
-            
-        if (source.charCodeAt(start) === CharacterCodes.a && 
-            source.charCodeAt(start + 1) === CharacterCodes.p && 
-            source.charCodeAt(start + 2) === CharacterCodes.o && 
-            source.charCodeAt(start + 3) === CharacterCodes.s) return true;
-            
-        if (source.charCodeAt(start) === CharacterCodes.n && 
-            source.charCodeAt(start + 1) === CharacterCodes.b && 
-            source.charCodeAt(start + 2) === CharacterCodes.s && 
-            source.charCodeAt(start + 3) === CharacterCodes.p) return true;
-            
+        if (source.charCodeAt(start) === CharacterCodes.q &&
+          source.charCodeAt(start + 1) === CharacterCodes.u &&
+          source.charCodeAt(start + 2) === CharacterCodes.o &&
+          source.charCodeAt(start + 3) === CharacterCodes.t) return true;
+
+        if (source.charCodeAt(start) === CharacterCodes.a &&
+          source.charCodeAt(start + 1) === CharacterCodes.p &&
+          source.charCodeAt(start + 2) === CharacterCodes.o &&
+          source.charCodeAt(start + 3) === CharacterCodes.s) return true;
+
+        if (source.charCodeAt(start) === CharacterCodes.n &&
+          source.charCodeAt(start + 1) === CharacterCodes.b &&
+          source.charCodeAt(start + 2) === CharacterCodes.s &&
+          source.charCodeAt(start + 3) === CharacterCodes.p) return true;
+
         return false;
-        
+
       default:
         return false;
     }
@@ -2011,12 +2011,40 @@ export function createScanner(): Scanner {
 
         // If there's more content after this line, classify the next line to
         // decide whether to continue the StringLiteral across lines.
-  // Do not start cross-line accumulation here; always emit single-line token
-  // to preserve existing scanner behavior and test expectations.
-  emitStringLiteralToken(start, textEnd, flags);
+        if (nextLineStart < end) {
+          const nextLineFlags = classifyLine(nextLineStart);
+          if (shouldContinueStringLiteral(nextLineFlags)) {
+            // Begin or continue accumulation: add current segment to span buffer
+            if (pendingStringStart < 0) startPendingString(start, flags);
+            scanTextSegmentsIntoSpansForCrossLine(start, textEnd);
+
+            // Advance scanner position to start of next line (consume newline)
+            updatePosition(nextLineStart);
+            pos = nextLineStart;
+
+            // Do not emit a token now; continuation will proceed on next scan
+            return;
+          }
+        }
+
+        // Not continuing - if there's an existing pending accumulation, emit it first
+        if (pendingStringStart >= 0 && spanCount > 0) {
+          emitAccumulatedStringLiteral();
+          return;
+        }
+
+        // No continuation - emit single-line token
+        emitStringLiteralToken(start, textEnd, flags);
         contextFlags &= ~ContextFlags.AtLineStart;
       } else {
         // Hit special character, EOF, or forced termination — emit as usual
+        // If we have a pending accumulated multi-line token, emit it before
+        // emitting the current single-line fragment to preserve correctness.
+        if (pendingStringStart >= 0 && spanCount > 0) {
+          emitAccumulatedStringLiteral();
+          return;
+        }
+
         emitStringLiteralToken(start, textEnd, flags);
         contextFlags &= ~ContextFlags.AtLineStart;
       }
@@ -2504,14 +2532,14 @@ export function createScanner(): Scanner {
         }
       }
 
-        // Record progress sentinel
-  const posBefore = pos;
-  const oldOffsetNext = offsetNext;
+      // Record progress sentinel
+      const posBefore = pos;
+      const oldOffsetNext = offsetNext;
 
       // Delegate to the appropriate line-level scanner
       scanCurrentLine();
 
-      if (SCAN_DEBUG) console.log('[SCAN] after scanCurrentLine', { posBefore, pos, oldOffsetNext, offsetNext, token, tokenText: tokenText && tokenText.length > 50 ? tokenText.slice(0,50)+'...' : tokenText });
+      if (SCAN_DEBUG) console.log('[SCAN] after scanCurrentLine', { posBefore, pos, oldOffsetNext, offsetNext, token, tokenText: tokenText && tokenText.length > 50 ? tokenText.slice(0, 50) + '...' : tokenText });
 
       // If a token was emitted during scanCurrentLine()/emitters, return to caller
       if (offsetNext !== oldOffsetNext) {
