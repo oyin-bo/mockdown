@@ -228,28 +228,34 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
 
     // Initial state
     scanner.fillDebugState(debugState);
-    expect(debugState.pos).toBe(0);
-    expect(debugState.line).toBe(1);
-    expect(debugState.column).toBe(1);
-    expect(debugState.atLineStart).toBe(true);
-    expect(debugState.mode).toBe('Normal');
+    expect(debugState).toMatchObject({
+      pos: 0,
+      line: 1,
+      column: 1,
+      atLineStart: true,
+      mode: 'Normal'
+    });
 
     // After scanning first line
     scanner.scan();
     scanner.fillDebugState(debugState);
-    expect(debugState.pos).toBe(6);
-    expect(debugState.line).toBe(1);
-    expect(debugState.currentToken).toBe(SyntaxKind.StringLiteral);
-    expect(debugState.currentTokenText).toBe('Line 1');
+    expect(debugState).toMatchObject({
+      pos: 6,
+      line: 1,
+      currentToken: SyntaxKind.StringLiteral,
+      currentTokenText: 'Line 1'
+    });
 
     // After newline
     scanner.scan();
     scanner.fillDebugState(debugState);
-    expect(debugState.pos).toBe(7);
-    expect(debugState.line).toBe(2);
-    expect(debugState.column).toBe(1);
-    expect(debugState.atLineStart).toBe(true);
-    expect(debugState.currentToken).toBe(SyntaxKind.NewLineTrivia);
+    expect(debugState).toMatchObject({
+      pos: 7,
+      line: 2,
+      column: 1,
+      atLineStart: true,
+      currentToken: SyntaxKind.NewLineTrivia
+    });
   });
 
   describe('Extended normalisation inputs (Phase 0.0) - edge cases', () => {
