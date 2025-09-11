@@ -308,54 +308,29 @@ Unicode combining: e\u000301 and emoji 👍🏼
   });
 
   test('should handle complex multi-line text', () => {
-    const text = `First line of text
+    const tokenTest = `
+First line of text
+1
+@1 "First line of text Second line with more content Third line here"
 Second line with more content
 Third line here
 
-Final line after blank`;
-
-    scanner.initText(text);
-
-    const tokens: { kind: SyntaxKind, text: string, flags: TokenFlags }[] = [];
-
-    while (scanner.token !== SyntaxKind.EndOfFileToken) {
-      scanner.scan();
-      if ((scanner.token as SyntaxKind.EndOfFileToken) !== SyntaxKind.EndOfFileToken) {
-        tokens.push({
-          kind: scanner.token,
-          text: scanner.tokenText,
-          flags: scanner.tokenFlags
-        });
-      }
-    }
-
-    // Should have text tokens, newline tokens, and blank line detection
-    expect(tokens.length).toBeGreaterThan(5); // Multiple lines and newlines
-
-    // Check that we have the expected token types
-    const textTokens = tokens.filter(t => t.kind === SyntaxKind.StringLiteral);
-    const newlineTokens = tokens.filter(t => t.kind === SyntaxKind.NewLineTrivia);
-    const blankLineTokens = tokens.filter(t => t.flags & TokenFlags.IsBlankLine);
-
-    expect(textTokens.length).toBe(4); // Four lines of text
-    expect(newlineTokens.length).toBe(4); // Four newlines
-    expect(blankLineTokens.length).toBe(1); // One blank line marker
+Final line after blank
+1
+@1 "Final line after blank"
+`;
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should set rollback flags appropriately', () => {
-    scanner.initText('Line 1\nLine 2');
+    const tokenTest = `
+Line 1
+1
+@1 "Line 1 Line 2"
+Line 2
+`;
 
-    // First line should have rollback capability (at line start)
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenFlags & TokenFlags.CanRollbackHere).toBeTruthy();
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
-
-    scanner.scan(); // newline
-    scanner.scan(); // second line
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenFlags & TokenFlags.CanRollbackHere).toBeTruthy();
-    expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
+    expect(verifyTokens(tokenTest)).toBe(tokenTest);
   });
 
   test('should handle setText with start and length parameters', () => {
@@ -363,14 +338,7 @@ Final line after blank`;
 
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 2');
+    expect(scanner.tokenText).toBe('Line 1 Line 2');
 
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
