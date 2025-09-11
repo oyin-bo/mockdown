@@ -81,4 +81,5 @@ These are considered hard constraints set out as the policy.
 * ESBuild tool is used for all builds and bundling.
 * No JavaScript output files are committed to the repository.
 * No TypeScript compilation to JavaScript is allowed.
+* This project relies on a test script in package.json for running tests
 

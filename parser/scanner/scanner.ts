@@ -3189,6 +3189,10 @@ export function createScanner(): Scanner {
 
   function rollback(position: number, type: RollbackType): void {
     // Simple rollback implementation for Stage 1
+    // Clear any pending span-buffer state to avoid stale pending accumulation
+    // after parser-initiated rollbacks. This is required before larger span
+    // changes are applied repository-wide.
+    clearPendingString();
     if (position < 0 || position > source.length) {
       throw new Error(`Invalid rollback position: ${position}`);
     }

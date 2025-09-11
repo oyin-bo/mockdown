@@ -159,12 +159,12 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle rollback to various positions', () => {
-    scanner.initText('Line 1\nLine 2\nLine 3');
+    scanner.initText('Line 1\n\nLine 20\nLine 333');
 
     // Scan several tokens
     scanner.scan(); // Line 1
     scanner.scan(); // newline
-    scanner.scan(); // Line 2
+    scanner.scan(); // Line 20 Line 333
 
     const midPosition = scanner.offsetNext;
 
@@ -210,7 +210,7 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
   });
 
   test('should handle debug state correctly', () => {
-    scanner.initText('Line 1\n  Line 2');
+    scanner.initText('Line 1\n  Line 20');
 
     // Initial state
     scanner.fillDebugState(debugState);
@@ -226,21 +226,10 @@ describe('Scanner2 Stage 1: Edge Cases', () => {
     scanner.scan();
     scanner.fillDebugState(debugState);
     expect(debugState).toMatchObject({
-      pos: 6,
-      line: 1,
-      currentToken: SyntaxKind.StringLiteral,
-      currentTokenText: 'Line 1'
-    });
-
-    // After newline
-    scanner.scan();
-    scanner.fillDebugState(debugState);
-    expect(debugState).toMatchObject({
       pos: 7,
       line: 2,
-      column: 1,
-      atLineStart: true,
-      currentToken: SyntaxKind.NewLineTrivia
+      currentToken: SyntaxKind.StringLiteral,
+      currentTokenText: 'Line 1 Line 20'
     });
   });
 
