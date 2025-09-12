@@ -116,3 +116,59 @@ Appendix: developer checklist when implementing
 # Latter adjustments
 
 * Avoid manual growth doubling, rely on JS engine optimised push behaviour.
+
+Extraordinary spans (special-character injection)
+-----------------------------------------------
+
+Use case: some decoding features (for example, percent-encoding, HTML entities, or other escape/unescape flows) need the ability to inject explicit single-character values that do not correspond to any contiguous slice of the original `source` string. To support these without complicating the scanner hot-path or changing the materialized output semantics, we introduce an "extraordinary span" encoding and small API addition.
+
+Encoding
+- An extraordinary span is encoded as the usual two-number pair in the backing `spans` array, but with the first number negative. The pair meaning is:
+	- start = -1 - registryIndex (i.e., store -(registryIndex + 1) so 0 becomes -1, 1 -> -2, etc.)
+	- length = registryIndex (an unsigned index into the extraordinary registry). The length slot is used only to hold the registry index and is ignored as a substring length.
+
+Rationale: using negative `start` values keeps the on-disk/array layout identical (still pairs of numbers) while making extraordinary spans efficiently distinguishable in the hot path with a single sign check.
+
+API change
+- Add a hot-path method `addChar(ch: string): void` to the `SpanBuffer` factory.
+- Semantics: `addChar` will deduplicate `ch` in a small internal `extraordinaryChars: string[]` registry. It finds an existing index with `findIndex` (O(n) expected tiny registry) and pushes `ch` only if not already present. Then it pushes the extraordinary span pair into `spans` encoded as described above.
+
+Materialization behaviour
+- During `materialize()` iterate spans as before. For each span:
+	- If `start >= 0` treat it as a normal substring span and extract from `source`.
+	- If `start < 0` compute `registryIndex = -1 - start` and look up `extraordinaryChars[registryIndex]` and push that single-character string into `stringParts` instead of a substring.
+
+Notes and constraints
+- The extraordinary registry is per-SpanBuffer instance (captured in the closure) and is not shared globally.
+- The registry is expected to remain very small because deduplication is applied; `findIndex` is acceptable and avoids an extra Map object allocation on the hot path.
+- `addChar(ch)` is a hot-path method but it only performs `findIndex` and array `push` in the uncommon path (new char). In most cases the char will already exist and only a couple of integer pushes are performed.
+- Keep `MAX_SPANS` checks unchanged; the extraordinary spans count toward the same limit.
+
+Call to action
+- When implementing the `SpanBuffer` in code, add `addChar(ch: string)` and a per-instance `extraordinaryChars: string[]` registry. Update `materialize()` to handle negative `start` encodings as shown above, and add unit tests that exercise:
+	- single extraordinary char materialization
+	- mixed normal and extraordinary spans
+	- deduplication behaviour (multiple identical added chars only stored once in the registry)
+	- capacity growth and clear/reuse semantics when extraordinary chars exist
+
+This extension keeps the hot-path minimal while providing a robust, easy-to-reason-about mechanism for injecting explicit characters into the final, materialized string.
+
+Merging adjacent spans optimization
+----------------------------------
+
+To reduce the number of spans produced for typical text (words separated by a single delimiter), the `addSpan` implementation may merge a newly appended normal span into the previous normal span when the substring between them equals the configured delimiter. This keeps the backing `spans` array compact (fewer, larger spans) in the common case where tokens are separated only by the delimiter (for example, single spaces).
+
+Rules:
+- Only merge when both the previous and the new span are normal spans (not extraordinary).
+- The substring between previousEnd and newStart must equal the configured `delimiter` (which may be the empty string). If `delimiter` is empty, adjacent spans are merged when they are contiguous.
+- Merging updates the previous span's length to cover the delimiter and the new span; no new slots are appended and `spanCount` is unchanged.
+
+Benefits:
+- Reduces memory churn and per-token bookkeeping for common text tokens.
+- Keeps `materialize()` work minimal: fewer substrings to produce and fewer array entries to join.
+
+Testing:
+- Add unit-tests that assert merging occurs for inputs like `"foo bar baz"` with delimiter `' '` and that `spanCapacity` reflects the merged count. Also test empty delimiter behavior.
+
+Implementation note:
+- This is a conservative optimization intended for normal spans only and does not attempt to merge across extraordinary spans or when flags would complicate delimiter semantics.
