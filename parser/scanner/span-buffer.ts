@@ -23,6 +23,8 @@ export function createSpanBuffer({ source, delimiter }:
   // Backing storage: pairs of [start, length]
   // Backing storage: pairs of [start, end) - end is exclusive
   const delimiterChar = delimiter ?? ' ';
+  if (delimiterChar.length > 1)
+    throw new Error('SpanBuffer: delimiter must be a single character or empty string');
 
   let spans: number[] = [];
   let spanCount = 0;
@@ -43,10 +45,8 @@ export function createSpanBuffer({ source, delimiter }:
     if (spanCount > 0) {
       const prevStart = spans[(spanCount - 1) * 2];
       const prevEnd = spans[(spanCount - 1) * 2 + 1];
-      if (prevStart >= 0 && start >= 0) {
-        const between = source.substring(prevEnd, start);
-        if (between === delimiterChar) {
-          // merge by extending previous end to include delimiter and new span
+      if (prevStart >= 0 && start === prevEnd + delimiterChar.length) {
+        if (!delimiterChar.length || delimiterChar.charCodeAt(0) === source.charCodeAt(prevEnd)) {
           spans[(spanCount - 1) * 2 + 1] = end;
           return;
         }
