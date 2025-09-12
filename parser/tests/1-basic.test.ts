@@ -54,22 +54,10 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   test('should handle line breaks', () => {
     scanner.initText('Line 1\nLine 2');
 
-    // First line
+    // In Markdown, consecutive text lines form a single paragraph
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
-    expect(scanner.offsetNext).toBe(6);
-
-    // Newline
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-    expect(scanner.tokenText).toBe('\n');
-    expect(scanner.offsetNext).toBe(7);
-
-    // Second line
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 2');
+    expect(scanner.tokenText).toBe('Line 1 Line 2');
     expect(scanner.tokenFlags & TokenFlags.IsAtLineStart).toBeTruthy();
     expect(scanner.offsetNext).toBe(13);
 
@@ -80,21 +68,14 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   test('should handle CRLF line breaks', () => {
     scanner.initText('Line 1\r\nLine 2');
 
-    // First line
+    // In Markdown, consecutive text lines form a single paragraph (regardless of line ending type)
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
+    expect(scanner.tokenText).toBe('Line 1 Line 2');
+    expect(scanner.offsetNext).toBe(15); // After consuming both lines
 
-    // CRLF newline
     scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-    expect(scanner.tokenText).toBe('\r\n');
-    expect(scanner.offsetNext).toBe(8);
-
-    // Second line
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 2');
+    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
   });
 
   test('should handle whitespace', () => {
@@ -108,26 +89,17 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
   test('should handle blank lines', () => {
     scanner.initText('Line 1\n\nLine 2');
 
-    // First line
+    // Blank lines separate paragraphs - should get two separate tokens
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
     expect(scanner.tokenText).toBe('Line 1');
 
-    // First newline
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-    expect(scanner.tokenText).toBe('\n');
-
-    // Blank line newline
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
-    expect(scanner.tokenText).toBe('\n');
-    expect(scanner.tokenFlags & TokenFlags.IsBlankLine).toBeTruthy();
-
-    // Second line
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
     expect(scanner.tokenText).toBe('Line 2');
+
+    scanner.scan();
+    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
   });
 
   test('should normalize whitespace within lines', () => {
@@ -147,30 +119,26 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     expect(debugState.column).toBe(1);
     expect(debugState.atLineStart).toBe(true);
 
-    scanner.scan(); // Line 1
+    // In Markdown, consecutive text lines form a single paragraph
+    scanner.scan(); // Should get entire paragraph: "Line 1 Line 2 Line 3"
+    expect(scanner.token).toBe(SyntaxKind.StringLiteral);
+    expect(scanner.tokenText).toBe('Line 1 Line 2 Line 3');
+    
     scanner.fillDebugState(debugState);
-    expect(debugState.pos).toBe(6);
-    expect(debugState.line).toBe(1);
+    expect(debugState.pos).toBe(20); // After consuming all three lines
+    expect(debugState.line).toBe(3);
 
-    scanner.scan(); // First newline
-    scanner.fillDebugState(debugState);
-    expect(debugState.pos).toBe(7);
-    expect(debugState.line).toBe(2);
-    expect(debugState.column).toBe(1);
-    expect(debugState.atLineStart).toBe(true);
+    scanner.scan(); // EOF
+    expect(scanner.token).toBe(SyntaxKind.EndOfFileToken);
   });
 
   test('should support rollback functionality', () => {
     scanner.initText('Line 1\nLine 2\nLine 3');
 
-    // Scan first line
+    // In Markdown, consecutive lines form one paragraph
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
-
-    // Scan newline
-    scanner.scan();
-    expect(scanner.token).toBe(SyntaxKind.NewLineTrivia);
+    expect(scanner.tokenText).toBe('Line 1 Line 2 Line 3');
 
     // Rollback to beginning
     scanner.rollback(0, 0 /* DocumentStart */);
@@ -182,10 +150,10 @@ describe('Scanner2 Stage 1: Text Lines + Whitespace/Newlines', () => {
     expect(debugState.column).toBe(1);
     expect(debugState.atLineStart).toBe(true);
 
-    // Should scan same content again
+    // Should scan same content again - same paragraph
     scanner.scan();
     expect(scanner.token).toBe(SyntaxKind.StringLiteral);
-    expect(scanner.tokenText).toBe('Line 1');
+    expect(scanner.tokenText).toBe('Line 1 Line 2 Line 3');
   });
 
   describe('Extended normalisation inputs (Phase 0.0)', () => {
@@ -326,7 +294,7 @@ Final line after blank
     const tokenTest = `
 Line 1
 1
-@1 "Line 1 Line 2"
+@1 StringLiteral "Line 1 Line 2"
 Line 2
 `;
 

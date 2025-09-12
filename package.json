@@ -10,7 +10,7 @@
   "scripts": {
     "build:parser": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js --format=cjs --platform=node",
     "build": "npm run build:parser",
-    "test": "vitest run parser/tests --exclude parser/docs"
+    "test": "vitest run"
   },
   "keywords": [
     "Mockdown",
