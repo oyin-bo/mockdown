@@ -62,25 +62,18 @@ describe('SpanBuffer', () => {
     const sb = createSpanBuffer({ source: 'repeat this sentence many times to grow backing' });
     const dbg = {};
 
-    let prevCapacity = 0;
     for (let i = 0; i < 16; i++) {
       sb.addSpan(i, i + 1);
       sb.fillDebugState(dbg);
       // Because of span merging the exact spanCount may be <= i+1. We assert
       // basic invariants: capacity is non-decreasing and >= spanCount, and no
       // extraordinary chars were added.
-      // Assert the whole debug object at once. Some fields (spanCapacity,
-      // spanCount, extraordinaryCapacity) are implementation-dependent and
-      // may change as the buffer grows; include them directly from the
-      // current dbg to keep the assertion single-shot while still asserting
-      // that extraordinaryCount is zero.
       expect(dbg).toEqual({
         spanCount: i + 1,
         spanCapacity: i + 1,
         extraordinaryCount: 0,
         extraordinaryCapacity: 0,
       });
-      prevCapacity = dbg.spanCapacity;
     }
 
     const dbgBefore = {};
@@ -99,7 +92,7 @@ describe('SpanBuffer', () => {
     // capacity should be unchanged from the last observed capacity
     expect(dbgAfter).toEqual({
       spanCount: 0,
-      spanCapacity: prevCapacity,
+      spanCapacity: 16,
       extraordinaryCount: 0,
       extraordinaryCapacity: 0,
     });
