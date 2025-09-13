@@ -14,11 +14,26 @@ This reorganizes the scanner into a streaming, single-pass-at-character-cost wor
 
 - Two-phase lexing / speculative lexing: Many compilers (for example, traditional C/Java compilers) use a cheap first pass to produce coarse tokens and a secondary pass to resolve context-sensitive tokens. The core similarity is that an initial, fast scan produces data small enough to be cheaply re-analyzed with richer context.
 
-- Incremental editors / change-aware parsers: Microsoft Roslyn (C#/.NET) provides an incremental parse model where edits are localized and token trees are partially reused; tree-sitter (widely used for editor integrations) builds incremental parse trees from small, well-defined token streams. Both projects demonstrate the value of keeping compact, replayable tokens for fast re-analysis and editor responsiveness.
 
-- Scannerless / scanner-fusion approaches: Some parser frameworks (for example certain PEG-based or scannerless GLR implementations) remove a separate lexical phase and operate directly on character streams. The proposed design is a hybrid that keeps an intentionally tiny, cheap scanning layer but defers disambiguation until more context is available.
+- Incremental editors / change-aware parsers: projects that emphasize incremental updates are useful references:
 
-- Existing Markdown/CommonMark engines: Implementations such as cmark (the reference C implementation), markdown-it (JS), and others often perform ad-hoc local rescans for emphasis and fence detection; they are practical references for correct semantics and corner cases. The provisional-span approach aims to formalise and optimise that ad-hoc work while maintaining compatible semantics.
+	- Microsoft Roslyn — the .NET compiler platform (C# and VB) exposes fine-grained incremental parsing APIs so editors can reuse parse trees and only re-parse the minimal changed region. See the repo and docs: https://github.com/dotnet/roslyn
+
+	- tree-sitter — a modern incremental parser generator used by many editors (Atom, Neovim plugins, etc.). It builds compact parse trees and supports very fast incremental re-parsing on edits. See the project and docs: https://tree-sitter.github.io/tree-sitter/
+
+- Scannerless / scanner-fusion approaches: parser families that avoid a distinct lexer and operate directly on character streams or use tightly integrated scanning include:
+
+	- PEG (Parsing Expression Grammars) — a recognition-based formalism where grammars are written as parsing expressions with ordered choice. PEG parsers (see PEG.js https://pegjs.org/ or the Wikipedia overview https://en.wikipedia.org/wiki/Parsing_expression_grammar) commonly embed lexical rules in the grammar instead of using a separate tokenizer.
+
+	- GLR (Generalized LR) — a bottom-up parsing algorithm capable of handling ambiguous grammars by producing parse forests; scannerless GLR systems may defer tokenization decisions and accept multiple token interpretations until the grammar disambiguates them. See the Wikipedia overview for GLR: https://en.wikipedia.org/wiki/Generalized_LR_parser
+
+- CommonMark and other Markdown engines: practical, real-world implementations are valuable references for exact semantics and corner-cases:
+
+	- cmark — the reference C implementation of CommonMark, useful for understanding the spec and for test-case cross-checking: https://github.com/commonmark/cmark
+
+	- markdown-it — a widely-used JavaScript CommonMark-compatible parser with many plugins and practical heuristics; useful for real-world behaviour comparisons: https://github.com/markdown-it/markdown-it
+
+The provisional-span approach aims to formalise and optimise the ad-hoc rescans and local rescanning these projects perform while remaining compatible with their semantics where desirable.
 
 Novelty: combining zero-allocation provisional records, deferred pairing at a higher-level handoff, and operating over compact numeric indices (not substrings) is not commonly packaged this way in markup processors and looks particularly well-suited for a performance-focused redesign.
 
