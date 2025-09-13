@@ -17,7 +17,7 @@
  * @return {number} The count of tokens pushed into output.
  */
 
-export function provisionalScan({
+export function scan0({
   input,
   startOffset, endOffset,
   output
