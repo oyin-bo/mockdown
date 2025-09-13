@@ -22,5 +22,28 @@ export function scan0({
   startOffset, endOffset,
   output
 }) {
-  // scan until resolution point, push results into output
+  // mock implementation for now
+
+  let posNewLine = input.indexOf('\n', startOffset);
+  if (posNewLine < 0 || posNewLine >= endOffset)
+    posNewLine = endOffset;
+
+  let added = 0;
+  if (posNewLine > startOffset) {
+    output.push(
+      (posNewLine - startOffset + 1) |
+      1 /* InlineText */
+    );
+    added++;
+  }
+
+  if (posNewLine < endOffset) {
+    output.push(
+      1 | // length
+      2 /* NewLine */
+    );
+    added++;
+  }
+
+  return added;
 }
