@@ -12,84 +12,55 @@ This reorganizes the scanner into a streaming, single-pass-at-character-cost wor
 
 ## Where this idea sits relative to prior art
 
-- Two-phase lexing / speculative lexing: Many compilers and language toolchains implement a cheap first pass that recognizes coarse tokens and a second pass that resolves context-dependent tokens. This design is the same idea applied to the domain of markup parsing where many tokens are ambiguous until the line/block context is known.
+- Two-phase lexing / speculative lexing: Many compilers (for example, traditional C/Java compilers) use a cheap first pass to produce coarse tokens and a secondary pass to resolve context-sensitive tokens. The core similarity is that an initial, fast scan produces data small enough to be cheaply re-analyzed with richer context.
 
-- Incremental editors / change-aware parsers: Editors like Roslyn or tree-sitter use incremental parse trees and token buffering to avoid re-tokenizing whole documents. The provisional-span idea is aligned with incremental thinking: keep small, replay-safe records and re-resolve only the minimal region when context changes.
+- Incremental editors / change-aware parsers: Microsoft Roslyn (C#/.NET) provides an incremental parse model where edits are localized and token trees are partially reused; tree-sitter (widely used for editor integrations) builds incremental parse trees from small, well-defined token streams. Both projects demonstrate the value of keeping compact, replayable tokens for fast re-analysis and editor responsiveness.
 
-- Scannerless or scanner-fusion approaches: Some grammars avoid a separate scanner entirely. This proposal preserves a scanner but delegates ambiguous character-level work to a local, provisional buffer — a hybrid approach that gains scannerless-like flexibility while preserving scanning performance.
+- Scannerless / scanner-fusion approaches: Some parser frameworks (for example certain PEG-based or scannerless GLR implementations) remove a separate lexical phase and operate directly on character streams. The proposed design is a hybrid that keeps an intentionally tiny, cheap scanning layer but defers disambiguation until more context is available.
 
-- CommonMark and other Markdown implementations: Many implementations already do ad-hoc lookahead and character rescans for emphasis pairing and fence detection. The provisional-span approach formalises and optimizes that work by recording surface events once and operating on them later.
+- Existing Markdown/CommonMark engines: Implementations such as cmark (the reference C implementation), markdown-it (JS), and others often perform ad-hoc local rescans for emphasis and fence detection; they are practical references for correct semantics and corner cases. The provisional-span approach aims to formalise and optimise that ad-hoc work while maintaining compatible semantics.
 
-Novelty: the combination of (a) zero-allocation provisional records in a SpanBuffer-like numeric layout, (b) deferring pairing until line/block finalization, and (c) performing pairing/merging operations over compact indices (not substrings) is an uncommon but natural fit for high-performance text processing and has clear engineering upside in this project.
+Novelty: combining zero-allocation provisional records, deferred pairing at a higher-level handoff, and operating over compact numeric indices (not substrings) is not commonly packaged this way in markup processors and looks particularly well-suited for a performance-focused redesign.
 
 ## Detailed design
 
 ### Data model — ProvisionalSpan (compact)
 
-We prefer a numeric-packed layout similar to `SpanBuffer` for minimal overhead. Two viable encodings:
+Keep the provisional record layout intentionally minimal and sequential: each provisional record is encoded as two numbers stored contiguously in the backing array: [length, flags]. Start/offset information is not stored per-record because the consumer always processes the provisional stream sequentially and the current absolute offset is trivially available from the surrounding context. This reduces the amount of stored state and the risk of offset inconsistencies introduced by duplicate bookkeeping.
 
-1. Absolute pairs: [start, length, flags]
-	 - Pros: simple to materialize substrings without accumulating lengths
-	 - Cons: small extra integer per span
+Encoding: store records as length0, flags0, length1, flags1, ... in a plain `number[]` backing store (or a typed array if required later). `length` encodes the length of the span in characters; `flags` is a compact bitset describing surface properties needed for higher-level resolution.
 
-2. Accumulative pairs: [length, flags] only, where the start is computed by summing prior lengths or by also keeping a single `lineStart` base (the latter avoids per-span start storage but requires an O(n) summation pass or maintaining running offsets during scan).
+Flag categories (high-level, not exhaustive):
 
-Recommendation: use three-number tuples [start, length, flags] for clarity and low-cost random access during finalize. Implementation note: store as contiguous numbers in the backing array as: start0, len0, flags0, start1, len1, flags1, ... — this mirrors `SpanBuffer`'s compact layout and remains JIT-friendly.
+- Structural markers: things that suggest block-level significance (runs that look like fences or thematic-break candidates, leading digit runs for ordered lists, blockquote markers, etc.).
+- Inline punctuation/formatting candidates: runs or single-char tokens that may participate in inline semantics (emphasis markers, backtick runs, brackets, exclamation/image indicators, etc.).
+- Whitespace and separation: whitespace runs, indentation info (note: indentation may be tracked separately by the caller/classifier), and similar separators.
+- Textual runs: ordinary text sequences which are likely to be coalesced into final text tokens.
+- Diagnostic or escape markers: explicit escapes or sequences that alter interpretation (for example backslash escapes in Markdown).
 
-Flag space: use a small bitset (32-bit number) where bits encode surface properties, for example:
+Describe categories in plain English; the precise bit mapping and token semantics will be decided later while implementing the provisional scanner and its consumer. The goal at this stage is to record surface-level events with the least possible state and maximal sequential simplicity.
 
-- PLAIN (no special meaning)
-- WHITESPACE
-- POT_EMPH_OPENER (candidate opening emphasis marker like '*' or '_')
-- POT_EMPH_CLOSER
-- STRONG_POT (double-asterisk candidate)
-- BACKTICK_RUN_N (we can encode run-length buckets or store run-length in length field semantics)
-- LINK_OPEN_BRACKET
-- LINK_CLOSE_BRACKET
-- EXCLAMATION_MARK (image candidate)
-- DIGIT (for ordered-list checks)
-- PUNCT (punctuation that matters for Markdown rules)
-- POSSIBLE_FENCE
-- POSSIBLE_TB (thematic break marker)
+### API expectations (high level)
 
-The exact palette will be driven by the constructs the scanner must handle. Keep the set minimal to keep bit ops cheap.
+Do not lock in an API shape yet. At this stage we expect the provisional scanner module to present a tiny, zero-allocation hot-path API with these high-level qualities:
 
-### API sketch
+- Append-only, sequential writes: the hot path must only append numeric records (length+flags) to a backing buffer with no per-record allocations.
+- No random-access requirements: the consumer processes records sequentially and may request a handoff/replay over a small span window; the backing store should support fast sequential iteration and a cheap reset/rewind.
+- No temporary arrays returned from hot-path functions. Any debug or inspection objects must be provided by the caller to be filled in-place.
+- Clear handoff contract: the provisional scanner must be able to provide the consumer (next-level scanner) with a stable sequential view of the records (either by exposing the backing array + count or by a minimal iterator/callback mechanism) without allocating during the hot path.
 
-TypeScript-like factory and minimal runtime surface:
+We will decide the exact call signatures once the provisional scanner and its consumer are prototyped and the concrete interaction patterns become clear. For now, avoid committing to functions or shape details — focus on the sequential, zero-allocation guarantee and on a minimal handoff contract.
 
-```ts
-function createProvisionalScanner(source: string, lineStart: number, docEnd: number) {
-	// internal backing: number[] spans; per-span: start, len, flags
-	return {
-		scanLine(): void; // consume characters from lineStart to first linebreak (zero-alloc, pushes numeric triples)
-		addSpan(start:number,len:number,flags:number): void; // hot-path helper (inlined)
-		finalizeLine(classifierFlags:number): Token[]; // resolve pairings, merge, emit final tokens
-		fillDebugState(state: { spanCount:number, reservedSlots:number }): void;
-	};
-}
-```
+### Handoff to the higher-level scanner
 
-Usage contract with `LineClassifier`:
+When the provisional scanner reaches a resolution point the next-level scanner consumes the compact record stream and performs span-level resolution. "Handoff" is a better name than "finalization" — the provisional scanner does not irrevocably finalise semantics, it simply prepares and hands over surface-level records for richer analysis.
 
-- Call `classifyLine()` (the classifier described elsewhere) first to learn whether the line is a fence, ATX candidate, indented code, blank, etc. That information can short-circuit expensive finalize logic (for example, plain paragraph lines may bypass some pairing if we know inline parsing is not expected).
-- Create a provisional scanner at the line start; call `scanLine()` to populate the numeric spans; then at the end, call `finalizeLine()` to convert the provisional stream into final tokens.
+Key consumer-side ideas (kept implementation-agnostic):
 
-### Finalization strategy
-
-Finalization runs a compact, span-level state machine to pair and resolve ambiguous constructs. Key ideas:
-
-- Use index-based stacks: when encountering POT_EMPH_OPENER spans push their indices; POT_EMPH_CLOSER pops and if pairing rules succeed, mark both spans with paired flags and create a final EMPH token referencing the start/end span indices.
-
-- Emphasis rules use only local span-level arithmetic: whether a run is left-flanking or right-flanking depends on the surrounding span flags (WHITESPACE, PUNCT, DIGIT, PLAIN). Because the scan recorded punctuation/whitespace granularly, the pairer can evaluate pairing rules without rescanning characters.
-
-- Backtick runs: the provisional scan records the run length in a dedicated flag or encodes it via a BACKTICK_RUN span where length==runLength; finalizer can match open and close runs by comparing lengths.
-
-- Fence detection: if the `LineClassifier` indicated POSSIBLE_FENCE, the provisional scan still records fence runs and their lengths; finalize decides whether this line is a fence open/close and emits FENCED_CODE_OPEN / FENCED_CODE_CLOSE tokens accordingly.
-
-- Link/image brackets and references: provisional spans record brackets and text spans; finalize can find matching '[' and ']' by indices and then decide (based on following spans/line context) whether it becomes an inline link/image or a literal bracket pair.
-
-- Merge plain spans: adjacent PLAIN spans (or PLAIN + WHITESPACE) can be coalesced into a single final text token. That reduces memory and speeds materialization.
+- Stack-based pairing at the record level: the consumer can pair opener/closer candidates by using index-based stacks over the record stream. Because records are sequential and compact, these operations are cheap and allocation-free.
+- Local, record-level predicates: flanking rules and run-length matching (for backticks) can be evaluated using neighbouring record flags and lengths without character rescans.
+- Merging and coalescing: the consumer coalesces adjacent textual records before string materialization to minimize substring operations.
+- Handoff is reversible: the consumer may decide not to resolve certain sequences and let a still-higher level (semantic scanner or parser) make the final call — keep the contract flexible.
 
 ### Memory and performance characteristics
 
@@ -97,78 +68,42 @@ Finalization runs a compact, span-level state machine to pair and resolve ambigu
 - Finalize pass: runs over N provisional spans rather than M characters. Typical N is << M because spans are coarse (words, runs of punctuation, bracket tokens). Even worst-case pathological inputs (alternating punctuation and letters) keep spanning cheap compared to rescanning characters for every pairing.
 - Materialization (creating strings): minimized by merging plain spans before calling substring operations and using a single reusable `stringParts` array as in `SpanBuffer`.
 
-## Edge cases and pitfalls
+## Edge considerations
 
-- Cross-line constructs: bold/italic that span lines are not solvable solely inside a single-line provisional scan. The scanner must either force early finalization only at block boundaries or hold provisional spans across lines in a controlled way. The `LineClassification` facility already documents that multi-line constructs are resolved by rescanning the classifier on the next line; adopt the same pattern here — only finalize when a block boundary is reached or when multi-line continuation is certain.
+Do not assume scanning is constrained to a single line. The provisional scanner's window extends until a decisive resolution point determined by higher-level rules (block boundaries, fences, or other protocol-defined stops). Many of the previous concerns about line-only scanning flow from prematurely assuming a line-based stop; instead, design the provisional scanner to operate sequentially until the consumer signals a handoff.
 
-- Ambiguity-rich lines: a line like "*** --- *" can be both a thematic break and inline emphasis. The classifier must conservatively mark the line as requiring full-line inspection; the provisional scan must record both potential interpretations; finalizer resolves using deterministic precedence rules (mirror CommonMark where appropriate).
+Practical implications:
 
-- Performance cliffs on pathological inputs: extremely token-dense inputs (alternating single characters that each become a span) increase N; ensure the implementation can handle this by testing and by having a fast path that falls back to character-based finalizer when needed.
+- Multi-line constructs: if the consumer needs cross-boundary context, the provisional stream should be replayable across the boundary (the backing store must support a cheap replay or an incremental append that the consumer can inspect).
+- Pathological density: if the provisional stream becomes extremely dense, the consumer may choose a different, character-oriented resolution strategy for that region — detection of unusual density should be a runtime heuristic in the consumer, not a design-time constraint on the provisional format.
+- Offsets: because per-record starts are omitted, the consumer must maintain the running absolute offset while iterating; this is cheap and deterministic in sequential processing.
 
-- Error reporting and offsets: because spans use numeric starts/lengths, mapping final tokens back to absolute document positions is trivial and zero-copy; ensure the chosen encoding supports large files (use Number, but be mindful of JS numeric limitations — indexes are safe up to 2^53, which is fine for document offsets).
+## Tests and verification (verifyTokens approach)
 
-## Tests and verification
+Testing will follow the project's annotated Markdown `verifyTokens` approach rather than conventional unit tests. At each stage we author small, human-readable annotated examples that serve as specification, test, and documentation:
 
-Unit tests (minimal set):
+- Provisional-level tests: annotated inputs that assert the sequence of provisional records (length+flag assertions) produced for a given fragment.
+- Semantic-level tests: annotated inputs that assert the tokens emitted by the consumer-level scanner after handoff.
+- AST-level tests: annotated inputs that assert the final AST shapes or token streams produced by the semantic parser.
 
-- Provisional scan correctness: for representative lines assert the numeric spans and flags recorded (exercise punctuation, backtick runs, bracket tokens, digits, whitespace runs).
-- Finalization correctness: pair emphasis markers in a variety of scenarios (simple pairs, nested, unmatched, left/right flanking rules). Compare final emitted tokens and ranges against the existing scanner behaviour (golden tests).
-- Fence and block tests: verify fences open/close, indented code precedence, ATX headings remain stable.
-- Performance microbench: compare scanning+finalize time vs current scanner for large documents and for worst-case token-dense lines.
-- Memory reuse tests: assert that backing numeric arrays and `stringParts` are reused (via `fillDebugState`) between lines and that no per-line allocation happens in the hot path.
+Every example is written in the verifyTokens format so failures are immediately actionable and the tests remain readable documentation for implementers.
 
-Integration tests:
+## Full redesign phases
 
-- Replace a small subset of scanner flows with the provisional scanner (e.g., inline emphasis only) behind a runtime flag and run the full test suite. Collect token diffs and performance deltas.
+This is a full redesign; the correct plan is not an incremental swap but a staged build-and-verify workflow across well-defined levels:
 
-Quality gates:
+1. Build a provisional scanner implementation (zero-allocation hot path, length+flags records). Test it with `verifyTokens` annotated examples that assert provisional records.
+2. Build the consumer-level semantic scanner that consumes provisional records and emits higher-level tokens. Test with `verifyTokens` examples that assert token emission and range mapping.
+3. Build the AST-level parser that consumes token streams and emits the final syntax tree. Test with `verifyTokens` examples that assert AST shapes.
 
-- Add fast unit tests first to lock down semantics. Then add regression tests for any token differences found when running the full test-suite with the feature flag.
+At each stage the tests are the authoritative source of truth. The implementation may borrow algorithms and ideas from existing code, but it must be developed independently and validated against the annotated tests.
 
-## Incremental rollout strategy
+## Practical implementation notes (how this will borrow from existing docs)
 
-1. Prototype: implement `createProvisionalScanner` as a distinct module in `parser/src/` and unit-test in `parser/tests/` (do not change scanner paths yet). Keep the prototype feature-flagless to iterate quickly locally.
+- Use the `SpanBuffer` design notes as a reference for backing-array growth, `stringParts` reuse, and materialization strategies — but do not depend on or call into the existing `SpanBuffer` implementation. Treat those notes as algorithmic references only.
+- Use the `LineClassification` document as a conceptual guide for deciding resolution points and for the kinds of surface tests the provisional scanner should signal; do not assume line-only stopping semantics — the resolution point decision will be part of the redesign protocol.
 
-2. Integration behind flag: wire the provisional scanner into the main scanner behind a `provisionalScannerEnabled` runtime flag. Initially scope it to only inline emphasis pairing and merging plain spans.
+Important: none of the existing production scanner code will be imported or called directly by the new implementation. We will borrow algorithms and ideas where useful but implement the provisional scanner and its consumer as independent, test-driven modules.
 
-3. Validate: run the full test-suite of `parser/tests`. Add a dedicated benchmark harness (reuse `parser/benchmark` conventions) to compare the prototype with the current scanner on realistic corpora.
+Provisional record encoding: store records as length,flags pairs in a contiguous numeric backing store (length0,flags0,length1,flags1...). The consumer maintains a running absolute offset while iterating.
 
-4. Expand: if stable and faster, progressively move block-level constructs (fences, lists, tables) into the provisional pipeline, validating correctness at each step.
-
-5. Remove toggle: once parity and benefits are proven, flip to default and remove the old path in a controlled refactor.
-
-## Practical implementation notes (mapping to docs already in repo)
-
-- `parser/docs/14-span-buffer.md`: reuse the same backing-array design, `materialize()` strategy and `stringParts` reuse; implement the provisional scanner's backing array as numeric triples instead of pairs.
-- `parser/docs/15-line-classification-facility.md`: call `classifyLine()` before or during `scanLine()` to short-circuit fence/ATX/indented-code cases and to know when finalization can be simplified.
-
-## Small, concrete API proposal
-
-file: `parser/src/provisionalScanner.ts`
-
-export function createProvisionalScanner(source: string, baseOffset: number, docEnd: number, opts?: { delimiter?: string }) {
-	// returns object with: scanLine(), finalizeLine(classifierFlags), fillDebugState()
-}
-
-ProvisionalSpan encoding in backing array: for span i, store numbers at index `3*i + 0..2` as `[start, len, flags]`.
-
-Hot-path helpers must be tiny and allocation-free:
-
-- addSpan(start,len,flags) -> push three numbers
-- maybeMergeWithPrevious() -> run a couple of integer checks and mutate previous len if appropriate
-
-Finalizer returns a minimal Token[] where Token uses the same on-disk shape as scanner tokens (type, start, length, maybe extra small integer flags). Materialization of string content is deferred until a token emission point and uses `stringParts`.
-
-## Risks and mitigations
-
-- Risk: subtle divergence from existing, well-tested scanner behaviour. Mitigation: heavy unit/regression testing and incremental rollout with a runtime flag.
-- Risk: increased implementation complexity around pairing rules. Mitigation: keep pairing logic small, well-documented, and re-use CommonMark semantics where possible. Edge-case tests are critical.
-- Risk: pathological inputs produce many tiny spans. Mitigation: detection of pathological density and fallback to a character-based finalizer for that line.
-
-## Conclusion and recommendation
-
-The "simple scanner inside complex scanner" is a high-value structural refactor for this project. It maps well to the repository's existing `SpanBuffer` and `LineClassification` plans and offers a promising way to reduce rescans, eliminate allocations on the common path, and simplify final token emission. I recommend a small prototype (module + unit tests) that initially handles inline emphasis and backticks, then expand to other constructs. If measurements show consistent improvement and parity with the canonical test-suite, proceed to broader integration.
-
----
-
-Notes: this document intentionally keeps the design conservative: the provisional pipeline is a performance optimization and should preserve existing CommonMark-like semantics as a top priority. The implementation approach above favors clarity and robust tests over clever but fragile micro-optimisations.
