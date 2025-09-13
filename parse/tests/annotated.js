@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const scanPath = path.join(__dirname, '..', 'scan0.js');
 const scanUrl = pathToFileURL(scanPath).href;
 const scanModule = await import(scanUrl);
-const { scan0 } = scanModule;
+const { scan0, PARSE_TOKENS } = scanModule;
 
 /**
  * Find .md files recursively under a directory.
@@ -90,7 +90,10 @@ function parseAnnotatedBlocks(text) {
  */
 function decodeProvisionalToken(tok) {
   const length = tok & 0xffffff;
-  const flags = tok >>> 24;
+  // Keep flags in the same high-bit format as PARSE_TOKENS (no right-shift).
+  // PARSE_TOKENS values live in the high bits (e.g. 0x1000000). Return the
+  // masked high bits so callers can compare directly against PARSE_TOKENS.
+  const flags = tok & 0xff000000;
   return { length, flags };
 }
 
@@ -117,14 +120,6 @@ function mapAssertions(markerLine, assertions) {
   return map;
 }
 
-/**
- * Simple mapping for token flag names used in scan0.js mock. In the project's scanner there will be an enum.
- * We'll provide common names used in examples: InlineText -> 1, NewLine -> 2
- */
-const FLAG_NAMES = {
-  InlineText: 1,
-  NewLine: 2
-};
 
 // Main: find markdown files under tests directory relative to this file
 const testsDir = __dirname; // parse/tests
@@ -248,14 +243,14 @@ for (const md of mdFiles) {
         let flagsNum = decoded.flags;
         if (flagsNum === 0 && typeof tok === 'number') {
           flagsNum = 0;
-          for (const v of Object.values(FLAG_NAMES)) if ((tok & v) === v) flagsNum |= v;
+          for (const v of Object.values(PARSE_TOKENS)) if ((tok & v) === v) flagsNum |= v;
         }
-        const names = Object.entries(FLAG_NAMES).filter(([, v]) => (flagsNum & v) === v).map(([k]) => k);
+        const names = Object.entries(PARSE_TOKENS).filter(([, v]) => (flagsNum & v) === v).map(([k]) => k);
         assertionReportLines.push('@' + positionMarker + ' ' + (names.join('|') || flagsNum));
 
         // compare expected
-        let expectedFlagValue;
-        for (const [k, v] of Object.entries(FLAG_NAMES)) if (k === expectedName) { expectedFlagValue = v; break; }
+  let expectedFlagValue;
+  for (const [k, v] of Object.entries(PARSE_TOKENS)) if (k === expectedName) { expectedFlagValue = v; break; }
         const has = expectedFlagValue ? ((flagsNum & expectedFlagValue) === expectedFlagValue) : false;
         if (!has) {
           // if mismatch we'll later assert with a diff using the built actual/expected blocks
