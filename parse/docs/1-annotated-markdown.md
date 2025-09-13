@@ -42,11 +42,7 @@ The test will take its name from the corresponding line the positional markers a
 
 If the test uses weird syntax for the assertions that is unparseable, that will produce a failure. If the test uses valid syntax but the actual output does not match the assertions, that will also produce a failure.
 
-A failure will include exact position in the annotated Markdown file with file path.
-
-A failure will also use text assertion similarly to how verifyTokens works. It will generate an assertion block that is specifying a correct state for the aspects being asserted, and assert it as equal to the assertion inside the annotated Markdown file. That way the assertion will fail, and the test runner will do the highlighting of the different parts of the assertions.
-
-All assertions per test will be asserted as one complete string with Markdown line above, the positional markers, then the @-assertions. So if multiple assertions fail, we see all of them in one go.
+A failure will include exact position in the annotated Markdown file with repository-relative path to the test .md file, and the line number in the markdown, as a third comment parameter to strictEqual.
 
 # Implementation notes
 

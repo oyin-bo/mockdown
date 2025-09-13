@@ -49,11 +49,10 @@ function parseAnnotatedBlocks(text) {
 	const blocks = [];
 	let i = 0;
 	while (i < lines.length) {
-		// find a candidate marker line by looking ahead for a line that consists of spaces and marker chars
-		// marker chars are digits 0-9 and A-Z and a-z and spaces
-		// we'll treat a marker line as one that contains at least one digit or letter and only spaces and marker chars
-		// but to be conservative: a line that contains a '1' char is marker line per spec
-		const markerIdx = lines.slice(i).findIndex(l => /\b1\b|^\s*1/.test(l));
+		// find a candidate marker line by looking ahead for a line that contains only
+		// spaces and marker characters (digits/letters) and at least one alphanumeric char.
+		// This lets us support multiple markers like: "1    2"
+		const markerIdx = lines.slice(i).findIndex(l => /^[ \t0-9A-Za-z]+$/.test(l) && /[0-9A-Za-z]/.test(l));
 		if (markerIdx === -1) break;
 		const markerLineIndex = i + markerIdx;
 		// now collect content lines immediately above the marker line: at least one
@@ -151,58 +150,135 @@ for (const md of mdFiles) {
 			const expectMap = mapAssertions(blk.markerLine, blk.assertions);
 
 			// For simplicity support single assertion @1 per block describing the first token's flag name
-			if (expectMap.size === 0) {
-				throw new Error('No @ assertions parsed');
+			if (expectMap.size === 0) throw new Error('No @ assertions parsed');
+
+			// Build mapping of marker id -> absolute character index in the input string
+			// markerLine contains spaces and digits at columns aligned with the content above.
+			const contentJoin = blk.content.join('\n');
+			// compute offset of the last content line start in the joined content
+			let lastLineOffset = 0;
+			if (blk.content.length > 1) {
+				for (let k = 0; k < blk.content.length - 1; k++) lastLineOffset += blk.content[k].length + 1; // +1 for newline
 			}
 
-			// Build readable actual string to compare against the expected assertion block text
-			const actualLines = [];
-			// content
-			for (const l of blk.content) actualLines.push(l);
-			actualLines.push(blk.markerLine);
-			// now for each assertion id in map, produce a text like '@1 InlineText'
-			for (const [id, val] of expectMap.entries()) {
-				// determine actual token at position id -> we assume id '1' refers to first token
-				const tokIndex = 0; // simple mapping for now
-			const tok = output[tokIndex];
-						const decoded = tok == null ? { length: 0, flags: 0 } : decodeProvisionalToken(tok);
-						// if flags are zero, some mocks may encode flags in the low bits — try that fallback
-						let flagsNum = decoded.flags;
-								if (flagsNum === 0 && typeof tok === 'number') {
-									// Some scanners (mocks) encode flags by OR'ing small flag bits into the low bits.
-									// Recover flags by checking each known flag bit.
-									flagsNum = 0;
-									for (const v of Object.values(FLAG_NAMES)) {
-										if ((tok & v) === v) flagsNum |= v;
-									}
-								}
-						const found = Object.entries(FLAG_NAMES).find(([, v]) => v === flagsNum);
-						const flagName = found ? found[0] : String(flagsNum);
-				actualLines.push(`@${id} ${flagName}`);
+			// Build arrays of marker chars and their column offsets (left-to-right)
+			/** @type {string[]} */
+			const positionMarkerChars = [];
+			/** @type {number[]} */
+			const positionMarkerLineOffsets = [];
+			for (let col = 0; col < blk.markerLine.length; col++) {
+				const ch = blk.markerLine.charAt(col);
+				if (/\s/.test(ch)) continue;
+				positionMarkerChars.push(ch);
+				positionMarkerLineOffsets.push(col);
 			}
 
-					const actual = actualLines.join('\n');
+			// Helper: map a marker label to its column offset (case-insensitive match)
+			/**
+			 * @param {string} label
+			 */
+			function findMarkerOffsetByLabel(label) {
+				const up = label.toUpperCase();
+				for (let k = 0; k < positionMarkerChars.length; k++) {
+					if (positionMarkerChars[k].toUpperCase() === up) return positionMarkerLineOffsets[k];
+				}
+				return undefined;
+			}
 
-					// For comparison: ensure that for each @ assertion, the expected token name is present in the actual flags
-					const missing = [];
-					for (const [id, expectedName] of expectMap.entries()) {
-						// actual value we produced for reporting
-						const tokIndex = 0; // as before
-						const tok = output[tokIndex];
-						const decoded = tok == null ? { length: 0, flags: 0 } : decodeProvisionalToken(tok);
-						let flagsNum = decoded.flags;
-						if (flagsNum === 0 && typeof tok === 'number') {
-							flagsNum = 0;
-							for (const v of Object.values(FLAG_NAMES)) {
-								if ((tok & v) === v) flagsNum |= v;
-							}
-						}
-						// check if expectedName corresponds to a known flag and that bit is set
-				const foundEntry = Object.entries(FLAG_NAMES).find(([k]) => k === String(expectedName));
-				const expectedFlagValue = foundEntry ? foundEntry[1] : undefined;
+			// For each assertion label, map it to a token start by finding the token that covers
+			// the corresponding marker column. Deduplicate multiple assertions that map to the same token start
+			// by keeping the first one (canonicalization like verify-tokens.ts).
+			const tokenStartToAssertionIndex = new Map();
+			const assertionEntries = Array.from(expectMap.entries()); // [ [label, expectedName], ... ]
+			for (let ai = 0; ai < assertionEntries.length; ai++) {
+				const [label] = assertionEntries[ai];
+				const col = findMarkerOffsetByLabel(label);
+				if (col == null) continue;
+				const absPos = lastLineOffset + col;
+
+				// locate token covering absPos
+				let acc = 0;
+				let foundIndex = -1;
+				for (let ti = 0; ti < output.length; ti++) {
+					const t = output[ti];
+					const len = (typeof t === 'number') ? (t & 0xffffff) : 0;
+					if (absPos >= acc && absPos < acc + len) { foundIndex = ti; break; }
+					acc += len;
+				}
+				if (foundIndex === -1) continue;
+				// find token start absolute index
+				let startAcc = 0;
+				for (let ti = 0; ti < foundIndex; ti++) startAcc += (typeof output[ti] === 'number') ? (output[ti] & 0xffffff) : 0;
+				if (!tokenStartToAssertionIndex.has(startAcc)) tokenStartToAssertionIndex.set(startAcc, ai);
+			}
+
+				const orderedTokenStarts = Array.from(tokenStartToAssertionIndex.keys()).sort((a, b) => a - b);
+
+				const missing = [];
+			// Build actual report lines: content, marker line, then per-canonical-marker reported flags
+			const actualReportLines = [];
+			for (const l of blk.content) actualReportLines.push(l);
+			// We'll build a canonical position line with markers placed at token starts
+			let positionLine = '';
+			const assertionReportLines = [];
+			for (let emitted = 0; emitted < orderedTokenStarts.length; emitted++) {
+				const tokenStart = orderedTokenStarts[emitted];
+				const assertionIndex = tokenStartToAssertionIndex.get(tokenStart);
+				const [label, expectedName] = assertionEntries[assertionIndex];
+
+				// canonical marker char
+				const positionMarker = (emitted + 1) < 10 ? String(emitted + 1) :
+					String.fromCharCode('A'.charCodeAt(0) + emitted - 9);
+
+				const positionMarkerOffset = tokenStart - lastLineOffset;
+				while (positionLine.length < positionMarkerOffset) positionLine += ' ';
+				positionLine += positionMarker;
+
+				// produce actual token data for this tokenStart
+				// find token by start index
+				let acc = 0;
+				let tokenIdx = -1;
+				for (let ti = 0; ti < output.length; ti++) {
+					const len = (typeof output[ti] === 'number') ? (output[ti] & 0xffffff) : 0;
+					if (acc === tokenStart) { tokenIdx = ti; break; }
+					acc += len;
+				}
+				const tok = output[tokenIdx];
+				const decoded = tok == null ? { length: 0, flags: 0 } : decodeProvisionalToken(tok);
+				let flagsNum = decoded.flags;
+				if (flagsNum === 0 && typeof tok === 'number') {
+					flagsNum = 0;
+					for (const v of Object.values(FLAG_NAMES)) if ((tok & v) === v) flagsNum |= v;
+				}
+				const names = Object.entries(FLAG_NAMES).filter(([, v]) => (flagsNum & v) === v).map(([k]) => k);
+				assertionReportLines.push('@' + positionMarker + ' ' + (names.join('|') || flagsNum));
+
+				// compare expected
+				let expectedFlagValue;
+				for (const [k, v] of Object.entries(FLAG_NAMES)) if (k === expectedName) { expectedFlagValue = v; break; }
 				const has = expectedFlagValue ? ((flagsNum & expectedFlagValue) === expectedFlagValue) : false;
-						if (!has) missing.push({ id, expectedName, flagsNum });
-					}
+				if (!has) {
+					// if mismatch we'll later assert with a diff using the built actual/expected blocks
+				}
+			}
+
+				actualReportLines.push(positionLine);
+				for (const ln of assertionReportLines) actualReportLines.push(ln);
+				const actualReport = actualReportLines.join('\n');
+
+				// Always build expected block text from original assertions for context
+				const expectedLines = [];
+				for (const l of blk.content) expectedLines.push(l);
+				expectedLines.push(blk.markerLine);
+				for (const a of blk.assertions) expectedLines.push(a);
+				const expected = expectedLines.join('\n');
+
+				// Compare canonicalized actual report with the original expected block. This will
+				// surface mismatches where markers/labels don't map to tokens as written in the test.
+				// Per spec: include repository-relative path and start line as third parameter to strictEqual
+				const repoRelative = path.relative(process.cwd(), md).replace(/\\/g, '/');
+				const lineNumber = blk.startLine;
+				assert.strictEqual(actualReport, expected, repoRelative + ':' + lineNumber);
 
 					if (missing.length) {
 						// Build expected block text from original assertions for context
@@ -212,27 +288,16 @@ for (const md of mdFiles) {
 						for (const a of blk.assertions) expectedLines.push(a);
 						const expected = expectedLines.join('\n');
 
-						const actualReportLines = [];
-						for (const l of blk.content) actualReportLines.push(l);
-						actualReportLines.push(blk.markerLine);
-						for (const [id] of expectMap.entries()) {
-							// produce actual token flag names list
-							const tok = output[0];
-							const decoded = tok == null ? { length: 0, flags: 0 } : decodeProvisionalToken(tok);
-							let flagsNum = decoded.flags;
-							if (flagsNum === 0 && typeof tok === 'number') {
-								flagsNum = 0;
-								for (const v of Object.values(FLAG_NAMES)) {
-									if ((tok & v) === v) flagsNum |= v;
-								}
-							}
-							const names = Object.entries(FLAG_NAMES).filter(([, v]) => (flagsNum & v) === v).map(([k]) => k);
-							actualReportLines.push(`@${id} ${names.join('|') || flagsNum}`);
+						// Use assert.strictEqual so the test runner prints a standard assertion diff
+						if (missing.length) {
+							// Build expected block text from original assertions for context
+							const expectedLines = [];
+							for (const l of blk.content) expectedLines.push(l);
+							expectedLines.push(blk.markerLine);
+							for (const a of blk.assertions) expectedLines.push(a);
+							const expected = expectedLines.join('\n');
+							assert.strictEqual(actualReport, expected);
 						}
-						const actualReport = actualReportLines.join('\n');
-
-								// Use assert.strictEqual so the test runner prints a standard assertion diff
-								assert.strictEqual(actualReport, expected);
 					}
 		});
 	}

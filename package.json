@@ -8,9 +8,10 @@
     "doc": "docs"
   },
   "scripts": {
-    "build:parser": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js --format=cjs --platform=node",
-    "build": "npm run build:parser",
-    "test": "vitest run"
+    "build:parser-old": "esbuild --bundle parser/index.ts --sourcemap --outfile=./mparser.js --format=cjs --platform=node",
+    "build-old": "npm run build:parser-old",
+    "test-old": "vitest run",
+    "test": "node --test parse/tests/**/*.js"
   },
   "keywords": [
     "Mockdown",
