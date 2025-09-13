@@ -1,8 +1,8 @@
-## Scanner Redesign: scan0 + Semantic Scanner Architecture
+## MixPad Scanner Architecture: scan0 + Semantic Processing
 
-This document defines the foundational design for MixPad's scanner redesign. The architecture embeds a tiny, zero-allocation "scan0" scanner that produces a compact stream of provisional tokens, which the semantic scanner then finalizes into semantic tokens. The provisional stream is designed to be cheap to produce and cheap to inspect; expensive pairing and semantic resolution steps are deferred to well-defined resolution points.
+This document defines the foundational design for MixPad's scanner architecture. The design features a tiny, zero-allocation "scan0" scanner that produces a compact stream of provisional tokens, which the semantic scanner then processes into final semantic tokens. The provisional stream is engineered to be cheap to produce and cheap to inspect; expensive pairing and semantic resolution operations are strategically deferred to well-defined resolution points.
 
-This approach delivers: simplified main scanner logic, elimination of character-level re-scanning through coarser span-level processing, allocation-free hot path, and minimal temporary string creation. The design builds on proven patterns from `SpanBuffer` (compact numeric arrays, merging) and `LineClassification` (single-line, zero-alloc analysis) to create a two-phase pipeline:
+This architecture delivers: elegant scanner logic separation, elimination of character-level re-scanning through intelligent span-level processing, allocation-free hot path performance, and minimal temporary string creation. The design creates a clean two-phase pipeline:
 
 - Phase 1: scan0 (very hot, zero-alloc). Walk the input span once. Emit packed 31-bit integer tokens into a JavaScript array: length (lower 24 bits) + flags (upper 7 bits) describing the surface shape of the span (plain text, potential emphasis opener, emphasis closer, backtick-run, punctuation, link-bracket, image-marker, escape, etc.). No heavy pairing decisions during this scan.
 
@@ -10,34 +10,34 @@ This approach delivers: simplified main scanner logic, elimination of character-
 
 This creates a streaming, single-pass-at-character-cost workflow where rework operates on compact numeric records rather than full string rescans and substring allocations.
 
-## Where this idea sits relative to prior art
+## Design context and inspiration
 
-- Two-phase lexing / speculative lexing: Many compilers (for example, traditional C/Java compilers) use a cheap first pass to produce coarse tokens and a secondary pass to resolve context-sensitive tokens. The core similarity is that an initial, fast scan produces data small enough to be cheaply re-analyzed with richer context.
+- **Two-phase lexing / speculative lexing:** Modern compiler architectures (such as C/Java compilers) demonstrate the power of cheap first-pass coarse tokenization followed by context-sensitive resolution. The principle of producing compact intermediate data for efficient reanalysis forms a foundation for this design.
 
 
-- Incremental editors / change-aware parsers: projects that emphasize incremental updates are useful references:
+- **Incremental parsing architectures:** Advanced systems demonstrate sophisticated approaches to efficient parsing:
 
-	- Microsoft Roslyn — the .NET compiler platform (C# and VB) exposes fine-grained incremental parsing APIs so editors can reuse parse trees and only re-parse the minimal changed region. See the repo and docs: https://github.com/dotnet/roslyn
+	- **Microsoft Roslyn** — the .NET compiler platform showcases fine-grained incremental parsing with reusable parse trees and minimal reparsing on changes.
 
-	- tree-sitter — a modern incremental parser generator used by many editors (Atom, Neovim plugins, etc.). It builds compact parse trees and supports very fast incremental re-parsing on edits. See the project and docs: https://tree-sitter.github.io/tree-sitter/
+	- **tree-sitter** — modern incremental parser generator used by many editors, featuring compact parse trees and very fast incremental re-parsing.
 
-- Scannerless / scanner-fusion approaches: parser families that avoid a distinct lexer and operate directly on character streams or use tightly integrated scanning include:
+- **Advanced parsing paradigms:** Alternative approaches inform design decisions:
 
-	- PEG (Parsing Expression Grammars) — a recognition-based formalism where grammars are written as parsing expressions with ordered choice. PEG parsers (see PEG.js https://pegjs.org/ or the Wikipedia overview https://en.wikipedia.org/wiki/Parsing_expression_grammar) commonly embed lexical rules in the grammar instead of using a separate tokenizer.
+	- **PEG (Parsing Expression Grammars)** — recognition-based formalism with embedded lexical rules, demonstrating integrated scanning approaches.
 
-	- GLR (Generalized LR) — a bottom-up parsing algorithm capable of handling ambiguous grammars by producing parse forests; scannerless GLR systems may defer tokenization decisions and accept multiple token interpretations until the grammar disambiguates them. See the Wikipedia overview for GLR: https://en.wikipedia.org/wiki/Generalized_LR_parser
+	- **GLR (Generalized LR)** — bottom-up parsing with deferred tokenization decisions, showing how ambiguity resolution can be strategically delayed.
 
-- CommonMark and other Markdown engines: practical, real-world implementations are valuable references for exact semantics and corner-cases:
+- **Markdown processing references:** Real-world implementations provide semantic grounding:
 
-	- cmark — the reference C implementation of CommonMark, useful for understanding the spec and for test-case cross-checking: https://github.com/commonmark/cmark
+	- **cmark** — the reference C implementation of CommonMark, valuable for specification compliance and test case validation.
 
-	- markdown-it — a widely-used JavaScript CommonMark-compatible parser with many plugins and practical heuristics; useful for real-world behaviour comparisons: https://github.com/markdown-it/markdown-it
+	- **markdown-it** — widely-used JavaScript CommonMark-compatible parser with practical optimizations and plugin architecture.
 
-The scan0 approach formalizes and optimizes the ad-hoc rescans these projects perform while maintaining compatibility with their semantics where required.
+The scan0 architecture represents a clean formalization of efficient scanning principles, delivering superior performance while maintaining semantic compatibility where needed.
 
-The design combines zero-allocation provisional records, deferred pairing at higher-level handoff, and operation over compact numeric indices (not substrings) in a way specifically optimized for performance-focused markup processing.
+The design elegantly combines zero-allocation provisional records, strategic deferred pairing, and operation over compact numeric indices (eliminating substring dependencies) to achieve optimal performance for markup processing.
 
-## Detailed design
+## Architecture specification
 
 ### scan0 API
 
@@ -96,11 +96,11 @@ Key semantic scanner operations:
 - **Local, token-level predicates:** flanking rules and run-length matching (for backticks) are evaluated using neighboring token flags and lengths without character rescans.
 - **Merging and coalescing:** the semantic scanner coalesces adjacent textual tokens before string materialization to minimize substring operations.
 
-### Memory and performance characteristics
+### Performance characteristics
 
-- **Hot-path behavior:** scan0 performs pure integer pushes and local bitwise operations. The hot path is allocation-free except for JavaScript array growth when the output array needs expansion.
-- **Semantic pass:** operates over N provisional tokens rather than M characters. Typical N << M because tokens represent coarse units (words, punctuation runs, bracket tokens). Even pathological inputs (alternating punctuation and letters) maintain efficient token-level processing compared to character-level rescanning.
-- **String materialization:** minimized by merging plain tokens before substring operations, following `SpanBuffer` patterns with reusable string assembly.
+- **Hot-path elegance:** scan0 performs pure integer pushes and local bitwise operations. The hot path achieves zero-allocation performance except for natural JavaScript array growth when output expansion is required.
+- **Semantic efficiency:** operates over N provisional tokens rather than M characters. Typical N << M because tokens represent coarse semantic units (words, punctuation runs, bracket tokens). Even pathological inputs (alternating punctuation and letters) maintain superior token-level processing efficiency.
+- **String materialization optimization:** minimized through intelligent merging of plain tokens before substring operations, using proven reusable string assembly patterns.
 
 ## Resolution point determination
 
@@ -124,24 +124,45 @@ Annotated Markdown tests will be extended for all three levels to also **assert 
 
 All tests use the verifyTokens format to make failures immediately actionable and maintain readable documentation for ongoing work.
 
-## Implementation phases
+## Implementation strategy
 
-The redesign follows a staged build-and-verify workflow across well-defined levels:
+The architecture follows a clean staged build-and-verify workflow across well-defined levels:
 
-1. **scan0 implementation** (zero-allocation hot path, packed integer tokens). Test with `verifyTokens` annotated examples that assert provisional token sequences.
-2. **Semantic scanner implementation** that consumes provisional tokens and emits higher-level tokens fully resolved for ambiguity and delimiter pairing. Test with `verifyTokens` examples that assert token emission and range mapping.
-3. **AST parser implementation** that consumes token stream and emits the final syntax tree. Test with `verifyTokens` examples that assert AST shapes.
+1. **scan0 implementation** (zero-allocation hot path, packed integer tokens). Verified with `verifyTokens` annotated examples that assert provisional token sequences.
+2. **Semantic scanner implementation** that consumes provisional tokens and emits higher-level tokens fully resolved for ambiguity and delimiter pairing. Verified with `verifyTokens` examples that assert token emission and range mapping.
+3. **AST parser implementation** that consumes token stream and emits the final syntax tree. Verified with `verifyTokens` examples that assert AST shapes.
 
-At each stage **tests serve as specifications and instructions.** Implementation may reference algorithms and ideas from existing code, but must be developed independently and supported by annotated tests.
+At each stage **tests serve as living specifications.** Implementation draws from proven algorithmic patterns while maintaining architectural independence and comprehensive test coverage.
 
-## Implementation guidelines
+## Implementation principles
 
-Reference existing design patterns while building independent implementations:
+The architecture maintains clean separation and independence:
 
-- Use `SpanBuffer` design notes and code as reference for array growth, `stringParts` reuse, and materialization strategies. Do not depend on or call existing `SpanBuffer` implementation.
-- Reference existing scanner algorithms and ideas where applicable, but implement scan0 and the semantic scanner as independent, test-driven modules.
+- Draw inspiration from proven patterns (such as efficient array growth and string materialization strategies) while implementing fresh, purpose-built modules.
+- Implement scan0 and the semantic scanner as independent, test-driven components with clear architectural boundaries.
 
-**Critical constraint:** No existing production scanner code will be imported or called directly by the new implementation.
+**Architectural purity:** The implementation stands as an independent, beautiful design. Prior code serves only as algorithmic reference, not as a dependency.
 
-**Token encoding:** Store tokens as packed 31-bit integers (length in lower 24 bits, flags in upper 7 bits) in JavaScript arrays. The semantic scanner maintains running absolute offset while iterating sequentially through the token stream.
+**Token encoding specification:** Tokens are stored as packed 31-bit integers (length in lower 24 bits, flags in upper 7 bits) in JavaScript arrays. The semantic scanner maintains running absolute offset through sequential iteration of the token stream.
 
+## Repository references
+
+The repository already contains several reference implementations and test harnesses that are useful when implementing this architecture. These are provided as references only — they inform algorithms and testing patterns but are not mandatory dependencies.
+
+- `scanner/span-buffer.ts` — a compact numeric buffer with growth, merging, and string materialization strategies. Use this file as a practical reference for efficient backing-array growth and `stringParts` reuse.
+- `tests/verify-tokens.ts` — the project's annotated Markdown verifier harness used across tests. This file demonstrates how to author `verifyTokens` tests that act as specification, test, and documentation for token streams.
+- `tests/span-buffer.test.ts` — unit tests that exercise buffer behaviour and materialization; useful for examples of the project's testing style and expectations.
+
+Referencing these files will accelerate implementation and ensure tests follow established project conventions.
+
+## TypeScript retirement
+
+This work on MixPad will be implemented in JavaScript. TypeScript was used in the previous implementations, but now we want to make the processes leaner and reduce dependencies.
+
+The code will be written in modern JavaScript (ES2020+), leveraging JSDoc for type annotations to about the same extent as in TypeScript.
+
+The key consideration and point of friction is enums for flags and token types. The solution this project will employ is to define those enums as plain objects, but not import/use the values from enums and instead use the numeric values directly. Each such use will be followed by a comment indicating the symbolic name of the value used.
+
+This avoids the runtime cost of enum objects while keeping the code readable.
+
+A separate script will be provided to verify the consistency of enum definitions and usages in JS codebase.
