@@ -47,3 +47,66 @@ A failure will include exact position in the annotated Markdown file with file p
 A failure will also use text assertion similarly to how verifyTokens works. It will generate an assertion block that is specifying a correct state for the aspects being asserted, and assert it as equal to the assertion inside the annotated Markdown file. That way the assertion will fail, and the test runner will do the highlighting of the different parts of the assertions.
 
 All assertions per test will be asserted as one complete string with Markdown line above, the positional markers, then the @-assertions. So if multiple assertions fail, we see all of them in one go.
+
+# Implementation notes
+
+## Test Harness Architecture
+
+The annotated Markdown test harness will be implemented as a Node.js built-in test runner that dynamically registers test callbacks from `.md` files containing annotated markdown blocks. The architecture follows these key principles:
+
+### 1. File Discovery and Processing
+
+**Suggested Target Structure (not prescriptive):**
+```
+parse/
+  annotated-tests/
+    scan0/
+      basic-tokenization.md
+      edge-cases.md
+      html-entities.md
+    semantic/
+      emphasis-pairing.md
+      code-blocks.md
+      lists-tables.md
+    parser/
+      ast-generation.md
+      cross-references.md
+```
+
+**Discovery Process:**
+- Recursively scan for `.md` files in the test directory structure
+- Each subdirectory represents a test suite category (scan0, semantic, parser)
+- File names become part of test suite descriptors
+- Each annotated block within a file becomes an individual test callback
+
+### 2. Test Generation Pipeline
+
+**Phase 1: Markdown File Parsing**
+- Read each `.md` file and extract annotated blocks using detection rules defined in this document
+- Parse position marker lines (must start with `1` possibly with leading space, followed by one or more lines starting with `@`)
+- Validate immediate `@` assertion lines requirement
+- Extract assertion syntax per marker position
+
+**Phase 2: Test Callback Registration**
+- Dynamically register one test callback per annotated block using Node.js built-in `test()` function
+- Test name format: `{line-text-content} {positional-marker-line}` as specified in this document
+- Each test callback includes:
+  - Source markdown content (cleaned of annotations)
+  - Expected token assertions at each marked position
+  - File path and line number for error reporting
+
+**Phase 3: Dynamic Test Execution**
+This is automatically happening as part of the Node.js test runner
+- Execute test callbacks inline during test run
+- Each callback succeeds or fails immediately
+- Group tests by directory/file hierarchy using node.js built-in tester conventions
+
+### 3. Test script
+
+```json
+{
+  "scripts": {
+    "test": "node --test parse/tests/**/*.js"
+  }
+}
+```
