@@ -48,12 +48,12 @@ export function scan0({
       }
 
       case 38 /* & */: {
-        // TODO: seek ahead for entity, either emit entity token or fall back to InlineText
-        const entityLength = scanEntity(input, offset - 1, endOffset);
-        if (entityLength > 0) {
-          output.push(0x3000000 | entityLength /* EntityNamed, length: entityLength */);
+        // Try to parse an entity and get both its length and its token kind.
+        const entityResult = scanEntity(input, offset - 1, endOffset);
+        if (entityResult && entityResult.length > 0) {
+          output.push(entityResult.kind | entityResult.length);
           tokenCount++;
-          offset += entityLength - 1;
+          offset += entityResult.length - 1;
         } else {
           tokenCount += scanInlineTextChar(input, offset - 1, endOffset, output);
         }
@@ -130,21 +130,21 @@ function scanInlineTextChar(input, offset, endOffset, output) {
  * @param {string} input
  * @param {number} start  Index of '&'
  * @param {number} end  Exclusive end index to not read past buffer
- * @returns {number} length of the entity (>=1) or 0 if not a valid entity
+ * @returns {{length:number, kind:number}|null} object with length and token kind, or null if not a valid entity
  */
 function scanEntity(input, start, end) {
-  if (start < 0 || start >= end) return 0;
-  if (input.charCodeAt(start) !== 38 /* & */) return 0;
+  if (start < 0 || start >= end) return null;
+  if (input.charCodeAt(start) !== 38 /* & */) return null;
 
   let offset = start + 1;
-  if (offset >= end) return 0;
+  if (offset >= end) return null;
 
   const ch = input.charCodeAt(offset);
 
   // Numeric entity: &#... or &#x...
   if (ch === 35 /* # */) {
     offset++;
-    if (offset >= end) return 0;
+    if (offset >= end) return null;
 
     // hex?
     const cc = input.charCodeAt(offset);
@@ -152,7 +152,7 @@ function scanEntity(input, start, end) {
     if (cc === 120 /* x */ || cc === 88 /* X */) {
       isHex = true;
       offset++;
-      if (offset >= end) return 0;
+      if (offset >= end) return null;
     }
 
     const digitsStart = offset;
@@ -168,12 +168,14 @@ function scanEntity(input, start, end) {
     }
 
     // require at least one digit
-    if (offset === digitsStart) return 0;
+    if (offset === digitsStart) return null;
     // require terminating semicolon
     if (offset < end && input.charCodeAt(offset) === 59 /* ; */) {
-      return offset - start + 1;
+      const length = offset - start + 1;
+      const kind = isHex ? 0x5000000 /* EntityHex */ : 0x4000000 /* EntityDecimal */;
+      return { length, kind };
     }
-    return 0;
+    return null;
   }
 
   // Named entity: &name;
@@ -185,12 +187,14 @@ function scanEntity(input, start, end) {
   }
 
   // require at least one name character and a terminating semicolon
-  if (offset === nameStart) return 0;
+  if (offset === nameStart) return null;
   if (offset < end && input.charCodeAt(offset) === 59 /* ; */) {
-    return offset - start + 1;
+    const length = offset - start + 1;
+    const kind = 0x3000000; /* EntityNamed */
+    return { length, kind };
   }
 
-  return 0;
+  return null;
 }
 
 /** @param {number} ch */
